@@ -59,4 +59,5 @@ src/
 - 작업은 `feature/HBB1-<지라번호>-<영문 요약>` 브랜치 → develop PR (접두사는 전체 단어 `feature/`, `feat/` ❌)
 - **PR은 항상 draft로 생성**, 준비되면 ready 전환
 - PR 제목은 `<타입>: [HBB1-<지라번호>] <요약>` 형식 (예: `feat: [HBB1-21] 대시보드 화면 구현`) — 지라 키가 제목에 있으면 티켓에 자동 연결
+- PR 본문은 템플릿(`.github/PULL_REQUEST_TEMPLATE.md`) 준수 — UI 변경 시 스크린샷 필수(Before/After), 완료 조건은 PRD에서 발췌한 검증 가능한 문장으로 작성하고 체크는 검증된 후에만
 - CI(GitHub Actions)는 main/develop 대상 push·PR에서 lint + format check + test + typecheck/build 실행
