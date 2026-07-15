@@ -15,6 +15,7 @@
 ```bash
 pnpm install
 pnpm dev          # http://localhost:5173
+pnpm test         # Vitest (pnpm test:watch = 워치 모드)
 pnpm build        # tsc -b + vite build → dist/
 pnpm preview      # 빌드 결과 미리보기
 ```

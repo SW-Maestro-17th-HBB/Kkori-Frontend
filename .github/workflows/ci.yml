@@ -31,5 +31,8 @@ jobs:
       - name: Format check
         run: pnpm format:check
 
+      - name: Test
+        run: pnpm test
+
       - name: Typecheck & Build
         run: pnpm build

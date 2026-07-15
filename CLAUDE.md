@@ -10,6 +10,7 @@ AI 면접 준비 서비스의 프론트엔드. Vite 7 / React 18 / TypeScript / 
 pnpm install           # 의존성 설치 (Node 20+, 팀 표준 22)
 pnpm dev               # 개발 서버 (5173)
 pnpm build             # tsc -b 타입체크 + vite build (CI와 동일)
+pnpm test              # Vitest 실행 (pnpm test:watch = 워치 모드)
 pnpm lint              # ESLint (pnpm lint:fix = 자동 수정)
 pnpm format:check      # Prettier 검사 (pnpm format = 적용)
 pnpm preview           # 빌드 결과 미리보기
@@ -20,7 +21,7 @@ pnpm preview           # 빌드 결과 미리보기
 
 ## 작업 규칙
 
-- 코드 변경 후 반드시 `pnpm lint && pnpm format:check && pnpm build` 통과를 확인할 것 (CI와 동일 3단계)
+- 코드 변경 후 반드시 `pnpm lint && pnpm format:check && pnpm test && pnpm build` 통과를 확인할 것 (CI와 동일 4단계)
 - UI 변경은 브라우저에서 실제 동작을 확인한 뒤 커밋 — PR에 스크린샷을 첨부하면 리뷰가 빨라짐
 - 커밋 메시지 타입은 `feat`, `fix`, `chore`, `docs`, `refactor`, `test` 사용
 
@@ -44,7 +45,10 @@ src/
   components/          # 공유 프리미티브 (Icon·TopNav·ScoreNum·DocThumb 등)
   api/                 # types → fixtures(목) → client(fetcher) → hooks(useQuery)
   pages/               # 화면 단위 컴포넌트 (라우트 1:1)
+  test/                # Vitest 셋업 + renderWithProviders 헬퍼
 ```
+
+- 테스트는 소스 옆에 `*.test.tsx`로 두고, 페이지 렌더는 `src/test/render.tsx`의 `renderWithProviders`(Router + Query 프로바이더 포함) 사용
 
 - 새 화면 추가 절차: `routes.ts`에 키·경로 추가 → `pages/`에 페이지 작성 → `App.tsx`에 Route 등록
 - 페이지 전용 하위 컴포넌트는 해당 페이지 파일 안에 두고, 2개 이상 화면에서 쓰이면 `components/`로 승격
@@ -55,4 +59,4 @@ src/
 - 작업은 `feature/HBB1-<지라번호>-<영문 요약>` 브랜치 → develop PR (접두사는 전체 단어 `feature/`, `feat/` ❌)
 - **PR은 항상 draft로 생성**, 준비되면 ready 전환
 - PR 제목은 `<타입>: [HBB1-<지라번호>] <요약>` 형식 (예: `feat: [HBB1-21] 대시보드 화면 구현`) — 지라 키가 제목에 있으면 티켓에 자동 연결
-- CI(GitHub Actions)는 main/develop 대상 push·PR에서 lint + format check + typecheck/build 실행
+- CI(GitHub Actions)는 main/develop 대상 push·PR에서 lint + format check + test + typecheck/build 실행
