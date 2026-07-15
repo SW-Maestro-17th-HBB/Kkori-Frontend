@@ -1,0 +1,82 @@
+/* ============================================================
+   Wanted Design System 대체 토큰
+   (_ds 번들 미포함 → README·프로토타입 사용처 기준 재구성)
+   브랜드 액센트 --blue-800 = #0066FF (README 고정값)
+   ============================================================ */
+:root {
+  /* ---------- 브랜드 블루 ---------- */
+  --blue-50: #eef4ff;
+  --blue-100: #d9e8ff;
+  --blue-400: #5b9bff;
+  --blue-700: #0054d1;
+  --blue-800: #0066ff;
+  --blue-900: #0047b3;
+  --blue-925: #003c96;
+
+  /* ---------- 쿨 뉴트럴 ---------- */
+  --neutral-50: #f9fafb;
+  --neutral-100: #f2f4f6;
+  --neutral-200: #e5e8eb;
+  --neutral-300: #d1d6db;
+  --neutral-400: #b0b8c1;
+  --neutral-500: #8b95a1;
+  --neutral-600: #6b7684;
+  --neutral-700: #4e5968;
+  --neutral-800: #333d4b;
+  --neutral-900: #191f28;
+  --neutral-925: #202632;
+  --neutral-950: #171c26;
+  --neutral-960: #12161e;
+  --neutral-970: #0d1017;
+
+  /* ---------- 시맨틱 ---------- */
+  --green-600: #16a34a;
+  --red-600: #ef4444;
+  --red-700: #dc2626;
+
+  /* ---------- 서피스 ---------- */
+  --bg-canvas: #ffffff;
+  --bg-surface: #ffffff;
+  --bg-elevated: #ffffff;
+  --bg-subtle: var(--neutral-50);
+  --bg-muted: var(--neutral-100);
+  --bg-inverse: var(--neutral-900);
+  --bg-brand-subtle: var(--blue-50);
+  --bg-success-subtle: #e8f7ee;
+  --bg-danger-subtle: #fdeeee;
+
+  /* ---------- 텍스트 ---------- */
+  --fg-strong: var(--neutral-900);
+  --fg-default: var(--neutral-800);
+  --fg-secondary: var(--neutral-600);
+  --fg-tertiary: var(--neutral-500);
+  --fg-link: var(--blue-800);
+
+  /* ---------- 보더 ---------- */
+  --border-subtle: #eceef1;
+  --border-default: #dfe3e8;
+  --border-strong: #c4ccd4;
+  --border-inverse: rgba(255, 255, 255, 0.14);
+
+  /* ---------- Radius ---------- */
+  --radius-4: 4px;
+  --radius-8: 8px;
+  --radius-12: 12px;
+  --radius-16: 16px;
+  --radius-full: 999px;
+  --radius-btn-md: 10px;
+
+  /* ---------- Shadow ---------- */
+  --shadow-2: 0 1px 2px rgba(16, 24, 40, 0.04), 0 2px 8px rgba(16, 24, 40, 0.04);
+  --shadow-4: 0 4px 12px rgba(16, 24, 40, 0.08);
+  --shadow-pop: 0 12px 32px rgba(16, 24, 40, 0.14), 0 2px 8px rgba(16, 24, 40, 0.08);
+
+  /* ---------- Gradient ---------- */
+  --gradient-hero: linear-gradient(128deg, #0a1836 0%, #0c2f7c 46%, #0066ff 100%);
+
+  /* ---------- 타이포 ---------- */
+  --font-display: "Wanted Sans Variable", "Wanted Sans", "Pretendard Variable",
+    Pretendard, -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+  --font-sans: "Pretendard Variable", Pretendard, -apple-system,
+    BlinkMacSystemFont, system-ui, "Segoe UI", sans-serif;
+}

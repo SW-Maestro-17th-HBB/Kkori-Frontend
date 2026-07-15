@@ -1,0 +1,267 @@
+@import "./tokens.css";
+
+/* ============================================================
+   전역 스타일 — 프로토타입 진입점 HTML의 전역 CSS 이식
+   ============================================================ */
+* {
+  box-sizing: border-box;
+}
+html,
+body {
+  margin: 0;
+}
+body {
+  background: var(--bg-canvas);
+  font-family: var(--font-sans);
+  color: var(--fg-default);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+a {
+  color: var(--fg-link);
+  text-decoration: none;
+  transition: color 0.12s ease;
+}
+a:hover {
+  color: var(--blue-700);
+}
+.linkbtn {
+  appearance: none;
+  background: none;
+  border: 0;
+  padding: 0;
+  margin: 0;
+  cursor: pointer;
+  font: inherit;
+  color: inherit;
+  text-align: left;
+}
+.navlink {
+  transition: color 0.12s ease;
+}
+.navlink:hover {
+  color: var(--fg-strong);
+}
+
+/* ---------- 전체 동의 배너 ---------- */
+.consent-all {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 18px;
+  margin-top: 24px;
+  border: 1px solid var(--blue-800);
+  border-radius: var(--radius-12);
+  background: var(--bg-brand-subtle);
+  cursor: pointer;
+  transition: background 0.12s ease;
+}
+.consent-all:hover {
+  background: var(--blue-100);
+}
+
+/* ---------- 리포트 행 ---------- */
+.report-row {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  padding: 18px 22px;
+  background: transparent;
+  cursor: pointer;
+  transition: background-color 0.12s ease;
+}
+.report-row:hover {
+  background: var(--bg-subtle);
+}
+
+/* ---------- 테이블 ---------- */
+.hbb-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-family: var(--font-sans);
+  background: var(--bg-surface);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-12);
+  overflow: hidden;
+}
+.hbb-table th {
+  text-align: left;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--fg-secondary);
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--border-default);
+  white-space: nowrap;
+}
+.hbb-table td {
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--border-subtle);
+  vertical-align: middle;
+  color: var(--fg-default);
+  font-size: 14px;
+  font-weight: 500;
+}
+.hbb-table tbody tr:last-child td {
+  border-bottom: 0;
+}
+.hbb-table__row {
+  cursor: pointer;
+  transition: background-color 0.12s ease;
+}
+.hbb-table__row:hover {
+  background: var(--bg-subtle);
+}
+.ib-sm {
+  width: 30px;
+  height: 30px;
+  border-radius: var(--radius-full);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: background-color 0.12s ease;
+}
+.ib-sm:hover {
+  background: var(--bg-muted);
+}
+.notif-row {
+  transition: background-color 0.12s ease;
+}
+.notif-row:hover {
+  filter: brightness(0.97);
+}
+.notif-foot:hover {
+  background: var(--bg-subtle);
+}
+.profile-chip {
+  transition: background-color 0.12s ease;
+}
+.profile-chip:hover {
+  background: var(--bg-subtle);
+}
+.menu-item {
+  transition: background-color 0.12s ease;
+}
+.menu-item:hover {
+  background: var(--bg-subtle);
+}
+.menu-item--danger:hover {
+  background: var(--bg-danger-subtle);
+}
+
+/* ---------- 시간 옵션 ---------- */
+.time-opt {
+  flex: 1;
+  text-align: left;
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-12);
+  padding: 18px;
+  cursor: pointer;
+  background: var(--bg-surface);
+  position: relative;
+  font: inherit;
+  transition: border-color 0.12s ease, background 0.12s ease;
+}
+.time-opt:hover {
+  border-color: var(--border-strong);
+}
+.time-opt--on {
+  border-color: var(--blue-800);
+  background: var(--bg-brand-subtle);
+  box-shadow: inset 0 0 0 1px var(--blue-800);
+}
+.time-opt__badge {
+  position: absolute;
+  top: 14px;
+  right: 14px;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: var(--blue-800);
+  color: #fff;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.time-opt--locked {
+  opacity: 0.55;
+  cursor: not-allowed;
+  background: var(--bg-subtle);
+}
+.time-opt--locked:hover {
+  border-color: var(--border-default);
+}
+
+/* ---------- 다크 버튼 (면접 진행) ---------- */
+.dark-btn {
+  height: 44px;
+  padding: 0 18px;
+  border-radius: var(--radius-full);
+  border: 1px solid rgba(255, 255, 255, 0.28);
+  background: rgba(255, 255, 255, 0.06);
+  color: #f2f3f4;
+  font-family: var(--font-sans);
+  font-size: 14px;
+  font-weight: 600;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  transition: background-color 0.12s ease;
+}
+.dark-btn:hover {
+  background: rgba(255, 255, 255, 0.14);
+}
+.dark-btn--round {
+  width: 46px;
+  padding: 0;
+  justify-content: center;
+}
+
+/* ---------- 분석 중 스피너 ---------- */
+@media (prefers-reduced-motion: no-preference) {
+  .status-spin {
+    animation: statusSpin 0.9s linear infinite;
+  }
+}
+@keyframes statusSpin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+@keyframes hbb-toast-in {
+  from {
+    opacity: 0;
+    transform: translate(-50%, 8px);
+  }
+  to {
+    opacity: 1;
+    transform: translate(-50%, 0);
+  }
+}
+
+/* ---------- 듣는 중 펄스 링 ---------- */
+.listen-ring {
+  position: absolute;
+  inset: -16px;
+  border: 1px solid rgba(91, 155, 255, 0.4);
+  border-radius: 24px;
+}
+@media (prefers-reduced-motion: no-preference) {
+  .listen-ring {
+    animation: listenPulse 2.6s ease-in-out infinite;
+  }
+}
+@keyframes listenPulse {
+  0%,
+  100% {
+    transform: scale(1);
+    opacity: 0.35;
+  }
+  50% {
+    transform: scale(1.02);
+    opacity: 0.8;
+  }
+}

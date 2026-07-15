@@ -1,0 +1,4 @@
+# pnpm 설정 (단일 패키지 — packages 필드 불필요)
+# esbuild는 postinstall로 플랫폼 바이너리를 검증하므로 빌드 스크립트 허용
+allowBuilds:
+  esbuild: true

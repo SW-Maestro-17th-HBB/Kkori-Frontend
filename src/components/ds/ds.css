@@ -1,0 +1,377 @@
+/* ============================================================
+   Wanted DS 대체 컴포넌트 스타일
+   (_ds 번들 미포함 → 프로토타입 사용처 기준 재구성)
+   ============================================================ */
+
+/* ---------- Button ---------- */
+.wds-btn {
+  appearance: none;
+  border: 0;
+  margin: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  font-family: var(--font-sans);
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  cursor: pointer;
+  white-space: nowrap;
+  border-radius: var(--radius-btn-md);
+  transition: background-color 0.12s ease, border-color 0.12s ease,
+    color 0.12s ease;
+}
+.wds-btn--sm {
+  height: 32px;
+  padding: 0 12px;
+  font-size: 13px;
+}
+.wds-btn--md {
+  height: 40px;
+  padding: 0 16px;
+  font-size: 14px;
+}
+.wds-btn--lg {
+  height: 48px;
+  padding: 0 22px;
+  font-size: 16px;
+  border-radius: var(--radius-12);
+}
+.wds-btn--full {
+  width: 100%;
+}
+.wds-btn--solid {
+  background: var(--blue-800);
+  color: #fff;
+}
+.wds-btn--solid:hover:not(:disabled) {
+  background: var(--blue-900);
+}
+.wds-btn--assistive {
+  background: var(--bg-muted);
+  color: var(--fg-default);
+}
+.wds-btn--assistive:hover:not(:disabled) {
+  background: var(--neutral-200);
+}
+.wds-btn--outlined {
+  background: var(--bg-surface);
+  border: 1px solid var(--border-default);
+  color: var(--fg-default);
+}
+.wds-btn--outlined:hover:not(:disabled) {
+  background: var(--bg-subtle);
+}
+.wds-btn--text {
+  background: transparent;
+  color: var(--fg-secondary);
+  padding: 0 4px;
+  height: auto;
+}
+.wds-btn--text:hover:not(:disabled) {
+  color: var(--fg-strong);
+}
+.wds-btn:disabled {
+  cursor: not-allowed;
+  background: var(--neutral-100);
+  color: var(--neutral-400);
+  border-color: transparent;
+}
+
+/* ---------- Badge ---------- */
+.wds-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 24px;
+  padding: 0 9px;
+  border-radius: 6px;
+  font-family: var(--font-sans);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: -0.005em;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+.wds-badge__dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+  flex-shrink: 0;
+}
+.wds-badge--brand {
+  background: var(--bg-brand-subtle);
+  color: var(--blue-800);
+}
+.wds-badge--success {
+  background: var(--bg-success-subtle);
+  color: var(--green-600);
+}
+.wds-badge--danger {
+  background: var(--bg-danger-subtle);
+  color: var(--red-600);
+}
+.wds-badge--neutral {
+  background: var(--bg-muted);
+  color: var(--fg-secondary);
+}
+.wds-badge--solid {
+  background: var(--blue-800);
+  color: #fff;
+}
+
+/* ---------- Tag ---------- */
+.wds-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 28px;
+  padding: 0 10px;
+  border-radius: var(--radius-8);
+  background: var(--bg-muted);
+  color: var(--fg-secondary);
+  font-family: var(--font-sans);
+  font-size: 13px;
+  font-weight: 500;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+/* ---------- Card ---------- */
+.wds-card {
+  background: var(--bg-surface);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-16);
+  padding: 22px;
+}
+
+/* ---------- Progress ---------- */
+.wds-progress {
+  width: 100%;
+  height: 8px;
+  border-radius: var(--radius-full);
+  background: var(--neutral-100);
+  overflow: hidden;
+}
+.wds-progress__fill {
+  height: 100%;
+  border-radius: var(--radius-full);
+  background: var(--blue-800);
+  transition: width 0.3s ease;
+}
+
+/* ---------- Modal ---------- */
+.wds-modal-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  background: rgba(13, 16, 23, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+}
+.wds-modal {
+  width: 100%;
+  max-width: 420px;
+  background: var(--bg-surface);
+  border-radius: var(--radius-16);
+  box-shadow: var(--shadow-pop);
+  padding: 26px 24px 24px;
+}
+.wds-modal__title {
+  margin: 0 0 12px;
+  font-family: var(--font-display);
+  font-size: 19px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: var(--fg-strong);
+}
+.wds-modal__body {
+  font-family: var(--font-sans);
+  font-size: 14.5px;
+  font-weight: 500;
+  line-height: 1.6;
+  color: var(--fg-default);
+}
+.wds-modal__actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 24px;
+}
+.wds-modal__actions > * {
+  flex: 1;
+}
+
+/* ---------- Input ---------- */
+.wds-input-wrap {
+  position: relative;
+  width: 100%;
+}
+.wds-input {
+  width: 100%;
+  height: 48px;
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-12);
+  background: var(--bg-surface);
+  padding: 0 14px;
+  font-family: var(--font-sans);
+  font-size: 15px;
+  font-weight: 500;
+  color: var(--fg-strong);
+  outline: none;
+  transition: border-color 0.12s ease;
+}
+.wds-input::placeholder {
+  color: var(--fg-tertiary);
+  font-weight: 500;
+}
+.wds-input:focus {
+  border-color: var(--blue-800);
+}
+.wds-input:disabled {
+  background: var(--bg-subtle);
+  color: var(--fg-tertiary);
+  cursor: not-allowed;
+}
+.wds-input-wrap--trailing .wds-input {
+  padding-right: 42px;
+}
+.wds-input__trailing {
+  position: absolute;
+  right: 14px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--fg-tertiary);
+  display: inline-flex;
+}
+
+/* ---------- Switch ---------- */
+.wds-switch {
+  appearance: none;
+  border: 0;
+  margin: 0;
+  width: 46px;
+  height: 28px;
+  padding: 3px;
+  border-radius: var(--radius-full);
+  background: var(--neutral-200);
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: background-color 0.15s ease;
+}
+.wds-switch__knob {
+  display: block;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 1px 3px rgba(16, 24, 40, 0.2);
+  transition: transform 0.15s ease;
+}
+.wds-switch--on {
+  background: var(--blue-800);
+}
+.wds-switch--on .wds-switch__knob {
+  transform: translateX(18px);
+}
+
+/* ---------- Toast ---------- */
+.wds-toast {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 13px 18px;
+  border-radius: var(--radius-12);
+  background: var(--neutral-900);
+  color: #fff;
+  font-family: var(--font-sans);
+  font-size: 14px;
+  font-weight: 500;
+  box-shadow: var(--shadow-pop);
+  white-space: nowrap;
+}
+.wds-toast__icon {
+  display: inline-flex;
+  color: rgba(255, 255, 255, 0.75);
+  flex-shrink: 0;
+}
+.wds-toast--success .wds-toast__icon {
+  color: #4ade80;
+}
+
+/* ---------- Chip ---------- */
+.wds-chip {
+  appearance: none;
+  margin: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 36px;
+  padding: 0 14px;
+  border-radius: var(--radius-full);
+  border: 1px solid var(--border-default);
+  background: var(--bg-surface);
+  font-family: var(--font-sans);
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--fg-secondary);
+  cursor: pointer;
+  white-space: nowrap;
+  transition: border-color 0.12s ease, background-color 0.12s ease,
+    color 0.12s ease;
+}
+.wds-chip:hover {
+  border-color: var(--border-strong);
+}
+.wds-chip--selected {
+  border-color: var(--blue-800);
+  background: var(--bg-brand-subtle);
+  color: var(--blue-800);
+}
+
+/* ---------- IconButton ---------- */
+.wds-iconbtn {
+  appearance: none;
+  border: 0;
+  margin: 0;
+  position: relative;
+  width: 40px;
+  height: 40px;
+  border-radius: var(--radius-full);
+  background: transparent;
+  color: var(--fg-secondary);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: background-color 0.12s ease;
+}
+.wds-iconbtn:hover {
+  background: var(--bg-subtle);
+}
+.wds-iconbtn__notif {
+  position: absolute;
+  top: 8px;
+  right: 9px;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--red-600);
+  box-shadow: 0 0 0 2px var(--bg-surface);
+}
+
+/* ---------- Avatar ---------- */
+.wds-avatar {
+  border-radius: var(--radius-full);
+  background: var(--bg-muted);
+  color: var(--fg-secondary);
+  font-family: var(--font-sans);
+  font-weight: 700;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  user-select: none;
+}
