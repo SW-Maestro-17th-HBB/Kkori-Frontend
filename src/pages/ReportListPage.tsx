@@ -23,7 +23,11 @@ function TrendChart({ pts }: { pts: TrendPoint[] }) {
   return (
     <div style={{ flex: 1, marginTop: 20 }}>
       <div style={{ position: "relative", height: H }}>
-        <svg viewBox={`0 0 100 ${H}`} preserveAspectRatio="none" style={{ position: "absolute", inset: 0, width: "100%", height: "100%" }}>
+        <svg
+          viewBox={`0 0 100 ${H}`}
+          preserveAspectRatio="none"
+          style={{ position: "absolute", inset: 0, width: "100%", height: "100%" }}
+        >
           <defs>
             <linearGradient id="hbbTrend" x1="0" y1="0" x2="0" y2="1">
               <stop offset="0%" stopColor="var(--blue-800)" stopOpacity="0.18" />
@@ -31,7 +35,15 @@ function TrendChart({ pts }: { pts: TrendPoint[] }) {
             </linearGradient>
           </defs>
           <polygon points={area} fill="url(#hbbTrend)" />
-          <polyline points={line} fill="none" stroke="var(--blue-800)" strokeWidth="2.5" strokeLinejoin="round" strokeLinecap="round" vectorEffect="non-scaling-stroke" />
+          <polyline
+            points={line}
+            fill="none"
+            stroke="var(--blue-800)"
+            strokeWidth="2.5"
+            strokeLinejoin="round"
+            strokeLinecap="round"
+            vectorEffect="non-scaling-stroke"
+          />
         </svg>
         {pts.map((p, i) => {
           const last = i === pts.length - 1;
@@ -72,7 +84,15 @@ function TrendChart({ pts }: { pts: TrendPoint[] }) {
       </div>
       <div style={{ display: "flex", justifyContent: "space-between", marginTop: 8 }}>
         {pts.map((p) => (
-          <span key={p.d} style={{ fontFamily: "var(--font-sans)", fontSize: 11.5, fontWeight: 500, color: "var(--fg-tertiary)" }}>
+          <span
+            key={p.d}
+            style={{
+              fontFamily: "var(--font-sans)",
+              fontSize: 11.5,
+              fontWeight: 500,
+              color: "var(--fg-tertiary)",
+            }}
+          >
             {p.d}
           </span>
         ))}
@@ -83,32 +103,98 @@ function TrendChart({ pts }: { pts: TrendPoint[] }) {
 
 /* 약점 분포 — 도넛 (conic-gradient) + 범례 */
 function WeaknessDonut({ segments }: { segments: [string, number][] }) {
-  const colors = ["var(--blue-800)", "var(--blue-400)", "oklch(0.86 0.06 258)", "var(--neutral-200)"];
-  const segs = segments.map((s, i) => [...s, colors[i % colors.length]] as [string, number, string]);
+  const colors = [
+    "var(--blue-800)",
+    "var(--blue-400)",
+    "oklch(0.86 0.06 258)",
+    "var(--neutral-200)",
+  ];
+  const segs = segments.map(
+    (s, i) => [...s, colors[i % colors.length]] as [string, number, string],
+  );
   const total = segs.reduce((a, s) => a + s[1], 0);
-  let acc = 0;
   const grad = segs
-    .map((s) => {
-      const start = (acc / total) * 360;
-      acc += s[1];
-      const end = (acc / total) * 360;
+    .map((s, i) => {
+      const before = segs.slice(0, i).reduce((a, x) => a + x[1], 0);
+      const start = (before / total) * 360;
+      const end = ((before + s[1]) / total) * 360;
       return `${s[2]} ${start}deg ${end}deg`;
     })
     .join(", ");
   return (
     <div style={{ display: "flex", alignItems: "center", gap: 22 }}>
-      <div style={{ width: 96, height: 96, borderRadius: "50%", flexShrink: 0, background: `conic-gradient(${grad})`, position: "relative" }}>
-        <div style={{ position: "absolute", inset: 22, borderRadius: "50%", background: "var(--bg-surface)", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center" }}>
-          <span style={{ fontFamily: "var(--font-display)", fontSize: 20, fontWeight: 700, color: "var(--fg-strong)", lineHeight: 1 }}>{total}</span>
-          <span style={{ fontFamily: "var(--font-sans)", fontSize: 10, fontWeight: 600, color: "var(--fg-tertiary)", marginTop: 2 }}>건 지적</span>
+      <div
+        style={{
+          width: 96,
+          height: 96,
+          borderRadius: "50%",
+          flexShrink: 0,
+          background: `conic-gradient(${grad})`,
+          position: "relative",
+        }}
+      >
+        <div
+          style={{
+            position: "absolute",
+            inset: 22,
+            borderRadius: "50%",
+            background: "var(--bg-surface)",
+            display: "flex",
+            flexDirection: "column",
+            alignItems: "center",
+            justifyContent: "center",
+          }}
+        >
+          <span
+            style={{
+              fontFamily: "var(--font-display)",
+              fontSize: 20,
+              fontWeight: 700,
+              color: "var(--fg-strong)",
+              lineHeight: 1,
+            }}
+          >
+            {total}
+          </span>
+          <span
+            style={{
+              fontFamily: "var(--font-sans)",
+              fontSize: 10,
+              fontWeight: 600,
+              color: "var(--fg-tertiary)",
+              marginTop: 2,
+            }}
+          >
+            건 지적
+          </span>
         </div>
       </div>
       <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: 9 }}>
         {segs.map(([n, c, col]) => (
           <div key={n} style={{ display: "flex", alignItems: "center", gap: 9 }}>
-            <span style={{ width: 10, height: 10, borderRadius: 3, background: col, flexShrink: 0 }} />
-            <span style={{ flex: 1, fontFamily: "var(--font-sans)", fontSize: 13, fontWeight: 500, color: "var(--fg-default)" }}>{n}</span>
-            <span style={{ fontFamily: "var(--font-sans)", fontSize: 13, fontWeight: 700, color: "var(--fg-secondary)", fontVariantNumeric: "tabular-nums" }}>
+            <span
+              style={{ width: 10, height: 10, borderRadius: 3, background: col, flexShrink: 0 }}
+            />
+            <span
+              style={{
+                flex: 1,
+                fontFamily: "var(--font-sans)",
+                fontSize: 13,
+                fontWeight: 500,
+                color: "var(--fg-default)",
+              }}
+            >
+              {n}
+            </span>
+            <span
+              style={{
+                fontFamily: "var(--font-sans)",
+                fontSize: 13,
+                fontWeight: 700,
+                color: "var(--fg-secondary)",
+                fontVariantNumeric: "tabular-nums",
+              }}
+            >
               {c}회
             </span>
           </div>
@@ -134,13 +220,38 @@ export function ReportListPage() {
         </Display>
 
         {/* 전체 통계 요약 — 1행: KPI + 점수 추이 */}
-        <div style={{ display: "grid", gridTemplateColumns: "220px 1fr", gap: 20, marginBottom: 28 }}>
+        <div
+          style={{ display: "grid", gridTemplateColumns: "220px 1fr", gap: 20, marginBottom: 28 }}
+        >
           <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-            <div style={{ background: "var(--bg-brand-subtle)", borderRadius: "var(--radius-16)", padding: "18px 20px" }}>
-              <div style={{ fontFamily: "var(--font-sans)", fontSize: 13, fontWeight: 600, color: "var(--blue-800)" }}>평균 점수</div>
+            <div
+              style={{
+                background: "var(--bg-brand-subtle)",
+                borderRadius: "var(--radius-16)",
+                padding: "18px 20px",
+              }}
+            >
+              <div
+                style={{
+                  fontFamily: "var(--font-sans)",
+                  fontSize: 13,
+                  fontWeight: 600,
+                  color: "var(--blue-800)",
+                }}
+              >
+                평균 점수
+              </div>
               <div style={{ display: "flex", alignItems: "flex-end", gap: 8, marginTop: 6 }}>
                 <ScoreNum score={stats?.avgScore ?? 0} size={40} />
-                <span style={{ fontFamily: "var(--font-sans)", fontSize: 12.5, fontWeight: 600, color: "var(--blue-800)", paddingBottom: 6 }}>
+                <span
+                  style={{
+                    fontFamily: "var(--font-sans)",
+                    fontSize: 12.5,
+                    fontWeight: 600,
+                    color: "var(--blue-800)",
+                    paddingBottom: 6,
+                  }}
+                >
                   {stats?.avgDelta ?? ""}
                 </span>
               </div>
@@ -152,16 +263,52 @@ export function ReportListPage() {
                   ["최고 점수", `${stats?.bestScore ?? 0}점`],
                 ] as [string, string][]
               ).map(([k, v]) => (
-                <div key={k} style={{ flex: 1, background: "var(--bg-surface)", border: "1px solid var(--border-subtle)", borderRadius: "var(--radius-12)", padding: "14px 16px" }}>
-                  <div style={{ fontFamily: "var(--font-sans)", fontSize: 12.5, fontWeight: 500, color: "var(--fg-tertiary)" }}>{k}</div>
-                  <div style={{ fontFamily: "var(--font-display)", fontSize: 20, fontWeight: 700, letterSpacing: "-0.02em", color: "var(--fg-strong)", marginTop: 5 }}>
+                <div
+                  key={k}
+                  style={{
+                    flex: 1,
+                    background: "var(--bg-surface)",
+                    border: "1px solid var(--border-subtle)",
+                    borderRadius: "var(--radius-12)",
+                    padding: "14px 16px",
+                  }}
+                >
+                  <div
+                    style={{
+                      fontFamily: "var(--font-sans)",
+                      fontSize: 12.5,
+                      fontWeight: 500,
+                      color: "var(--fg-tertiary)",
+                    }}
+                  >
+                    {k}
+                  </div>
+                  <div
+                    style={{
+                      fontFamily: "var(--font-display)",
+                      fontSize: 20,
+                      fontWeight: 700,
+                      letterSpacing: "-0.02em",
+                      color: "var(--fg-strong)",
+                      marginTop: 5,
+                    }}
+                  >
                     {v}
                   </div>
                 </div>
               ))}
             </div>
           </div>
-          <div style={{ background: "var(--bg-surface)", border: "1px solid var(--border-subtle)", borderRadius: "var(--radius-16)", padding: "18px 22px", display: "flex", flexDirection: "column" }}>
+          <div
+            style={{
+              background: "var(--bg-surface)",
+              border: "1px solid var(--border-subtle)",
+              borderRadius: "var(--radius-16)",
+              padding: "18px 22px",
+              display: "flex",
+              flexDirection: "column",
+            }}
+          >
             <SectionLabel>점수 추이</SectionLabel>
             {stats && <TrendChart pts={stats.trend} />}
           </div>
@@ -169,23 +316,75 @@ export function ReportListPage() {
 
         {/* 2행: 채점 축 평균 + 약점 분포 */}
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 20, marginBottom: 28 }}>
-          <div style={{ background: "var(--bg-surface)", border: "1px solid var(--border-subtle)", borderRadius: "var(--radius-16)", padding: "18px 22px" }}>
-            <SectionLabel style={{ marginBottom: 16 }}>채점 축 평균 ({stats?.totalCount ?? 0}회)</SectionLabel>
+          <div
+            style={{
+              background: "var(--bg-surface)",
+              border: "1px solid var(--border-subtle)",
+              borderRadius: "var(--radius-16)",
+              padding: "18px 22px",
+            }}
+          >
+            <SectionLabel style={{ marginBottom: 16 }}>
+              채점 축 평균 ({stats?.totalCount ?? 0}회)
+            </SectionLabel>
             <div style={{ display: "flex", flexDirection: "column", gap: 13 }}>
               {(stats?.axisAverages ?? []).map(([n, v]) => (
                 <div key={n} style={{ display: "flex", alignItems: "center", gap: 12 }}>
-                  <span style={{ width: 84, flexShrink: 0, fontFamily: "var(--font-sans)", fontSize: 13, fontWeight: 500, color: "var(--fg-default)" }}>{n}</span>
-                  <div style={{ flex: 1, height: 8, borderRadius: "var(--radius-full)", background: "var(--neutral-100)", overflow: "hidden" }}>
-                    <div style={{ width: `${v}%`, height: "100%", borderRadius: "var(--radius-full)", background: v >= 80 ? "var(--blue-800)" : "var(--blue-400)" }} />
+                  <span
+                    style={{
+                      width: 84,
+                      flexShrink: 0,
+                      fontFamily: "var(--font-sans)",
+                      fontSize: 13,
+                      fontWeight: 500,
+                      color: "var(--fg-default)",
+                    }}
+                  >
+                    {n}
+                  </span>
+                  <div
+                    style={{
+                      flex: 1,
+                      height: 8,
+                      borderRadius: "var(--radius-full)",
+                      background: "var(--neutral-100)",
+                      overflow: "hidden",
+                    }}
+                  >
+                    <div
+                      style={{
+                        width: `${v}%`,
+                        height: "100%",
+                        borderRadius: "var(--radius-full)",
+                        background: v >= 80 ? "var(--blue-800)" : "var(--blue-400)",
+                      }}
+                    />
                   </div>
-                  <span style={{ width: 26, textAlign: "right", fontFamily: "var(--font-sans)", fontSize: 13, fontWeight: 700, color: "var(--fg-strong)", fontVariantNumeric: "tabular-nums" }}>
+                  <span
+                    style={{
+                      width: 26,
+                      textAlign: "right",
+                      fontFamily: "var(--font-sans)",
+                      fontSize: 13,
+                      fontWeight: 700,
+                      color: "var(--fg-strong)",
+                      fontVariantNumeric: "tabular-nums",
+                    }}
+                  >
                     {v}
                   </span>
                 </div>
               ))}
             </div>
           </div>
-          <div style={{ background: "var(--bg-surface)", border: "1px solid var(--border-subtle)", borderRadius: "var(--radius-16)", padding: "18px 22px" }}>
+          <div
+            style={{
+              background: "var(--bg-surface)",
+              border: "1px solid var(--border-subtle)",
+              borderRadius: "var(--radius-16)",
+              padding: "18px 22px",
+            }}
+          >
             <SectionLabel style={{ marginBottom: 14 }}>약점 분포</SectionLabel>
             {stats && <WeaknessDonut segments={stats.weaknessSegments} />}
           </div>
@@ -218,12 +417,18 @@ export function ReportListPage() {
           </thead>
           <tbody>
             {rows.map((r) => (
-              <tr key={r.id} className="hbb-table__row" onClick={() => navigate(reportDetailPath(r.id))}>
+              <tr
+                key={r.id}
+                className="hbb-table__row"
+                onClick={() => navigate(reportDetailPath(r.id))}
+              >
                 <td style={{ color: "var(--fg-secondary)" }}>{r.date}</td>
                 <td>
                   <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
                     <DocThumb ext={r.resumeExt} size={26} />
-                    <span style={{ fontWeight: 600, color: "var(--fg-strong)" }}>{r.resumeName}</span>
+                    <span style={{ fontWeight: 600, color: "var(--fg-strong)" }}>
+                      {r.resumeName}
+                    </span>
                   </div>
                 </td>
                 <td>

@@ -19,7 +19,14 @@ export function ResumePage() {
     <div style={{ background: "var(--bg-canvas)", minHeight: "100vh" }}>
       <TopNav active="resume" />
       <div style={{ maxWidth: 1040, margin: "0 auto", padding: "44px 40px 60px" }}>
-        <div style={{ display: "flex", alignItems: "flex-end", justifyContent: "space-between", marginBottom: 24 }}>
+        <div
+          style={{
+            display: "flex",
+            alignItems: "flex-end",
+            justifyContent: "space-between",
+            marginBottom: 24,
+          }}
+        >
           <div>
             <SectionLabel>이력서</SectionLabel>
             <Display size={32} tracking={-0.025} style={{ marginTop: 8 }}>
@@ -32,7 +39,15 @@ export function ResumePage() {
         </div>
 
         {/* 드롭존 */}
-        <div style={{ border: "1.5px dashed var(--border-default)", borderRadius: "var(--radius-16)", background: "var(--bg-subtle)", padding: 40, textAlign: "center" }}>
+        <div
+          style={{
+            border: "1.5px dashed var(--border-default)",
+            borderRadius: "var(--radius-16)",
+            background: "var(--bg-subtle)",
+            padding: 40,
+            textAlign: "center",
+          }}
+        >
           <div
             style={{
               width: 52,
@@ -47,10 +62,26 @@ export function ResumePage() {
           >
             <Icon name="file-up" size={24} />
           </div>
-          <div style={{ fontFamily: "var(--font-sans)", fontSize: 18, fontWeight: 700, color: "var(--fg-strong)", marginTop: 16 }}>
+          <div
+            style={{
+              fontFamily: "var(--font-sans)",
+              fontSize: 18,
+              fontWeight: 700,
+              color: "var(--fg-strong)",
+              marginTop: 16,
+            }}
+          >
             여기로 이력서를 끌어다 놓으세요
           </div>
-          <p style={{ fontFamily: "var(--font-sans)", fontSize: 14, fontWeight: 500, color: "var(--fg-tertiary)", marginTop: 8 }}>
+          <p
+            style={{
+              fontFamily: "var(--font-sans)",
+              fontSize: 14,
+              fontWeight: 500,
+              color: "var(--fg-tertiary)",
+              marginTop: 8,
+            }}
+          >
             또는 파일 선택 · PDF / DOCX · 최대 10MB
           </p>
         </div>
@@ -58,10 +89,26 @@ export function ResumePage() {
         {/* 분석 중 알림 */}
         {analyzing && (
           <Card style={{ marginTop: 16 }}>
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14 }}>
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                marginBottom: 14,
+              }}
+            >
               <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
                 <DocThumb ext={analyzing.ext} size={30} />
-                <span style={{ fontFamily: "var(--font-sans)", fontSize: 14, fontWeight: 600, color: "var(--fg-strong)" }}>{analyzing.name}</span>
+                <span
+                  style={{
+                    fontFamily: "var(--font-sans)",
+                    fontSize: 14,
+                    fontWeight: 600,
+                    color: "var(--fg-strong)",
+                  }}
+                >
+                  {analyzing.name}
+                </span>
               </div>
               <StatusBadge kind="ing">분석 중 · {analyzing.progress ?? 0}%</StatusBadge>
             </div>
@@ -83,22 +130,42 @@ export function ResumePage() {
             <tbody>
               {rows.map((r, i) => (
                 <Fragment key={r.id}>
-                  <tr className="hbb-table__row" onClick={() => setOpen(open === i ? -1 : i)} style={open === i ? { background: "var(--bg-subtle)" } : undefined}>
+                  <tr
+                    className="hbb-table__row"
+                    onClick={() => setOpen(open === i ? -1 : i)}
+                    style={open === i ? { background: "var(--bg-subtle)" } : undefined}
+                  >
                     <td>
                       <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-                        <Icon name={open === i ? "chevron-down" : "chevron-right"} size={16} style={{ color: "var(--fg-tertiary)" }} />
+                        <Icon
+                          name={open === i ? "chevron-down" : "chevron-right"}
+                          size={16}
+                          style={{ color: "var(--fg-tertiary)" }}
+                        />
                         <DocThumb ext={r.ext} size={28} />
                         <span style={{ fontWeight: 600, color: "var(--fg-strong)" }}>{r.name}</span>
                       </div>
                     </td>
                     <td style={{ color: "var(--fg-secondary)" }}>{r.uploadedAt}</td>
                     <td>
-                      <StatusBadge kind={r.status}>{r.status === "done" ? "분석 완료" : "분석 실패"}</StatusBadge>
+                      <StatusBadge kind={r.status}>
+                        {r.status === "done" ? "분석 완료" : "분석 실패"}
+                      </StatusBadge>
                     </td>
                     <td style={{ textAlign: "right" }}>
-                      <span style={{ display: "inline-flex", gap: 2, justifyContent: "flex-end", color: "var(--fg-tertiary)" }}>
+                      <span
+                        style={{
+                          display: "inline-flex",
+                          gap: 2,
+                          justifyContent: "flex-end",
+                          color: "var(--fg-tertiary)",
+                        }}
+                      >
                         <span className="ib-sm">
-                          <Icon name={r.status === "fail" ? "rotate-cw" : "more-horizontal"} size={16} />
+                          <Icon
+                            name={r.status === "fail" ? "rotate-cw" : "more-horizontal"}
+                            size={16}
+                          />
                         </span>
                         <span className="ib-sm">
                           <Icon name="trash-2" size={16} />
@@ -110,7 +177,14 @@ export function ResumePage() {
                     <tr>
                       <td colSpan={4} style={{ padding: 0, background: "var(--bg-subtle)" }}>
                         <div style={{ padding: "18px 18px 20px 44px" }}>
-                          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14 }}>
+                          <div
+                            style={{
+                              display: "flex",
+                              alignItems: "center",
+                              justifyContent: "space-between",
+                              marginBottom: 14,
+                            }}
+                          >
                             <SectionLabel>분석 결과 미리보기</SectionLabel>
                             <div style={{ display: "flex", gap: 8 }}>
                               <Button variant="assistive" size="sm">
@@ -128,7 +202,14 @@ export function ResumePage() {
                               </Button>
                             </div>
                           </div>
-                          <div style={{ background: "var(--bg-surface)", border: "1px solid var(--border-subtle)", borderRadius: "var(--radius-12)", padding: "6px 16px" }}>
+                          <div
+                            style={{
+                              background: "var(--bg-surface)",
+                              border: "1px solid var(--border-subtle)",
+                              borderRadius: "var(--radius-12)",
+                              padding: "6px 16px",
+                            }}
+                          >
                             {(
                               [
                                 ["이름", r.preview.name],
@@ -149,9 +230,15 @@ export function ResumePage() {
                                   fontWeight: 500,
                                 }}
                               >
-                                <span style={{ width: 96, flexShrink: 0, color: "var(--fg-tertiary)" }}>{k}</span>
+                                <span
+                                  style={{ width: 96, flexShrink: 0, color: "var(--fg-tertiary)" }}
+                                >
+                                  {k}
+                                </span>
                                 {v ? (
-                                  <span style={{ color: "var(--fg-strong)", fontWeight: 600 }}>{v}</span>
+                                  <span style={{ color: "var(--fg-strong)", fontWeight: 600 }}>
+                                    {v}
+                                  </span>
                                 ) : (
                                   <span style={{ display: "flex", gap: 6 }}>
                                     {r.preview!.skills.map((c) => (

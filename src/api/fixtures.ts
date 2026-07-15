@@ -208,8 +208,26 @@ export const reportDetail: ReportDetail = {
     ["수치·사례로 근거 보강", "“왜”에 정량적 근거 1개 이상"],
   ],
   timeline: [
-    { q: "자기소개를 부탁드려요.", score: 80, tail: false, note: "두괄식으로 시작하면 더 좋아요", lines: 2 },
-    { q: "최근 프로젝트의 기술 스택 선택 이유는?", score: 88, tail: false, note: "기술 정확도 우수 · 근거 구체적", lines: 3 },
-    { q: "그 결정에서 가장 어려웠던 점은?", score: 73, tail: true, note: "답변 속도 빠름 · 사례 부족", lines: 2 },
+    {
+      q: "자기소개를 부탁드려요.",
+      score: 80,
+      tail: false,
+      note: "두괄식으로 시작하면 더 좋아요",
+      lines: 2,
+    },
+    {
+      q: "최근 프로젝트의 기술 스택 선택 이유는?",
+      score: 88,
+      tail: false,
+      note: "기술 정확도 우수 · 근거 구체적",
+      lines: 3,
+    },
+    {
+      q: "그 결정에서 가장 어려웠던 점은?",
+      score: 73,
+      tail: true,
+      note: "답변 속도 빠름 · 사례 부족",
+      lines: 2,
+    },
   ],
 };

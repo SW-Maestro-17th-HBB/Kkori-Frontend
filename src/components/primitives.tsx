@@ -66,13 +66,7 @@ export function Display({
 }
 
 /* ---------- 섹션 라벨 (caption, secondary) ---------- */
-export function SectionLabel({
-  children,
-  style,
-}: {
-  children: ReactNode;
-  style?: CSSProperties;
-}) {
+export function SectionLabel({ children, style }: { children: ReactNode; style?: CSSProperties }) {
   return (
     <div
       style={{
@@ -227,7 +221,12 @@ export function DocThumb({ ext = "PDF", size = 40 }: { ext?: string; size?: numb
         justifyContent: "center",
       }}
     >
-      <Icon name="file-text" size={Math.round(size * 0.46)} strokeWidth={1.75} style={{ color: "var(--fg-tertiary)" }} />
+      <Icon
+        name="file-text"
+        size={Math.round(size * 0.46)}
+        strokeWidth={1.75}
+        style={{ color: "var(--fg-tertiary)" }}
+      />
       <span
         style={{
           position: "absolute",
@@ -301,7 +300,15 @@ export function Section({
         }}
       >
         <div style={{ display: "flex", alignItems: "baseline", gap: 10 }}>
-          <h2 style={{ margin: 0, fontSize: 22, fontWeight: 700, letterSpacing: "-0.019em", color: "var(--fg-strong)" }}>
+          <h2
+            style={{
+              margin: 0,
+              fontSize: 22,
+              fontWeight: 700,
+              letterSpacing: "-0.019em",
+              color: "var(--fg-strong)",
+            }}
+          >
             {title}
           </h2>
           {count != null && (

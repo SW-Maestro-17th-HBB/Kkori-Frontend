@@ -162,7 +162,9 @@ a:hover {
   background: var(--bg-surface);
   position: relative;
   font: inherit;
-  transition: border-color 0.12s ease, background 0.12s ease;
+  transition:
+    border-color 0.12s ease,
+    background 0.12s ease;
 }
 .time-opt:hover {
   border-color: var(--border-strong);

@@ -78,13 +78,7 @@ export function Tag({ style, children }: { style?: CSSProperties; children: Reac
 }
 
 /* ---------- Card ---------- */
-export function Card({
-  style,
-  children,
-}: {
-  style?: CSSProperties;
-  children: ReactNode;
-}) {
+export function Card({ style, children }: { style?: CSSProperties; children: ReactNode }) {
   return (
     <div className="wds-card" style={style}>
       {children}
@@ -96,7 +90,13 @@ export function Card({
 export function Progress({ value }: { value: number }) {
   const v = Math.max(0, Math.min(100, value));
   return (
-    <div className="wds-progress" role="progressbar" aria-valuenow={v} aria-valuemin={0} aria-valuemax={100}>
+    <div
+      className="wds-progress"
+      role="progressbar"
+      aria-valuenow={v}
+      aria-valuemin={0}
+      aria-valuemax={100}
+    >
       <div className="wds-progress__fill" style={{ width: `${v}%` }} />
     </div>
   );
@@ -129,7 +129,14 @@ export function Modal({
   if (!open) return null;
   return (
     <div className="wds-modal-overlay" onClick={onClose}>
-      <div className="wds-modal" role="dialog" aria-modal="true" aria-label={title} style={style} onClick={(e) => e.stopPropagation()}>
+      <div
+        className="wds-modal"
+        role="dialog"
+        aria-modal="true"
+        aria-label={title}
+        style={style}
+        onClick={(e) => e.stopPropagation()}
+      >
         <h2 className="wds-modal__title">{title}</h2>
         <div className="wds-modal__body">{children}</div>
         {actions && actions.length > 0 && (

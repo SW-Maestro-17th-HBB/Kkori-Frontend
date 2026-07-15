@@ -1,5 +1,5 @@
 /* ============================ 면접 설정 (/setup) ============================ */
-import { Fragment, useEffect, useState, type ReactNode } from "react";
+import { Fragment, useState, type ReactNode } from "react";
 import { useResumes } from "../api/hooks";
 import { Button, Card } from "../components/ds";
 import { Icon } from "../components/Icon";
@@ -7,7 +7,17 @@ import { Display, DocThumb } from "../components/primitives";
 import { TopNav } from "../components/TopNav";
 import { useNav } from "../hooks/useNav";
 
-function StepCard({ no, title, children, disabled = false }: { no: number; title: string; children: ReactNode; disabled?: boolean }) {
+function StepCard({
+  no,
+  title,
+  children,
+  disabled = false,
+}: {
+  no: number;
+  title: string;
+  children: ReactNode;
+  disabled?: boolean;
+}) {
   return (
     <div style={{ position: "relative" }}>
       <Card style={disabled ? { opacity: 0.5 } : undefined}>
@@ -31,7 +41,17 @@ function StepCard({ no, title, children, disabled = false }: { no: number; title
           >
             {no}
           </span>
-          <h3 style={{ margin: 0, fontSize: 17, fontWeight: 700, letterSpacing: "-0.01em", color: "var(--fg-strong)" }}>{title}</h3>
+          <h3
+            style={{
+              margin: 0,
+              fontSize: 17,
+              fontWeight: 700,
+              letterSpacing: "-0.01em",
+              color: "var(--fg-strong)",
+            }}
+          >
+            {title}
+          </h3>
         </div>
         {children}
       </Card>
@@ -72,10 +92,8 @@ export function SetupPage() {
   const resumeOpts = resumes.filter((r) => r.status === "done");
   const [resume, setResume] = useState<string | null>(null);
   const [pickOpen, setPickOpen] = useState(false);
-
-  useEffect(() => {
-    if (!resume && dur === "real") setDur("quick");
-  }, [resume, dur]);
+  // 이력서 없이는 실전 모의 선택 불가 — 상태 대신 렌더 시점에 파생
+  const effectiveDur = !resume && dur === "real" ? "quick" : dur;
 
   return (
     <div style={{ background: "var(--bg-canvas)", minHeight: "100vh" }}>
@@ -85,7 +103,15 @@ export function SetupPage() {
           <Display size={32} tracking={-0.025} as="h1">
             면접 준비
           </Display>
-          <p style={{ fontFamily: "var(--font-sans)", fontSize: 17, fontWeight: 500, color: "var(--fg-secondary)", marginTop: 10 }}>
+          <p
+            style={{
+              fontFamily: "var(--font-sans)",
+              fontSize: 17,
+              fontWeight: 500,
+              color: "var(--fg-secondary)",
+              marginTop: 10,
+            }}
+          >
             아래 단계를 확인하면 면접을 시작할 수 있어요.
           </p>
         </div>
@@ -168,7 +194,16 @@ export function SetupPage() {
                       }}
                     >
                       <DocThumb ext={r.ext} size={22} /> {r.name}{" "}
-                      <span style={{ marginLeft: "auto", fontSize: 12, fontWeight: 500, color: "var(--fg-tertiary)" }}>분석 완료</span>
+                      <span
+                        style={{
+                          marginLeft: "auto",
+                          fontSize: 12,
+                          fontWeight: 500,
+                          color: "var(--fg-tertiary)",
+                        }}
+                      >
+                        분석 완료
+                      </span>
                     </button>
                   ))}
                 </div>
@@ -177,8 +212,18 @@ export function SetupPage() {
           </StepCard>
 
           <StepCard no={2} title="면접 유형">
-            <p style={{ fontFamily: "var(--font-sans)", fontSize: 13, fontWeight: 500, lineHeight: 1.5, color: "var(--fg-secondary)", marginBottom: 10 }}>
-              이력서를 분석해 <b style={{ color: "var(--blue-800)", fontWeight: 700 }}>백엔드</b>로 추천했어요. 직무를 바꾸면 질문 방향이 달라져요.
+            <p
+              style={{
+                fontFamily: "var(--font-sans)",
+                fontSize: 13,
+                fontWeight: 500,
+                lineHeight: 1.5,
+                color: "var(--fg-secondary)",
+                marginBottom: 10,
+              }}
+            >
+              이력서를 분석해 <b style={{ color: "var(--blue-800)", fontWeight: 700 }}>백엔드</b>로
+              추천했어요. 직무를 바꾸면 질문 방향이 달라져요.
             </p>
             <SelectRow value="백엔드" />
           </StepCard>
@@ -196,16 +241,38 @@ export function SetupPage() {
                   <button
                     key={id}
                     disabled={off}
-                    className={"time-opt" + (dur === id ? " time-opt--on" : "") + (off ? " time-opt--locked" : "")}
+                    className={
+                      "time-opt" +
+                      (effectiveDur === id ? " time-opt--on" : "") +
+                      (off ? " time-opt--locked" : "")
+                    }
                     onClick={() => !off && setDur(id)}
                   >
-                    {dur === id && !off && (
+                    {effectiveDur === id && !off && (
                       <span className="time-opt__badge">
                         <Icon name="check" size={12} strokeWidth={3} />
                       </span>
                     )}
-                    <div style={{ fontFamily: "var(--font-sans)", fontSize: 15, fontWeight: 700, color: "var(--fg-strong)" }}>{t}</div>
-                    <div style={{ fontFamily: "var(--font-sans)", fontSize: 13, fontWeight: 500, lineHeight: 1.3, color: "var(--fg-secondary)", marginTop: 6 }}>
+                    <div
+                      style={{
+                        fontFamily: "var(--font-sans)",
+                        fontSize: 15,
+                        fontWeight: 700,
+                        color: "var(--fg-strong)",
+                      }}
+                    >
+                      {t}
+                    </div>
+                    <div
+                      style={{
+                        fontFamily: "var(--font-sans)",
+                        fontSize: 13,
+                        fontWeight: 500,
+                        lineHeight: 1.3,
+                        color: "var(--fg-secondary)",
+                        marginTop: 6,
+                      }}
+                    >
                       {s}
                     </div>
                   </button>
@@ -213,9 +280,18 @@ export function SetupPage() {
               })}
             </div>
             {!resume && (
-              <p style={{ fontFamily: "var(--font-sans)", fontSize: 12.5, fontWeight: 500, color: "var(--fg-tertiary)", marginTop: 10 }}>
+              <p
+                style={{
+                  fontFamily: "var(--font-sans)",
+                  fontSize: 12.5,
+                  fontWeight: 500,
+                  color: "var(--fg-tertiary)",
+                  marginTop: 10,
+                }}
+              >
                 실전 모의(30분)는 이력서를 기반으로 꼬리질문을 만들어요. 먼저{" "}
-                <b style={{ color: "var(--fg-secondary)", fontWeight: 700 }}>이력서를 선택</b>해 주세요.
+                <b style={{ color: "var(--fg-secondary)", fontWeight: 700 }}>이력서를 선택</b>해
+                주세요.
               </p>
             )}
           </StepCard>
@@ -254,14 +330,38 @@ export function SetupPage() {
                 </span>
                 <Icon name="user-round" size={36} strokeWidth={1.75} />
               </div>
-              <div style={{ flex: 1, display: "flex", flexDirection: "column", justifyContent: "center", gap: 14 }}>
+              <div
+                style={{
+                  flex: 1,
+                  display: "flex",
+                  flexDirection: "column",
+                  justifyContent: "center",
+                  gap: 14,
+                }}
+              >
                 <div>
-                  <div style={{ fontFamily: "var(--font-sans)", fontSize: 13, fontWeight: 500, color: "var(--fg-secondary)", marginBottom: 8 }}>
+                  <div
+                    style={{
+                      fontFamily: "var(--font-sans)",
+                      fontSize: 13,
+                      fontWeight: 500,
+                      color: "var(--fg-secondary)",
+                      marginBottom: 8,
+                    }}
+                  >
                     마이크 입력 레벨
                   </div>
                   <div style={{ display: "flex", gap: 3, alignItems: "flex-end", height: 22 }}>
                     {[8, 14, 18, 22, 12, 16, 9].map((h, i) => (
-                      <i key={i} style={{ width: 5, height: h, borderRadius: 2, background: i < 5 ? "var(--blue-800)" : "var(--neutral-200)" }} />
+                      <i
+                        key={i}
+                        style={{
+                          width: 5,
+                          height: h,
+                          borderRadius: 2,
+                          background: i < 5 ? "var(--blue-800)" : "var(--neutral-200)",
+                        }}
+                      />
                     ))}
                   </div>
                 </div>
@@ -271,7 +371,18 @@ export function SetupPage() {
             </div>
             <div style={{ display: "flex", gap: 18, marginTop: 16, flexWrap: "wrap" }}>
               {["카메라 정상", "마이크 정상", "권한 허용됨"].map((c) => (
-                <span key={c} style={{ display: "inline-flex", alignItems: "center", gap: 7, fontFamily: "var(--font-sans)", fontSize: 13, fontWeight: 500, color: "var(--fg-default)" }}>
+                <span
+                  key={c}
+                  style={{
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: 7,
+                    fontFamily: "var(--font-sans)",
+                    fontSize: 13,
+                    fontWeight: 500,
+                    color: "var(--fg-default)",
+                  }}
+                >
                   <span
                     style={{
                       width: 16,

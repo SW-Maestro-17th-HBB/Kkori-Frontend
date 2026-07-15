@@ -36,7 +36,12 @@ const TERMS: { id: TermId; t: string; req: boolean; body: string }[] = [
 
 export function ConsentPage() {
   const nav = useNav();
-  const [checks, setChecks] = useState<Record<TermId, boolean>>({ tos: true, privacy: true, media: true, mkt: false });
+  const [checks, setChecks] = useState<Record<TermId, boolean>>({
+    tos: true,
+    privacy: true,
+    media: true,
+    mkt: false,
+  });
   const [open, setOpen] = useState<TermId | null>("tos");
 
   const allOn = TERMS.every((t) => checks[t.id]);
@@ -49,7 +54,15 @@ export function ConsentPage() {
 
   return (
     <div style={{ minHeight: "100vh", background: "var(--bg-canvas)" }}>
-      <div style={{ height: 60, display: "flex", alignItems: "center", padding: "0 28px", borderBottom: "1px solid var(--border-subtle)" }}>
+      <div
+        style={{
+          height: 60,
+          display: "flex",
+          alignItems: "center",
+          padding: "0 28px",
+          borderBottom: "1px solid var(--border-subtle)",
+        }}
+      >
         <Wordmark />
       </div>
       <div style={{ maxWidth: 600, margin: "0 auto", padding: "48px 24px 72px" }}>
@@ -57,20 +70,55 @@ export function ConsentPage() {
           <Badge variant="brand">
             <Icon name="check" size={13} strokeWidth={2.5} /> Kakao 계정 연결됨
           </Badge>
-          <span style={{ fontFamily: "var(--font-sans)", fontSize: 13, fontWeight: 500, color: "var(--fg-tertiary)" }}>회원가입 · 2 / 2 단계</span>
+          <span
+            style={{
+              fontFamily: "var(--font-sans)",
+              fontSize: 13,
+              fontWeight: 500,
+              color: "var(--fg-tertiary)",
+            }}
+          >
+            회원가입 · 2 / 2 단계
+          </span>
         </div>
         <Display size={30} tracking={-0.024} as="h1" style={{ marginTop: 20 }}>
           약관에 동의하고 시작하세요
         </Display>
-        <p style={{ fontFamily: "var(--font-sans)", fontSize: 16, fontWeight: 500, lineHeight: 1.55, color: "var(--fg-secondary)", marginTop: 10 }}>
+        <p
+          style={{
+            fontFamily: "var(--font-sans)",
+            fontSize: 16,
+            fontWeight: 500,
+            lineHeight: 1.55,
+            color: "var(--fg-secondary)",
+            marginTop: 10,
+          }}
+        >
           처음 오셨네요. 안전한 이용을 위해 아래 약관을 확인하고 동의해 주세요.
         </p>
 
         <button onClick={toggleAll} className="linkbtn consent-all">
           <Checkbox on={allOn} big />
           <div>
-            <div style={{ fontFamily: "var(--font-sans)", fontSize: 16, fontWeight: 700, color: "var(--fg-strong)" }}>약관 전체 동의</div>
-            <div style={{ fontFamily: "var(--font-sans)", fontSize: 13, fontWeight: 500, color: "var(--fg-secondary)", marginTop: 4 }}>
+            <div
+              style={{
+                fontFamily: "var(--font-sans)",
+                fontSize: 16,
+                fontWeight: 700,
+                color: "var(--fg-strong)",
+              }}
+            >
+              약관 전체 동의
+            </div>
+            <div
+              style={{
+                fontFamily: "var(--font-sans)",
+                fontSize: 13,
+                fontWeight: 500,
+                color: "var(--fg-secondary)",
+                marginTop: 4,
+              }}
+            >
               필수 및 선택 항목을 모두 포함해요
             </div>
           </div>
@@ -78,14 +126,36 @@ export function ConsentPage() {
 
         <div style={{ display: "flex", flexDirection: "column", gap: 10, marginTop: 12 }}>
           {TERMS.map((t) => (
-            <div key={t.id} style={{ border: "1px solid var(--border-subtle)", borderRadius: "var(--radius-12)", background: "var(--bg-surface)", overflow: "hidden" }}>
+            <div
+              key={t.id}
+              style={{
+                border: "1px solid var(--border-subtle)",
+                borderRadius: "var(--radius-12)",
+                background: "var(--bg-surface)",
+                overflow: "hidden",
+              }}
+            >
               <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "14px 16px" }}>
                 <button className="linkbtn" onClick={() => toggle(t.id)}>
                   <Checkbox on={checks[t.id]} />
                 </button>
-                <span style={{ flex: 1, fontFamily: "var(--font-sans)", fontSize: 15, fontWeight: 600, color: "var(--fg-strong)" }}>{t.t}</span>
+                <span
+                  style={{
+                    flex: 1,
+                    fontFamily: "var(--font-sans)",
+                    fontSize: 15,
+                    fontWeight: 600,
+                    color: "var(--fg-strong)",
+                  }}
+                >
+                  {t.t}
+                </span>
                 <Badge variant={t.req ? "brand" : "neutral"}>{t.req ? "필수" : "선택"}</Badge>
-                <button className="linkbtn" onClick={() => setOpen(open === t.id ? null : t.id)} style={{ color: "var(--fg-tertiary)" }}>
+                <button
+                  className="linkbtn"
+                  onClick={() => setOpen(open === t.id ? null : t.id)}
+                  style={{ color: "var(--fg-tertiary)" }}
+                >
                   <Icon name={open === t.id ? "chevron-up" : "chevron-down"} size={18} />
                 </button>
               </div>
@@ -112,11 +182,26 @@ export function ConsentPage() {
         </div>
 
         <div style={{ marginTop: 26 }}>
-          <Button variant="solid" size="lg" fullWidth disabled={!reqOn} onClick={() => reqOn && nav("dash")}>
+          <Button
+            variant="solid"
+            size="lg"
+            fullWidth
+            disabled={!reqOn}
+            onClick={() => reqOn && nav("dash")}
+          >
             동의하고 시작하기
           </Button>
           {!reqOn && (
-            <p style={{ fontFamily: "var(--font-sans)", fontSize: 13, fontWeight: 500, color: "var(--fg-tertiary)", textAlign: "center", marginTop: 10 }}>
+            <p
+              style={{
+                fontFamily: "var(--font-sans)",
+                fontSize: 13,
+                fontWeight: 500,
+                color: "var(--fg-tertiary)",
+                textAlign: "center",
+                marginTop: 10,
+              }}
+            >
               필수 항목에 모두 동의해야 시작할 수 있어요.
             </p>
           )}

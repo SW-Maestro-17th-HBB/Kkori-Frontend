@@ -4,7 +4,15 @@ import { useNavigate } from "react-router";
 import { useProfile, useReports, useReportStats, useResumes } from "../api/hooks";
 import { Button, Card, Modal, Tag } from "../components/ds";
 import { Icon } from "../components/Icon";
-import { Display, DocThumb, ScoreNum, Section, SectionLabel, StatusBadge, WeakTag } from "../components/primitives";
+import {
+  Display,
+  DocThumb,
+  ScoreNum,
+  Section,
+  SectionLabel,
+  StatusBadge,
+  WeakTag,
+} from "../components/primitives";
 import { TopNav } from "../components/TopNav";
 import { useNav } from "../hooks/useNav";
 import { reportDetailPath } from "../routes";
@@ -31,7 +39,15 @@ export function DashboardPage() {
           <Display size={32} tracking={-0.025}>
             안녕하세요, {profile?.name ?? ""}님
           </Display>
-          <p style={{ fontFamily: "var(--font-sans)", fontSize: 17, fontWeight: 500, color: "var(--fg-secondary)", marginTop: 10 }}>
+          <p
+            style={{
+              fontFamily: "var(--font-sans)",
+              fontSize: 17,
+              fontWeight: 500,
+              color: "var(--fg-secondary)",
+              marginTop: 10,
+            }}
+          >
             이어서 연습해볼까요? 준비된 이력서로 바로 면접을 시작할 수 있어요.
           </p>
         </div>
@@ -49,11 +65,28 @@ export function DashboardPage() {
         >
           <div style={{ padding: "22px 24px" }}>
             <SectionLabel>바로 시작</SectionLabel>
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 15, marginTop: 12 }}>
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                gap: 15,
+                marginTop: 12,
+              }}
+            >
               <div style={{ display: "flex", alignItems: "center", gap: 15 }}>
                 <DocThumb ext={active?.ext ?? "PDF"} size={46} />
                 <div>
-                  <div style={{ fontFamily: "var(--font-sans)", fontSize: 17, fontWeight: 700, color: "var(--fg-strong)" }}>{active?.name ?? ""}</div>
+                  <div
+                    style={{
+                      fontFamily: "var(--font-sans)",
+                      fontSize: 17,
+                      fontWeight: 700,
+                      color: "var(--fg-strong)",
+                    }}
+                  >
+                    {active?.name ?? ""}
+                  </div>
                   <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 10 }}>
                     <StatusBadge kind="done">분석 완료</StatusBadge>
                     {active?.tag && <Tag style={{ height: 26, fontSize: 12 }}>{active.tag}</Tag>}
@@ -61,21 +94,55 @@ export function DashboardPage() {
                 </div>
               </div>
               <div style={{ display: "flex", gap: 10, flexShrink: 0 }}>
-                <Button variant="solid" leadingIcon={<Icon name="play" size={16} />} onClick={() => nav("setup")}>
+                <Button
+                  variant="solid"
+                  leadingIcon={<Icon name="play" size={16} />}
+                  onClick={() => nav("setup")}
+                >
                   면접 시작
                 </Button>
-                <Button variant="assistive" leadingIcon={<Icon name="repeat-2" size={16} />} onClick={() => setPickOpen(true)}>
+                <Button
+                  variant="assistive"
+                  leadingIcon={<Icon name="repeat-2" size={16} />}
+                  onClick={() => setPickOpen(true)}
+                >
                   이력서 변경
                 </Button>
               </div>
             </div>
           </div>
-          <div style={{ borderTop: "1px solid var(--border-subtle)", background: "var(--bg-subtle)", padding: "20px 24px" }}>
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
+          <div
+            style={{
+              borderTop: "1px solid var(--border-subtle)",
+              background: "var(--bg-subtle)",
+              padding: "20px 24px",
+            }}
+          >
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                marginBottom: 16,
+              }}
+            >
               <SectionLabel>최근 3회 흐름</SectionLabel>
-              <span style={{ fontFamily: "var(--font-sans)", fontSize: 13, fontWeight: 500, color: "var(--fg-secondary)" }}>
-                평균 <b style={{ color: "var(--fg-strong)", fontWeight: 700 }}>{stats?.recentAvg ?? "-"}점</b> · 지난주 대비{" "}
-                <b style={{ color: "var(--blue-800)", fontWeight: 700 }}>+{stats?.recentDelta ?? "-"}</b>
+              <span
+                style={{
+                  fontFamily: "var(--font-sans)",
+                  fontSize: 13,
+                  fontWeight: 500,
+                  color: "var(--fg-secondary)",
+                }}
+              >
+                평균{" "}
+                <b style={{ color: "var(--fg-strong)", fontWeight: 700 }}>
+                  {stats?.recentAvg ?? "-"}점
+                </b>{" "}
+                · 지난주 대비{" "}
+                <b style={{ color: "var(--blue-800)", fontWeight: 700 }}>
+                  +{stats?.recentDelta ?? "-"}
+                </b>
               </span>
             </div>
             <div style={{ display: "flex", alignItems: "flex-end", gap: 16, height: 76 }}>
@@ -84,7 +151,15 @@ export function DashboardPage() {
                 return (
                   <div
                     key={x.d}
-                    style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: 6, height: "100%", justifyContent: "flex-end" }}
+                    style={{
+                      flex: 1,
+                      display: "flex",
+                      flexDirection: "column",
+                      alignItems: "center",
+                      gap: 6,
+                      height: "100%",
+                      justifyContent: "flex-end",
+                    }}
                   >
                     <span
                       style={{
@@ -97,8 +172,24 @@ export function DashboardPage() {
                     >
                       {x.s}
                     </span>
-                    <div style={{ width: "100%", height: (x.s - 60) * 1.8 + 12, borderRadius: 4, background: last ? "var(--blue-800)" : "var(--neutral-200)" }} />
-                    <span style={{ fontFamily: "var(--font-sans)", fontSize: 11, fontWeight: 500, color: "var(--fg-tertiary)" }}>{x.d}</span>
+                    <div
+                      style={{
+                        width: "100%",
+                        height: (x.s - 60) * 1.8 + 12,
+                        borderRadius: 4,
+                        background: last ? "var(--blue-800)" : "var(--neutral-200)",
+                      }}
+                    />
+                    <span
+                      style={{
+                        fontFamily: "var(--font-sans)",
+                        fontSize: 11,
+                        fontWeight: 500,
+                        color: "var(--fg-tertiary)",
+                      }}
+                    >
+                      {x.d}
+                    </span>
                   </div>
                 );
               })}
@@ -110,11 +201,39 @@ export function DashboardPage() {
         <Section title="내 이력서" count={resumes.length}>
           <div>
             {resumes.map((r, i) => (
-              <div key={r.id} style={{ display: "flex", alignItems: "center", gap: 18, padding: "18px 4px", borderTop: i ? "1px solid var(--border-subtle)" : "none" }}>
+              <div
+                key={r.id}
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 18,
+                  padding: "18px 4px",
+                  borderTop: i ? "1px solid var(--border-subtle)" : "none",
+                }}
+              >
                 <DocThumb ext={r.ext} size={34} />
                 <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontFamily: "var(--font-sans)", fontSize: 16, fontWeight: 600, color: "var(--fg-strong)" }}>{r.name}</div>
-                  <div style={{ fontFamily: "var(--font-sans)", fontSize: 13, fontWeight: 500, color: "var(--fg-tertiary)", marginTop: 5 }}>{r.meta}</div>
+                  <div
+                    style={{
+                      fontFamily: "var(--font-sans)",
+                      fontSize: 16,
+                      fontWeight: 600,
+                      color: "var(--fg-strong)",
+                    }}
+                  >
+                    {r.name}
+                  </div>
+                  <div
+                    style={{
+                      fontFamily: "var(--font-sans)",
+                      fontSize: 13,
+                      fontWeight: 500,
+                      color: "var(--fg-tertiary)",
+                      marginTop: 5,
+                    }}
+                  >
+                    {r.meta}
+                  </div>
                 </div>
                 <StatusBadge kind={r.status}>
                   {r.status === "done" ? "분석 완료" : r.status === "ing" ? "분석 중" : "분석 실패"}
@@ -157,11 +276,31 @@ export function DashboardPage() {
                 style={{ borderTop: i ? "1px solid var(--border-subtle)" : "none" }}
               >
                 <ScoreNum score={r.score} size={38} />
-                <div style={{ width: 96, flexShrink: 0, fontFamily: "var(--font-sans)", fontSize: 14, fontWeight: 600, color: "var(--fg-default)", fontVariantNumeric: "tabular-nums" }}>
+                <div
+                  style={{
+                    width: 96,
+                    flexShrink: 0,
+                    fontFamily: "var(--font-sans)",
+                    fontSize: 14,
+                    fontWeight: 600,
+                    color: "var(--fg-default)",
+                    fontVariantNumeric: "tabular-nums",
+                  }}
+                >
                   {r.date}
                 </div>
                 <div style={{ flex: 1 }}>
-                  <div style={{ fontFamily: "var(--font-sans)", fontSize: 14, fontWeight: 500, color: "var(--fg-default)", marginBottom: 8 }}>{r.title}</div>
+                  <div
+                    style={{
+                      fontFamily: "var(--font-sans)",
+                      fontSize: 14,
+                      fontWeight: 500,
+                      color: "var(--fg-default)",
+                      marginBottom: 8,
+                    }}
+                  >
+                    {r.title}
+                  </div>
                   <div style={{ display: "flex", gap: 7, flexWrap: "wrap" }}>
                     {r.tags.map((t) => (
                       <WeakTag key={t}>{t}</WeakTag>
@@ -202,14 +341,34 @@ export function DashboardPage() {
                 gap: 12,
                 padding: "12px 14px",
                 borderRadius: "var(--radius-12)",
-                border: i === activeResume ? "1px solid var(--blue-800)" : "1px solid var(--border-subtle)",
+                border:
+                  i === activeResume
+                    ? "1px solid var(--blue-800)"
+                    : "1px solid var(--border-subtle)",
                 background: i === activeResume ? "var(--bg-brand-subtle)" : "var(--bg-surface)",
               }}
             >
               <DocThumb ext={r.ext} size={32} />
               <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ fontFamily: "var(--font-sans)", fontSize: 14, fontWeight: 600, color: "var(--fg-strong)" }}>{r.name}</div>
-                <div style={{ fontFamily: "var(--font-sans)", fontSize: 12, fontWeight: 500, color: "var(--fg-tertiary)", marginTop: 4 }}>
+                <div
+                  style={{
+                    fontFamily: "var(--font-sans)",
+                    fontSize: 14,
+                    fontWeight: 600,
+                    color: "var(--fg-strong)",
+                  }}
+                >
+                  {r.name}
+                </div>
+                <div
+                  style={{
+                    fontFamily: "var(--font-sans)",
+                    fontSize: 12,
+                    fontWeight: 500,
+                    color: "var(--fg-tertiary)",
+                    marginTop: 4,
+                  }}
+                >
                   {r.meta} · 분석 완료
                 </div>
               </div>
@@ -232,7 +391,15 @@ export function DashboardPage() {
             </button>
           ))}
         </div>
-        <p style={{ fontFamily: "var(--font-sans)", fontSize: 12, fontWeight: 500, color: "var(--fg-tertiary)", marginTop: 14 }}>
+        <p
+          style={{
+            fontFamily: "var(--font-sans)",
+            fontSize: 12,
+            fontWeight: 500,
+            color: "var(--fg-tertiary)",
+            marginTop: 14,
+          }}
+        >
           분석이 완료된 이력서만 선택할 수 있어요.
         </p>
       </Modal>

@@ -8,10 +8,25 @@ export function AuthPage() {
   const nav = useNav();
   return (
     <div style={{ minHeight: "100vh", background: "var(--bg-canvas)" }}>
-      <div style={{ height: 60, display: "flex", alignItems: "center", padding: "0 28px", borderBottom: "1px solid var(--border-subtle)" }}>
+      <div
+        style={{
+          height: 60,
+          display: "flex",
+          alignItems: "center",
+          padding: "0 28px",
+          borderBottom: "1px solid var(--border-subtle)",
+        }}
+      >
         <Wordmark />
       </div>
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "center", padding: "72px 0" }}>
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          padding: "72px 0",
+        }}
+      >
         <div
           style={{
             width: 380,
@@ -26,7 +41,15 @@ export function AuthPage() {
           <Display size={26} tracking={-0.024} as="h2">
             시작하기
           </Display>
-          <p style={{ fontFamily: "var(--font-sans)", fontSize: 15, fontWeight: 500, color: "var(--fg-secondary)", marginTop: 10 }}>
+          <p
+            style={{
+              fontFamily: "var(--font-sans)",
+              fontSize: 15,
+              fontWeight: 500,
+              color: "var(--fg-secondary)",
+              marginTop: 10,
+            }}
+          >
             카카오 계정으로 3초 만에 시작해요.
           </p>
           <div style={{ display: "flex", flexDirection: "column", gap: 10, marginTop: 28 }}>
@@ -59,7 +82,10 @@ export function AuthPage() {
                 ["bar-chart-3", "점수 리포트"],
               ] as [string, string][]
             ).map(([ic, t]) => (
-              <div key={t} style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 8 }}>
+              <div
+                key={t}
+                style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 8 }}
+              >
                 <span
                   style={{
                     width: 36,
@@ -74,7 +100,16 @@ export function AuthPage() {
                 >
                   <Icon name={ic} size={17} />
                 </span>
-                <span style={{ fontFamily: "var(--font-sans)", fontSize: 11, fontWeight: 600, color: "var(--fg-tertiary)" }}>{t}</span>
+                <span
+                  style={{
+                    fontFamily: "var(--font-sans)",
+                    fontSize: 11,
+                    fontWeight: 600,
+                    color: "var(--fg-tertiary)",
+                  }}
+                >
+                  {t}
+                </span>
               </div>
             ))}
           </div>

@@ -86,7 +86,9 @@ export function Icon({
 }) {
   const Cmp = ICONS[name];
   if (!Cmp && import.meta.env.DEV) {
-    console.warn(`[Icon] 등록되지 않은 아이콘: "${name}" — src/components/Icon.tsx의 ICONS에 추가하세요.`);
+    console.warn(
+      `[Icon] 등록되지 않은 아이콘: "${name}" — src/components/Icon.tsx의 ICONS에 추가하세요.`,
+    );
   }
   return (
     <span

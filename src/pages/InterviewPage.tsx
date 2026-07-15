@@ -19,7 +19,20 @@ export function InterviewPage() {
       }}
     >
       {/* 상단 */}
-      <div style={{ position: "absolute", top: 0, left: 0, right: 0, height: 62, display: "flex", alignItems: "center", justifyContent: "space-between", padding: "0 22px", zIndex: 6 }}>
+      <div
+        style={{
+          position: "absolute",
+          top: 0,
+          left: 0,
+          right: 0,
+          height: 62,
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          padding: "0 22px",
+          zIndex: 6,
+        }}
+      >
         <span
           style={{
             display: "inline-flex",
@@ -36,7 +49,10 @@ export function InterviewPage() {
             fontWeight: 600,
           }}
         >
-          <span style={{ width: 8, height: 8, borderRadius: "50%", background: "var(--red-600)" }} /> 04:12 남음
+          <span
+            style={{ width: 8, height: 8, borderRadius: "50%", background: "var(--red-600)" }}
+          />{" "}
+          04:12 남음
         </span>
         <button className="dark-btn" onClick={() => nav("reportDetail")}>
           면접 종료
@@ -101,7 +117,16 @@ export function InterviewPage() {
             <Icon name="audio-lines" size={64} strokeWidth={1.75} />
           </div>
         </div>
-        <div style={{ marginTop: 24, height: 30, display: "flex", alignItems: "center", justifyContent: "center", color: "rgba(255,255,255,.7)" }}>
+        <div
+          style={{
+            marginTop: 24,
+            height: 30,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            color: "rgba(255,255,255,.7)",
+          }}
+        >
           <Icon name="mic" size={22} strokeWidth={1.75} />
         </div>
       </div>
@@ -123,17 +148,51 @@ export function InterviewPage() {
             boxShadow: "var(--shadow-pop)",
           }}
         >
-          <div style={{ display: "flex", alignItems: "center", gap: 8, fontFamily: "var(--font-sans)", fontSize: 11, fontWeight: 600, letterSpacing: "0.02em", color: "var(--blue-400)" }}>
-            현재 질문 · Q3 <span style={{ color: "rgba(255,255,255,.4)" }}>·</span> <span style={{ color: "rgba(255,255,255,.55)" }}>꼬리질문</span>
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: 8,
+              fontFamily: "var(--font-sans)",
+              fontSize: 11,
+              fontWeight: 600,
+              letterSpacing: "0.02em",
+              color: "var(--blue-400)",
+            }}
+          >
+            현재 질문 · Q3 <span style={{ color: "rgba(255,255,255,.4)" }}>·</span>{" "}
+            <span style={{ color: "rgba(255,255,255,.55)" }}>꼬리질문</span>
           </div>
-          <div style={{ color: "#f2f3f4", fontFamily: "var(--font-sans)", fontSize: 16, fontWeight: 500, lineHeight: 1.5, marginTop: 9 }}>
+          <div
+            style={{
+              color: "#f2f3f4",
+              fontFamily: "var(--font-sans)",
+              fontSize: 16,
+              fontWeight: 500,
+              lineHeight: 1.5,
+              marginTop: 9,
+            }}
+          >
             최근 프로젝트에서 가장 어려웠던 기술적 의사결정은 무엇이었나요?
           </div>
         </div>
       )}
 
       {/* 하단 컨트롤 */}
-      <div style={{ position: "absolute", bottom: 0, left: 0, right: 0, padding: "18px 20px 26px", display: "flex", alignItems: "center", justifyContent: "center", gap: 12, zIndex: 6 }}>
+      <div
+        style={{
+          position: "absolute",
+          bottom: 0,
+          left: 0,
+          right: 0,
+          padding: "18px 20px 26px",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          gap: 12,
+          zIndex: 6,
+        }}
+      >
         <button className="dark-btn dark-btn--round" aria-label="마이크">
           <Icon name="mic" size={18} />
         </button>

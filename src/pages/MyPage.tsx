@@ -1,7 +1,17 @@
 /* ============================ 마이페이지 (/account) ============================ */
-import { Fragment, useEffect, useRef, useState } from "react";
+import { Fragment, useRef, useState } from "react";
 import { useProfile, useSubscription } from "../api/hooks";
-import { Avatar, Badge, Button, Card, Input, Modal, Progress, Switch, Toast } from "../components/ds";
+import {
+  Avatar,
+  Badge,
+  Button,
+  Card,
+  Input,
+  Modal,
+  Progress,
+  Switch,
+  Toast,
+} from "../components/ds";
 import { Icon } from "../components/Icon";
 import { Display, SectionLabel } from "../components/primitives";
 import { TopNav } from "../components/TopNav";
@@ -23,16 +33,20 @@ export function MyPage({ tab }: { tab?: TabId }) {
   const { data: sub } = useSubscription();
 
   const [active, setActive] = useState<TabId>(tab ?? "profile");
-  const [notif, setNotif] = useState<Record<NotifId, boolean>>({ report: true, analyze: true, weekly: true, marketing: false });
+  const [notif, setNotif] = useState<Record<NotifId, boolean>>({
+    report: true,
+    analyze: true,
+    weekly: true,
+    marketing: false,
+  });
   const [toast, setToast] = useState<{ msg: string; tone: "default" | "success" } | null>(null);
   const toastTimer = useRef<ReturnType<typeof setTimeout>>();
   const [delOpen, setDelOpen] = useState(false);
   const [editing, setEditing] = useState(false);
+  const [savedName, setSavedName] = useState<string | null>(null);
   const [form, setForm] = useState({ name: "" });
-
-  useEffect(() => {
-    if (profile) setForm({ name: profile.name });
-  }, [profile]);
+  // 저장된 로컬 수정값이 있으면 프로필 이름보다 우선 (목 데이터라 서버 반영 없음)
+  const displayName = savedName ?? profile?.name ?? "";
 
   const showToast = (msg: string, tone: "default" | "success") => {
     setToast({ msg, tone });
@@ -48,7 +62,10 @@ export function MyPage({ tab }: { tab?: TabId }) {
   const onToggle = (id: NotifId, v: boolean) => {
     setNotif((n) => ({ ...n, [id]: v }));
     if (id === "marketing") {
-      showToast(v ? `${today} 마케팅 정보 수신에 동의했어요` : `${today} 마케팅 정보 수신을 해제했어요`, v ? "success" : "default");
+      showToast(
+        v ? `${today} 마케팅 정보 수신에 동의했어요` : `${today} 마케팅 정보 수신을 해제했어요`,
+        v ? "success" : "default",
+      );
     } else {
       showToast(`${NOTIF_LABELS[id]} 알림을 ${v ? "켰어요" : "껐어요"}`, "default");
     }
@@ -84,8 +101,25 @@ export function MyPage({ tab }: { tab?: TabId }) {
         >
           <Avatar initials={profile?.initials ?? ""} size={56} />
           <div style={{ flex: 1 }}>
-            <div style={{ fontFamily: "var(--font-sans)", fontSize: 19, fontWeight: 700, color: "var(--fg-strong)" }}>{profile?.name ?? ""}</div>
-            <div style={{ fontFamily: "var(--font-sans)", fontSize: 13.5, fontWeight: 500, color: "var(--fg-tertiary)", marginTop: 4 }}>
+            <div
+              style={{
+                fontFamily: "var(--font-sans)",
+                fontSize: 19,
+                fontWeight: 700,
+                color: "var(--fg-strong)",
+              }}
+            >
+              {displayName}
+            </div>
+            <div
+              style={{
+                fontFamily: "var(--font-sans)",
+                fontSize: 13.5,
+                fontWeight: 500,
+                color: "var(--fg-tertiary)",
+                marginTop: 4,
+              }}
+            >
               {profile?.email ?? ""}
             </div>
           </div>
@@ -97,7 +131,14 @@ export function MyPage({ tab }: { tab?: TabId }) {
         </div>
 
         {/* 탭 */}
-        <div style={{ display: "flex", gap: 4, borderBottom: "1px solid var(--border-subtle)", marginBottom: 24 }}>
+        <div
+          style={{
+            display: "flex",
+            gap: 4,
+            borderBottom: "1px solid var(--border-subtle)",
+            marginBottom: 24,
+          }}
+        >
           {tabs.map(([id, label]) => (
             <button
               key={id}
@@ -126,19 +167,56 @@ export function MyPage({ tab }: { tab?: TabId }) {
                 <div style={{ marginTop: 8 }}>
                   {(
                     [
-                      ["이름", form.name],
+                      ["이름", displayName],
                       ["이메일", profile?.email ?? ""],
                       ["가입일", profile?.joinedAt ?? ""],
                     ] as [string, string][]
                   ).map(([k, v], i, a) => (
-                    <div key={k} style={{ display: "flex", alignItems: "center", gap: 12, padding: "14px 0", borderBottom: i < a.length - 1 ? "1px solid var(--border-subtle)" : "none" }}>
-                      <span style={{ width: 96, flexShrink: 0, fontFamily: "var(--font-sans)", fontSize: 14, fontWeight: 500, color: "var(--fg-tertiary)" }}>{k}</span>
-                      <span style={{ flex: 1, fontFamily: "var(--font-sans)", fontSize: 14, fontWeight: 600, color: "var(--fg-strong)" }}>{v}</span>
+                    <div
+                      key={k}
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        gap: 12,
+                        padding: "14px 0",
+                        borderBottom: i < a.length - 1 ? "1px solid var(--border-subtle)" : "none",
+                      }}
+                    >
+                      <span
+                        style={{
+                          width: 96,
+                          flexShrink: 0,
+                          fontFamily: "var(--font-sans)",
+                          fontSize: 14,
+                          fontWeight: 500,
+                          color: "var(--fg-tertiary)",
+                        }}
+                      >
+                        {k}
+                      </span>
+                      <span
+                        style={{
+                          flex: 1,
+                          fontFamily: "var(--font-sans)",
+                          fontSize: 14,
+                          fontWeight: 600,
+                          color: "var(--fg-strong)",
+                        }}
+                      >
+                        {v}
+                      </span>
                     </div>
                   ))}
                 </div>
                 <div style={{ display: "flex", gap: 8, marginTop: 18 }}>
-                  <Button variant="assistive" leadingIcon={<Icon name="pencil" size={15} />} onClick={() => setEditing(true)}>
+                  <Button
+                    variant="assistive"
+                    leadingIcon={<Icon name="pencil" size={15} />}
+                    onClick={() => {
+                      setForm({ name: displayName });
+                      setEditing(true);
+                    }}
+                  >
                     프로필 수정
                   </Button>
                 </div>
@@ -147,23 +225,63 @@ export function MyPage({ tab }: { tab?: TabId }) {
               <Fragment>
                 <div style={{ marginTop: 14, display: "flex", flexDirection: "column", gap: 16 }}>
                   <div>
-                    <label style={{ display: "block", fontFamily: "var(--font-sans)", fontSize: 13, fontWeight: 600, color: "var(--fg-secondary)", marginBottom: 7 }}>
+                    <label
+                      style={{
+                        display: "block",
+                        fontFamily: "var(--font-sans)",
+                        fontSize: 13,
+                        fontWeight: 600,
+                        color: "var(--fg-secondary)",
+                        marginBottom: 7,
+                      }}
+                    >
                       이름
                     </label>
-                    <Input value={form.name} placeholder="이름을 입력하세요" onChange={(e) => setForm({ name: e.target.value })} />
+                    <Input
+                      value={form.name}
+                      placeholder="이름을 입력하세요"
+                      onChange={(e) => setForm({ name: e.target.value })}
+                    />
                   </div>
                   <div>
-                    <label style={{ display: "block", fontFamily: "var(--font-sans)", fontSize: 13, fontWeight: 600, color: "var(--fg-secondary)", marginBottom: 7 }}>
+                    <label
+                      style={{
+                        display: "block",
+                        fontFamily: "var(--font-sans)",
+                        fontSize: 13,
+                        fontWeight: 600,
+                        color: "var(--fg-secondary)",
+                        marginBottom: 7,
+                      }}
+                    >
                       이메일
                     </label>
-                    <Input value={profile?.email ?? ""} disabled trailingIcon={<Icon name="lock" size={16} />} />
-                    <p style={{ fontFamily: "var(--font-sans)", fontSize: 12, fontWeight: 500, color: "var(--fg-tertiary)", marginTop: 7 }}>
+                    <Input
+                      value={profile?.email ?? ""}
+                      disabled
+                      trailingIcon={<Icon name="lock" size={16} />}
+                    />
+                    <p
+                      style={{
+                        fontFamily: "var(--font-sans)",
+                        fontSize: 12,
+                        fontWeight: 500,
+                        color: "var(--fg-tertiary)",
+                        marginTop: 7,
+                      }}
+                    >
                       카카오 계정 이메일은 변경할 수 없어요.
                     </p>
                   </div>
                 </div>
                 <div style={{ display: "flex", gap: 8, marginTop: 22 }}>
-                  <Button variant="solid" onClick={() => setEditing(false)}>
+                  <Button
+                    variant="solid"
+                    onClick={() => {
+                      setSavedName(form.name);
+                      setEditing(false);
+                    }}
+                  >
                     저장하기
                   </Button>
                   <Button variant="assistive" onClick={() => setEditing(false)}>
@@ -190,8 +308,25 @@ export function MyPage({ tab }: { tab?: TabId }) {
             }}
           >
             <div>
-              <div style={{ fontFamily: "var(--font-sans)", fontSize: 14, fontWeight: 700, color: "var(--fg-strong)" }}>회원 탈퇴</div>
-              <div style={{ fontFamily: "var(--font-sans)", fontSize: 13, fontWeight: 500, color: "var(--fg-secondary)", marginTop: 4 }}>
+              <div
+                style={{
+                  fontFamily: "var(--font-sans)",
+                  fontSize: 14,
+                  fontWeight: 700,
+                  color: "var(--fg-strong)",
+                }}
+              >
+                회원 탈퇴
+              </div>
+              <div
+                style={{
+                  fontFamily: "var(--font-sans)",
+                  fontSize: 13,
+                  fontWeight: 500,
+                  color: "var(--fg-secondary)",
+                  marginTop: 4,
+                }}
+              >
                 탈퇴 후 3일까지는 되살릴 수 있어요. 3일이 지나면 모든 데이터가 영구 삭제돼요.
               </div>
             </div>
@@ -217,17 +352,46 @@ export function MyPage({ tab }: { tab?: TabId }) {
 
         {active === "billing" && (
           <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
-            <div style={{ background: "var(--bg-brand-subtle)", border: "1px solid transparent", borderRadius: "var(--radius-16)", padding: 24 }}>
-              <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between" }}>
+            <div
+              style={{
+                background: "var(--bg-brand-subtle)",
+                border: "1px solid transparent",
+                borderRadius: "var(--radius-16)",
+                padding: 24,
+              }}
+            >
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "flex-start",
+                  justifyContent: "space-between",
+                }}
+              >
                 <div>
                   <SectionLabel style={{ color: "var(--blue-800)" }}>현재 플랜</SectionLabel>
                   <div style={{ display: "flex", alignItems: "baseline", gap: 8, marginTop: 10 }}>
-                    <span style={{ fontFamily: "var(--font-display)", fontSize: 26, fontWeight: 700, letterSpacing: "-0.02em", color: "var(--fg-strong)" }}>
+                    <span
+                      style={{
+                        fontFamily: "var(--font-display)",
+                        fontSize: 26,
+                        fontWeight: 700,
+                        letterSpacing: "-0.02em",
+                        color: "var(--fg-strong)",
+                      }}
+                    >
                       무료 플랜
                     </span>
                     <Badge variant="brand">Free</Badge>
                   </div>
-                  <p style={{ fontFamily: "var(--font-sans)", fontSize: 14, fontWeight: 500, color: "var(--fg-secondary)", marginTop: 8 }}>
+                  <p
+                    style={{
+                      fontFamily: "var(--font-sans)",
+                      fontSize: 14,
+                      fontWeight: 500,
+                      color: "var(--fg-secondary)",
+                      marginTop: 8,
+                    }}
+                  >
                     이번 달 실전 모의 면접{" "}
                     <b style={{ color: "var(--blue-800)", fontWeight: 700 }}>
                       {sub?.usedRealInterviews ?? 0} / {sub?.maxRealInterviews ?? 0}회
@@ -240,7 +404,9 @@ export function MyPage({ tab }: { tab?: TabId }) {
                 </Button>
               </div>
               <div style={{ marginTop: 18 }}>
-                <Progress value={sub ? (sub.usedRealInterviews / sub.maxRealInterviews) * 100 : 0} />
+                <Progress
+                  value={sub ? (sub.usedRealInterviews / sub.maxRealInterviews) * 100 : 0}
+                />
               </div>
             </div>
             <Card>
@@ -261,7 +427,15 @@ export function MyPage({ tab }: { tab?: TabId }) {
                 >
                   <Icon name="credit-card" size={16} />
                 </span>
-                <span style={{ flex: 1, fontFamily: "var(--font-sans)", fontSize: 14, fontWeight: 500, color: "var(--fg-secondary)" }}>
+                <span
+                  style={{
+                    flex: 1,
+                    fontFamily: "var(--font-sans)",
+                    fontSize: 14,
+                    fontWeight: 500,
+                    color: "var(--fg-secondary)",
+                  }}
+                >
                   등록된 결제 수단이 없어요
                 </span>
                 <Button variant="assistive" size="sm">
@@ -271,7 +445,16 @@ export function MyPage({ tab }: { tab?: TabId }) {
             </Card>
             <Card>
               <SectionLabel style={{ marginBottom: 6 }}>결제 내역</SectionLabel>
-              <p style={{ fontFamily: "var(--font-sans)", fontSize: 14, fontWeight: 500, color: "var(--fg-tertiary)", padding: "10px 0", margin: 0 }}>
+              <p
+                style={{
+                  fontFamily: "var(--font-sans)",
+                  fontSize: 14,
+                  fontWeight: 500,
+                  color: "var(--fg-tertiary)",
+                  padding: "10px 0",
+                  margin: 0,
+                }}
+              >
                 아직 결제 내역이 없어요.
               </p>
             </Card>
@@ -289,10 +472,38 @@ export function MyPage({ tab }: { tab?: TabId }) {
                 ["marketing", "마케팅 정보 수신", "신규 기능·이벤트 소식을 받아봐요"],
               ] as [NotifId, string, string][]
             ).map(([id, t, d], i, a) => (
-              <div key={id} style={{ display: "flex", alignItems: "center", gap: 16, padding: "16px 0", borderBottom: i < a.length - 1 ? "1px solid var(--border-subtle)" : "none" }}>
+              <div
+                key={id}
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 16,
+                  padding: "16px 0",
+                  borderBottom: i < a.length - 1 ? "1px solid var(--border-subtle)" : "none",
+                }}
+              >
                 <div style={{ flex: 1 }}>
-                  <div style={{ fontFamily: "var(--font-sans)", fontSize: 15, fontWeight: 600, color: "var(--fg-strong)" }}>{t}</div>
-                  <div style={{ fontFamily: "var(--font-sans)", fontSize: 13, fontWeight: 500, color: "var(--fg-secondary)", marginTop: 4 }}>{d}</div>
+                  <div
+                    style={{
+                      fontFamily: "var(--font-sans)",
+                      fontSize: 15,
+                      fontWeight: 600,
+                      color: "var(--fg-strong)",
+                    }}
+                  >
+                    {t}
+                  </div>
+                  <div
+                    style={{
+                      fontFamily: "var(--font-sans)",
+                      fontSize: 13,
+                      fontWeight: 500,
+                      color: "var(--fg-secondary)",
+                      marginTop: 4,
+                    }}
+                  >
+                    {d}
+                  </div>
                 </div>
                 <Switch checked={notif[id]} onChange={(v) => onToggle(id, v)} />
               </div>
@@ -333,14 +544,27 @@ export function MyPage({ tab }: { tab?: TabId }) {
           ]}
         >
           <span style={{ color: "var(--fg-secondary)" }}>
-            탈퇴 후 <b style={{ color: "var(--fg-strong)", fontWeight: 700 }}>3일 이내</b>에 다시 로그인하면 이력서·리포트·개인정보를 그대로 되살릴 수 있어요.
-            3일이 지나면 모든 데이터가 영구 삭제되며 복구할 수 없어요.
+            탈퇴 후 <b style={{ color: "var(--fg-strong)", fontWeight: 700 }}>3일 이내</b>에 다시
+            로그인하면 이력서·리포트·개인정보를 그대로 되살릴 수 있어요. 3일이 지나면 모든 데이터가
+            영구 삭제되며 복구할 수 없어요.
           </span>
         </Modal>
 
         {toast && (
-          <div style={{ position: "fixed", left: "50%", bottom: 32, transform: "translateX(-50%)", zIndex: 1100, animation: "hbb-toast-in 200ms ease" }}>
-            <Toast tone={toast.tone} icon={<Icon name={toast.tone === "success" ? "check-circle-2" : "info"} size={18} />}>
+          <div
+            style={{
+              position: "fixed",
+              left: "50%",
+              bottom: 32,
+              transform: "translateX(-50%)",
+              zIndex: 1100,
+              animation: "hbb-toast-in 200ms ease",
+            }}
+          >
+            <Toast
+              tone={toast.tone}
+              icon={<Icon name={toast.tone === "success" ? "check-circle-2" : "info"} size={18} />}
+            >
               {toast.msg}
             </Toast>
           </div>

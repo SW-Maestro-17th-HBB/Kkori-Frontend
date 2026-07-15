@@ -13,24 +13,20 @@ import type {
   Subscription,
 } from "./types";
 
-const delay = <T,>(data: T, ms = 120): Promise<T> =>
+const delay = <T>(data: T, ms = 120): Promise<T> =>
   new Promise((resolve) => setTimeout(() => resolve(data), ms));
 
 export const fetchProfile = (): Promise<Profile> => delay(fixtures.profile);
 
-export const fetchSubscription = (): Promise<Subscription> =>
-  delay(fixtures.subscription);
+export const fetchSubscription = (): Promise<Subscription> => delay(fixtures.subscription);
 
-export const fetchNotifications = (): Promise<NotificationItem[]> =>
-  delay(fixtures.notifications);
+export const fetchNotifications = (): Promise<NotificationItem[]> => delay(fixtures.notifications);
 
 export const fetchResumes = (): Promise<Resume[]> => delay(fixtures.resumes);
 
-export const fetchReports = (): Promise<ReportSummary[]> =>
-  delay(fixtures.reports);
+export const fetchReports = (): Promise<ReportSummary[]> => delay(fixtures.reports);
 
-export const fetchReportStats = (): Promise<ReportStats> =>
-  delay(fixtures.reportStats);
+export const fetchReportStats = (): Promise<ReportStats> => delay(fixtures.reportStats);
 
 export const fetchReportDetail = (id: number | string): Promise<ReportDetail> =>
   delay({ ...fixtures.reportDetail, id: Number(id) || 1 });
