@@ -20,7 +20,9 @@ concurrency:
   group: jira-story-${{ github.event.client_payload.jiraKey || inputs.jiraKey }}
   cancel-in-progress: false
 
+# permissions 를 명시하면 나머지는 전부 none 이 됨 — checkout 에 contents: read 필수
 permissions:
+  contents: read
   issues: write
 
 jobs:
