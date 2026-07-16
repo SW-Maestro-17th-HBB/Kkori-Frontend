@@ -1,8 +1,10 @@
 /* ============================================================
-   API 클라이언트 — 현재는 목 fetcher.
-   백엔드 연동 시 이 파일의 함수 본문만 실제 fetch로 교체.
+   API 클라이언트 — 도메인별로 목 → 실제 API 점진 교체 중.
+   [실제] 인증(auth)  [목] 이력서·리포트·사용자·알림
    ============================================================ */
 import * as fixtures from "./fixtures";
+import { request } from "./request";
+import type { components } from "./schema";
 import type {
   NotificationItem,
   Profile,
@@ -15,6 +17,13 @@ import type {
 
 const delay = <T>(data: T, ms = 120): Promise<T> =>
   new Promise((resolve) => setTimeout(() => resolve(data), ms));
+
+/* ---------- 인증 (실제 API) ---------- */
+
+export type KakaoLoginResponse = components["schemas"]["KakaoLoginResponse"];
+
+export const postKakaoLogin = (code: string): Promise<KakaoLoginResponse> =>
+  request<KakaoLoginResponse>("POST", "/api/v1/auth/kakao", { body: { code } });
 
 export const fetchProfile = (): Promise<Profile> => delay(fixtures.profile);
 

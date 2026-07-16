@@ -5,6 +5,7 @@
 export const ROUTES = {
   landing: "/",
   auth: "/login",
+  kakaoCallback: "/auth/kakao/callback",
   consent: "/signup",
   dash: "/dashboard",
   resume: "/resumes",

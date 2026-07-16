@@ -7,7 +7,21 @@ import {
   fetchReportStats,
   fetchResumes,
   fetchSubscription,
+  postKakaoLogin,
 } from "./client";
+
+/* ---------- 인증 ---------- */
+
+/** 카카오 code 교환 — code 는 1회용이라 재시도·재요청을 모두 차단한 쿼리.
+    (mutate-in-effect 는 StrictMode 이중 마운트에서 상태 유실 — queryKey 캐시가 dedup 을 보장) */
+export const useKakaoLogin = (code: string | null) =>
+  useQuery({
+    queryKey: ["auth", "kakaoLogin", code],
+    queryFn: () => postKakaoLogin(code as string),
+    enabled: code !== null,
+    retry: false,
+    staleTime: Infinity,
+  });
 
 export const useProfile = () => useQuery({ queryKey: ["profile"], queryFn: fetchProfile });
 

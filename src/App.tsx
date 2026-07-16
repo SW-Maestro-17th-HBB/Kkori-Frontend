@@ -2,6 +2,7 @@ import { useEffect } from "react";
 import { Navigate, Route, Routes, useLocation } from "react-router";
 import { LandingPage } from "./pages/LandingPage";
 import { AuthPage } from "./pages/AuthPage";
+import { KakaoCallbackPage } from "./pages/KakaoCallbackPage";
 import { ConsentPage } from "./pages/ConsentPage";
 import { DashboardPage } from "./pages/DashboardPage";
 import { ResumePage } from "./pages/ResumePage";
@@ -27,6 +28,7 @@ export default function App() {
       <Routes>
         <Route path="/" element={<LandingPage />} />
         <Route path="/login" element={<AuthPage />} />
+        <Route path="/auth/kakao/callback" element={<KakaoCallbackPage />} />
         <Route path="/signup" element={<ConsentPage />} />
         <Route path="/dashboard" element={<DashboardPage />} />
         <Route path="/resumes" element={<ResumePage />} />
