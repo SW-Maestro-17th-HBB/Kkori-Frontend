@@ -15,7 +15,9 @@ const JIRA_BASE = (process.env.JIRA_BASE_URL || "").replace(/\/+$/, "");
 const JIRA_EMAIL = process.env.JIRA_EMAIL;
 const JIRA_TOKEN = process.env.JIRA_API_TOKEN;
 
-const payload = JSON.parse(process.env.CLIENT_PAYLOAD || "{}");
+// workflow_dispatch 에서는 client_payload 가 없어 toJSON() 이 문자열 "null" 을 만든다
+// ("null" 은 truthy 라 || 기본값을 안 탐) → 파싱 결과에 ?? {} 로 방어.
+const payload = JSON.parse(process.env.CLIENT_PAYLOAD || "{}") ?? {};
 // repository_dispatch 는 payload, workflow_dispatch(수동 실행)는 INPUT_JIRA_KEY 로 받는다.
 const jiraKey = payload.jiraKey || process.env.INPUT_JIRA_KEY || "";
 
