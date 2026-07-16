@@ -1,8 +1,14 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { screen } from "@testing-library/react";
-import { Route, Routes } from "react-router";
+import { Route, Routes, useLocation } from "react-router";
 import { renderWithProviders } from "../test/render";
-import { getAccessToken, getRefreshToken, getSignupSession } from "../api/tokenStore";
+import {
+  createOauthState,
+  getAccessToken,
+  getRefreshToken,
+  getSignupSession,
+  peekOauthState,
+} from "../api/tokenStore";
 import { KakaoCallbackPage } from "./KakaoCallbackPage";
 
 const envelope = (data: unknown) =>
@@ -17,16 +23,36 @@ const errorEnvelope = (code: string, message: string, status: number) =>
     headers: { "Content-Type": "application/json" },
   });
 
+/** 현재 라우터 search 를 노출하는 프로브 (URL 정리 검증용) */
+function LocationProbe() {
+  const loc = useLocation();
+  return <div data-testid="loc-search">{loc.search}</div>;
+}
+
 function renderCallback(route: string) {
   return renderWithProviders(
     <Routes>
-      <Route path="/auth/kakao/callback" element={<KakaoCallbackPage />} />
+      <Route
+        path="/auth/kakao/callback"
+        element={
+          <>
+            <KakaoCallbackPage />
+            <LocationProbe />
+          </>
+        }
+      />
       <Route path="/dashboard" element={<div>대시보드-도착</div>} />
       <Route path="/signup" element={<div>동의화면-도착</div>} />
       <Route path="/login" element={<div>로그인화면-도착</div>} />
     </Routes>,
     { route },
   );
+}
+
+/** 정상 플로우 세팅 — 인가 시작 시점처럼 state 를 세션에 만들고 콜백 URL 을 돌려준다 */
+function validCallbackRoute(code: string) {
+  const state = createOauthState();
+  return `/auth/kakao/callback?code=${code}&state=${state}`;
 }
 
 afterEach(() => {
@@ -48,7 +74,7 @@ describe("KakaoCallbackPage — 판정 분기", () => {
         }),
       ),
     );
-    renderCallback("/auth/kakao/callback?code=valid-code");
+    renderCallback(validCallbackRoute("valid-code"));
     expect(await screen.findByText("대시보드-도착")).toBeInTheDocument();
     expect(getAccessToken()).toBe("at-123");
     expect(getRefreshToken()).toBe("rt-456");
@@ -59,7 +85,7 @@ describe("KakaoCallbackPage — 판정 분기", () => {
       "fetch",
       vi.fn().mockResolvedValue(envelope({ isNewUser: true, signupToken: "st-789" })),
     );
-    renderCallback("/auth/kakao/callback?code=valid-code");
+    renderCallback(validCallbackRoute("valid-code"));
     expect(await screen.findByText("동의화면-도착")).toBeInTheDocument();
     expect(getSignupSession()).toEqual({ signupToken: "st-789", isRestored: false });
     expect(getAccessToken()).toBeNull();
@@ -74,17 +100,58 @@ describe("KakaoCallbackPage — 판정 분기", () => {
           envelope({ isNewUser: false, isRestored: true, signupToken: "st-restore" }),
         ),
     );
-    renderCallback("/auth/kakao/callback?code=valid-code");
+    renderCallback(validCallbackRoute("valid-code"));
     expect(await screen.findByText("동의화면-도착")).toBeInTheDocument();
     expect(getSignupSession()).toEqual({ signupToken: "st-restore", isRestored: true });
   });
 
-  it("code 는 한 번만 교환한다 (StrictMode 이중 실행 방어)", async () => {
+  it("code 는 한 번만 교환한다 (StrictMode 이중 마운트 방어)", async () => {
     const mock = vi.fn().mockResolvedValue(envelope({ isNewUser: true, signupToken: "st-once" }));
     vi.stubGlobal("fetch", mock);
-    renderCallback("/auth/kakao/callback?code=valid-code");
+    renderCallback(validCallbackRoute("valid-code"));
     await screen.findByText("동의화면-도착");
     expect(mock).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("KakaoCallbackPage — state 검증 (Login CSRF 방어)", () => {
+  it("state 가 세션 저장값과 다르면 교환 없이 실패 처리한다", () => {
+    const mock = vi.fn();
+    vi.stubGlobal("fetch", mock);
+    createOauthState(); // 피해자 세션의 state
+    renderCallback("/auth/kakao/callback?code=attacker-code&state=attacker-state");
+    expect(screen.getByText("로그인에 실패했어요")).toBeInTheDocument();
+    expect(mock).not.toHaveBeenCalled();
+  });
+
+  it("세션에 state 가 없으면(공격자 URL 직접 진입) 교환 없이 실패 처리한다", () => {
+    const mock = vi.fn();
+    vi.stubGlobal("fetch", mock);
+    renderCallback("/auth/kakao/callback?code=attacker-code&state=whatever");
+    expect(screen.getByText("로그인에 실패했어요")).toBeInTheDocument();
+    expect(mock).not.toHaveBeenCalled();
+  });
+
+  it("검증 후 state 는 즉시 폐기된다 (1회용)", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(envelope({ isNewUser: true, signupToken: "st-1" })),
+    );
+    renderCallback(validCallbackRoute("valid-code"));
+    await screen.findByText("동의화면-도착");
+    expect(peekOauthState()).toBeNull();
+  });
+});
+
+describe("KakaoCallbackPage — code 잔류 방지", () => {
+  it("실패해도 code·state 를 URL 에서 즉시 제거한다", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(errorEnvelope("A002", "카카오 인증에 실패했습니다.", 401)),
+    );
+    renderCallback(validCallbackRoute("one-time-code"));
+    await screen.findByText("로그인에 실패했어요");
+    expect(screen.getByTestId("loc-search")).toHaveTextContent(/^$/);
   });
 });
 
@@ -98,7 +165,7 @@ describe("KakaoCallbackPage — 실패 처리", () => {
           errorEnvelope("A002", "카카오 인증에 실패했습니다. 다시 로그인해 주세요.", 401),
         ),
     );
-    renderCallback("/auth/kakao/callback?code=expired-code");
+    renderCallback(validCallbackRoute("expired-code"));
     expect(await screen.findByText("로그인에 실패했어요")).toBeInTheDocument();
     expect(
       screen.getByText("카카오 인증에 실패했습니다. 다시 로그인해 주세요."),

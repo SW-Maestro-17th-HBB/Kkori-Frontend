@@ -33,6 +33,26 @@ export function isLoggedIn(): boolean {
   return getAccessToken() !== null;
 }
 
+/* ---------- OAuth state (Login CSRF 방어) ----------
+   인가 요청에 포함한 난수를 콜백에서 대조해, 공격자가 만든 콜백 URL 로
+   피해자를 로그인시키는 공격을 차단한다. 1회용 — 콜백에서 검증 후 즉시 폐기. */
+
+const OAUTH_STATE_KEY = "kkori.oauthState";
+
+export function createOauthState(): string {
+  const state = crypto.randomUUID();
+  sessionStorage.setItem(OAUTH_STATE_KEY, state);
+  return state;
+}
+
+export function peekOauthState(): string | null {
+  return sessionStorage.getItem(OAUTH_STATE_KEY);
+}
+
+export function clearOauthState() {
+  sessionStorage.removeItem(OAUTH_STATE_KEY);
+}
+
 /* ---------- 가입/복구 진행 상태 (임시) ---------- */
 
 export function setSignupSession(signupToken: string, isRestored: boolean) {

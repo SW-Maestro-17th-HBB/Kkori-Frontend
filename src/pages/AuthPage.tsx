@@ -1,4 +1,5 @@
 /* ============================ 로그인 (/login) ============================ */
+import { createOauthState } from "../api/tokenStore";
 import { Button } from "../components/ds";
 import { Icon } from "../components/Icon";
 import { Display, Wordmark } from "../components/primitives";
@@ -16,6 +17,8 @@ function startKakaoLogin() {
     response_type: "code",
     client_id: clientId,
     redirect_uri: redirectUri,
+    // Login CSRF 방어 — 콜백에서 세션에 저장한 값과 대조
+    state: createOauthState(),
   });
   window.location.assign(`https://kauth.kakao.com/oauth/authorize?${params}`);
 }

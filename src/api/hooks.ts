@@ -13,7 +13,8 @@ import {
 /* ---------- 인증 ---------- */
 
 /** 카카오 code 교환 — code 는 1회용이라 재시도·재요청을 모두 차단한 쿼리.
-    (mutate-in-effect 는 StrictMode 이중 마운트에서 상태 유실 — queryKey 캐시가 dedup 을 보장) */
+    (mutate-in-effect 는 StrictMode 이중 마운트에서 상태 유실 — queryKey 캐시가 dedup 을 보장)
+    refetch 3종도 차단 — 탭 포커스/재연결/재마운트로 소진된 code 가 재전송되면 안 됨 */
 export const useKakaoLogin = (code: string | null) =>
   useQuery({
     queryKey: ["auth", "kakaoLogin", code],
@@ -21,6 +22,9 @@ export const useKakaoLogin = (code: string | null) =>
     enabled: code !== null,
     retry: false,
     staleTime: Infinity,
+    refetchOnMount: false,
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: false,
   });
 
 export const useProfile = () => useQuery({ queryKey: ["profile"], queryFn: fetchProfile });
