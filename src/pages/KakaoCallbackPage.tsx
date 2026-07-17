@@ -8,16 +8,16 @@
    - 1회용 code 를 URL·브라우저 기록에 남기지 않음: 첫 렌더에서 메모리로 캡처한 뒤
      주소를 즉시 정리하고, 모든 이동을 replace 로 처리. */
 import { useEffect, useRef, useState } from "react";
-import { useNavigate, useSearchParams } from "react-router";
+import { useSearchParams } from "react-router";
 import { useKakaoLogin } from "../api/hooks";
 import { isApiError } from "../api/request";
 import { clearOauthState, peekOauthState, setSignupSession, setTokens } from "../api/tokenStore";
 import { Button } from "../components/ds";
 import { Display, Wordmark } from "../components/primitives";
-import { ROUTES } from "../routes";
+import { useNav } from "../hooks/useNav";
 
 export function KakaoCallbackPage() {
-  const navigate = useNavigate();
+  const nav = useNav();
   const [params, setSearchParams] = useSearchParams();
 
   // URL 파라미터는 첫 렌더에서 한 번만 메모리로 캡처 (이후 URL 은 정리됨)
@@ -49,16 +49,16 @@ export function KakaoCallbackPage() {
     if (data.accessToken && data.refreshToken) {
       // 기존 유저 — 즉시 로그인 완료
       setTokens(data.accessToken, data.refreshToken);
-      navigate(ROUTES.dash, { replace: true });
+      nav("dash", { replace: true });
     } else if (data.signupToken) {
       // 신규(isNewUser) 또는 복구(isRestored) — 동의 화면으로
       setSignupSession(data.signupToken, data.isRestored === true);
-      navigate(ROUTES.consent, { replace: true });
+      nav("consent", { replace: true });
     } else {
       // 계약 위반 — 토큰도 signupToken 도 없음
-      navigate(ROUTES.auth, { replace: true });
+      nav("auth", { replace: true });
     }
-  }, [data, navigate]);
+  }, [data, nav]);
 
   const failed = isError || code === null;
   const message = initial.kakaoError
@@ -99,6 +99,7 @@ export function KakaoCallbackPage() {
               로그인에 실패했어요
             </Display>
             <p
+              role="alert"
               style={{
                 fontFamily: "var(--font-sans)",
                 fontSize: 15,
@@ -109,7 +110,7 @@ export function KakaoCallbackPage() {
             >
               {message}
             </p>
-            <Button variant="solid" onClick={() => navigate(ROUTES.auth, { replace: true })}>
+            <Button variant="solid" onClick={() => nav("auth", { replace: true })}>
               다시 로그인하기
             </Button>
           </>
@@ -127,6 +128,8 @@ export function KakaoCallbackPage() {
               }}
             />
             <p
+              role="status"
+              aria-live="polite"
               style={{
                 fontFamily: "var(--font-sans)",
                 fontSize: 15,

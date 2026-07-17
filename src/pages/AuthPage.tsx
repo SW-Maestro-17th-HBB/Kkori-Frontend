@@ -5,7 +5,10 @@ import { Icon } from "../components/Icon";
 import { Display, Wordmark } from "../components/primitives";
 import { ROUTES } from "../routes";
 
-/* 카카오 인가 페이지로 이동 — client_id 는 백엔드가 code 교환에 쓰는 키와 동일해야 함 */
+/* 카카오 REST API 키 — 인가 요청 client_id 는 백엔드가 code 교환에 쓰는 키와 동일해야 함 */
+const KAKAO_CONFIGURED = Boolean(import.meta.env.VITE_KAKAO_CLIENT_ID);
+
+/* 카카오 인가 페이지로 이동 */
 function startKakaoLogin() {
   const clientId = import.meta.env.VITE_KAKAO_CLIENT_ID;
   if (!clientId) {
@@ -77,10 +80,25 @@ export function AuthPage() {
               fullWidth
               leadingIcon={<Icon name="message-circle" size={18} />}
               onClick={startKakaoLogin}
-              style={{ background: "#FEE500", color: "#191600" }}
+              disabled={!KAKAO_CONFIGURED}
+              style={KAKAO_CONFIGURED ? { background: "#FEE500", color: "#191600" } : undefined}
             >
               카카오로 계속하기
             </Button>
+            {!KAKAO_CONFIGURED && (
+              <p
+                role="alert"
+                style={{
+                  fontFamily: "var(--font-sans)",
+                  fontSize: 13,
+                  fontWeight: 500,
+                  color: "var(--red-700)",
+                  margin: 0,
+                }}
+              >
+                카카오 로그인 설정이 아직 완료되지 않았어요. 잠시 후 다시 시도해 주세요.
+              </p>
+            )}
           </div>
           <div
             style={{

@@ -53,7 +53,9 @@ export function clearOauthState() {
   sessionStorage.removeItem(OAUTH_STATE_KEY);
 }
 
-/* ---------- 가입/복구 진행 상태 (임시) ---------- */
+/* ---------- 가입/복구 진행 상태 (임시) ----------
+   만료(10분)는 클라이언트에서 검사하지 않는다 — 서버가 서명·만료를 검증해
+   만료 시 A005(INVALID_SIGNUP_TOKEN)를 반환하고, 화면은 재로그인 유도로 처리한다. */
 
 export function setSignupSession(signupToken: string, isRestored: boolean) {
   sessionStorage.setItem(SIGNUP_KEY, signupToken);
