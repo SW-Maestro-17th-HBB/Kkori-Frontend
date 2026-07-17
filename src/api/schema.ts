@@ -4,6 +4,29 @@
  */
 
 export interface paths {
+  "/api/v1/user/consents/{type}": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    /**
+     * 선택 동의 변경
+     * @description 선택 항목(marketing)의 동의·철회를 기록하고 전체 최신 상태를 반환한다.
+     *     동의(agreed=true)는 사용자가 확인한 동의서 version이 필수이며 서버 현재 버전과
+     *     다르면 409(U005). 필수 항목 변경은 400(U004), 알 수 없는 항목은 400(U003).
+     *     동일 상태 재요청은 이력을 만들지 않는다(멱등, 200).
+     */
+    put: operations["change"];
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   "/api/v1/resumes": {
     parameters: {
       query?: never;
@@ -38,6 +61,8 @@ export interface paths {
      * 회원가입 완료
      * @description signupToken과 동의 내역을 받아 계정을 생성하고 토큰 쌍을 발급한다.
      *     필수 동의 3종(privacy·audio_usage·resume_usage)이 모두 agreed=true여야 한다.
+     *     agreed=true 항목은 사용자가 확인한 동의서 version이 필수이며, 서버 현재 버전과
+     *     다르면 409(U005) — 최신 동의서를 다시 확인한 뒤 재제출해야 한다. 동일 type 중복은 400.
      */
     post: operations["signup"];
     delete?: never;
@@ -166,14 +191,71 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  "/api/v1/user/consents": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * 내 동의 상태 조회
+     * @description 전체 동의 항목의 최신 상태(agreed·기록 버전·마지막 변경 시각)를 반환한다.
+     *     이력이 없는 항목도 agreed=false, version·updatedAt=null로 포함된다.
+     */
+    get: operations["getMyConsents"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/v1/consents": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * 현재 동의 항목·버전 제공
+     * @description 동의 화면 구성에 필요한 검증 메타데이터(항목·필수 여부·현재 동의서 버전)를 반환한다.
+     *     가입 전 동의 화면에서도 호출되므로 인증이 필요 없다. 버전 대조의 원천이므로
+     *     응답은 캐시되지 않는다(Cache-Control: no-store) — 409 처리 시 캐시를 우회해 재조회할 것.
+     */
+    get: operations["getCatalog"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
 }
 export type webhooks = Record<string, never>;
 export interface components {
   schemas: {
-    ApiResponseResumeUploadResponse: {
+    ConsentChangeRequest: {
+      agreed: boolean;
+      /** Format: int32 */
+      version?: number;
+    };
+    ApiResponseUserConsentsResponse: {
       success?: boolean;
-      data?: components["schemas"]["ResumeUploadResponse"];
+      data?: components["schemas"]["UserConsentsResponse"];
       error?: components["schemas"]["ErrorResponse"];
+    };
+    ConsentStateItem: {
+      /** @enum {string} */
+      type?: "privacy" | "audio_usage" | "resume_usage" | "marketing";
+      agreed?: boolean;
+      /** Format: int32 */
+      version?: number;
+      /** Format: date-time */
+      updatedAt?: string;
     };
     ErrorResponse: {
       code?: string;
@@ -183,6 +265,14 @@ export interface components {
     FieldError: {
       field?: string;
       reason?: string;
+    };
+    UserConsentsResponse: {
+      consents?: components["schemas"]["ConsentStateItem"][];
+    };
+    ApiResponseResumeUploadResponse: {
+      success?: boolean;
+      data?: components["schemas"]["ResumeUploadResponse"];
+      error?: components["schemas"]["ErrorResponse"];
     };
     ResumeUploadResponse: {
       /** Format: int64 */
@@ -212,6 +302,8 @@ export interface components {
       /** @enum {string} */
       type?: "privacy" | "audio_usage" | "resume_usage" | "marketing";
       agreed?: boolean;
+      /** Format: int32 */
+      version?: number;
     };
     SignupRequest: {
       signupToken?: string;
@@ -272,6 +364,21 @@ export interface components {
       /** Format: int64 */
       timeout?: number;
     };
+    ApiResponseConsentCatalogResponse: {
+      success?: boolean;
+      data?: components["schemas"]["ConsentCatalogResponse"];
+      error?: components["schemas"]["ErrorResponse"];
+    };
+    CatalogItem: {
+      /** @enum {string} */
+      type?: "privacy" | "audio_usage" | "resume_usage" | "marketing";
+      required?: boolean;
+      /** Format: int32 */
+      version?: number;
+    };
+    ConsentCatalogResponse: {
+      consents?: components["schemas"]["CatalogItem"][];
+    };
     ApiResponseWithdrawResponse: {
       success?: boolean;
       data?: components["schemas"]["WithdrawResponse"];
@@ -290,6 +397,33 @@ export interface components {
 }
 export type $defs = Record<string, never>;
 export interface operations {
+  change: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        /** @description 동의 항목 — 소문자 스네이크 표기 (예: marketing) */
+        type: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["ConsentChangeRequest"];
+      };
+    };
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "*/*": components["schemas"]["ApiResponseUserConsentsResponse"];
+        };
+      };
+    };
+  };
   upload: {
     parameters: {
       query?: {
@@ -535,6 +669,46 @@ export interface operations {
         };
         content: {
           "text/event-stream": components["schemas"]["SseEmitter"];
+        };
+      };
+    };
+  };
+  getMyConsents: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "*/*": components["schemas"]["ApiResponseUserConsentsResponse"];
+        };
+      };
+    };
+  };
+  getCatalog: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "*/*": components["schemas"]["ApiResponseConsentCatalogResponse"];
         };
       };
     };
