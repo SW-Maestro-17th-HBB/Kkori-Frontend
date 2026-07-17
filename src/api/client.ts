@@ -21,9 +21,22 @@ const delay = <T>(data: T, ms = 120): Promise<T> =>
 /* ---------- 인증 (실제 API) ---------- */
 
 export type KakaoLoginResponse = components["schemas"]["KakaoLoginResponse"];
+export type ConsentCatalogResponse = components["schemas"]["ConsentCatalogResponse"];
+export type CatalogItem = components["schemas"]["CatalogItem"];
+export type ConsentType = NonNullable<CatalogItem["type"]>;
+export type SignupRequest = components["schemas"]["SignupRequest"];
+export type ConsentItem = components["schemas"]["ConsentItem"];
+export type TokenResponse = components["schemas"]["TokenResponse"];
 
 export const postKakaoLogin = (code: string): Promise<KakaoLoginResponse> =>
   request<KakaoLoginResponse>("POST", "/api/v1/auth/kakao", { body: { code } });
+
+// 버전 대조의 원천 — HTTP 캐시 재사용 금지(서버도 Cache-Control: no-store)
+export const getConsentCatalog = (): Promise<ConsentCatalogResponse> =>
+  request<ConsentCatalogResponse>("GET", "/api/v1/consents", { cache: "no-store" });
+
+export const postSignup = (body: SignupRequest): Promise<TokenResponse> =>
+  request<TokenResponse>("POST", "/api/v1/auth/signup", { body });
 
 export const fetchProfile = (): Promise<Profile> => delay(fixtures.profile);
 
