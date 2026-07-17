@@ -186,7 +186,9 @@ export const hardRedirect = {
   to: (url: string) => window.location.assign(url),
 };
 
-let reissueInFlight: Promise<void> | null = null;
+/** 진행 중 재발급 — **요청한 세션에 바인딩**해 동일 세션의 대기자만 결과를 공유한다.
+    (A 세션의 재발급 실패를 B 세션 요청이 자기 실패로 오인하는 사고 방지) */
+let reissueInFlight: { sessionId: string | null; promise: Promise<void> } | null = null;
 /** 강제 이동 1회 보장 — 동시 실패한 대기자들이 중복 이동하지 않도록.
     하드 리다이렉트로 페이지가 리셋되므로 실환경에선 자연 초기화된다. */
 let reauthHandled = false;
@@ -197,9 +199,12 @@ export function __resetAuthForTests() {
   reauthHandled = false;
 }
 
-/** 세션 회복 불능 확정 시 처리 — silent 정책은 이동하지 않고 가드도 점유하지 않는다 */
-async function applyReauth(policy: ReauthPolicy): Promise<void> {
-  await clearTokens();
+/** 세션 회복 불능 확정 시 처리 — 잠금 안에서 세션을 대조해 **그 세션이 아직 현재일 때만**
+    정리·이동한다(그 사이 다른 계정이 로그인했으면 남의 세션이므로 아무것도 안 함).
+    silent 정책은 이동하지 않고 가드도 점유하지 않는다. */
+async function applyReauth(policy: ReauthPolicy, expectedSessionId: string | null): Promise<void> {
+  const cleared = await clearTokens(expectedSessionId);
+  if (!cleared) return; // 세션이 이미 교체됨 — 삭제·이동·정리 전부 생략
   clearSignupSession();
   if (policy === "redirect" && !reauthHandled) {
     reauthHandled = true;
@@ -234,11 +239,15 @@ type TokenPair = components["schemas"]["TokenResponse"];
     돌려주므로, 불확실 실패는 같은 RT 로 정확히 1회 재시도한다(명시적 401 은 즉시 전파).
     토큰 누락은 예외가 아닌 루프 내 데이터 검증으로 다루며, SESSION_EXPIRED 는
     ① RT 부재(사전) ② 시도 소진 시 마지막 실패가 누락일 때 — 두 지점에서만 생성. */
-async function doReissue(): Promise<void> {
+async function doReissue(expectedSessionId: string | null): Promise<void> {
   // 단일 스냅샷으로 캡처 — RT 와 세션 ID 가 서로 다른 세션의 것일 수 없다
   const auth = getAuthSnapshot();
   if (!auth) {
     throw new ApiError(FE_ERROR_CODES.SESSION_EXPIRED, "다시 로그인해 주세요.", 401);
+  }
+  if (auth.sessionId !== expectedSessionId) {
+    // 요청한 세션이 이미 교체됨 — 남의 RT 로 재발급하지 않는다 (비 terminal)
+    throw new ApiError(FE_ERROR_CODES.SESSION_REPLACED, "세션이 변경되었습니다.", 401);
   }
   const { refreshToken, sessionId } = auth; // 지역 고정 — 재시도도 같은 RT (Grace 계약)
   let lastUncertain: unknown = null;
@@ -272,12 +281,20 @@ async function doReissue(): Promise<void> {
   throw lastUncertain; // 시도 소진 — 마지막 불확실 실패 전파 (누락이면 SESSION_EXPIRED → terminal)
 }
 
-/** 동시 다발 401 의 중복 재발급 단일화 — 대기자 전원이 하나의 재발급 결과를 공유 */
-function reissueOnce(): Promise<void> {
-  reissueInFlight ??= doReissue().finally(() => {
-    reissueInFlight = null;
-  });
-  return reissueInFlight;
+/** 동시 다발 401 의 중복 재발급 단일화 — **같은 세션의** 대기자만 결과를 공유하고,
+    다른 세션의 요청은 자기 세션의 RT 로 별도 재발급을 시작한다 */
+function reissueOnce(sessionId: string | null): Promise<void> {
+  if (reissueInFlight && reissueInFlight.sessionId === sessionId) {
+    return reissueInFlight.promise;
+  }
+  const entry = {
+    sessionId,
+    promise: doReissue(sessionId).finally(() => {
+      if (reissueInFlight === entry) reissueInFlight = null; // 내 슬롯일 때만 해제
+    }),
+  };
+  reissueInFlight = entry;
+  return entry.promise;
 }
 
 export async function request<T>(
@@ -305,9 +322,9 @@ export async function request<T>(
     // 재발급을 건너뛰고 새 토큰으로 재시도만 한다 — 불필요한 중복 회전 방지
     if (getAccessToken() === attemptToken) {
       try {
-        await reissueOnce();
+        await reissueOnce(attemptSession);
       } catch (re) {
-        if (isTerminalReissueFailure(re)) await applyReauth(policy);
+        if (isTerminalReissueFailure(re)) await applyReauth(policy, attemptSession);
         throw re;
       }
     }
@@ -317,7 +334,8 @@ export async function request<T>(
       // 정확히 1회 재시도 — bodyFactory 는 회전된 토큰을 반영해 재평가된다
       return await rawRequest<T>(method, path, opts, getAccessToken());
     } catch (e2) {
-      if (isApiError(e2) && e2.status === 401) await applyReauth(policy); // 2차 재발급 금지
+      // 2차 재발급 금지 — 재시도의 401 은 회복 불능
+      if (isApiError(e2) && e2.status === 401) await applyReauth(policy, attemptSession);
       throw e2;
     }
   }

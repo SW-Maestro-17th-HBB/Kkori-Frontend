@@ -12,7 +12,7 @@ import {
   postLogout,
   postSignup,
 } from "./client";
-import { clearSignupSession, clearTokens, getRefreshToken } from "./tokenStore";
+import { clearSignupSession, clearTokens, getAuthSnapshot } from "./tokenStore";
 import { useNav } from "../hooks/useNav";
 
 /* ---------- 인증 ---------- */
@@ -56,18 +56,24 @@ export const useLogout = () => {
   const nav = useNav();
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async () => {
-      if (!getRefreshToken()) return; // 이미 로그아웃 상태 — API 생략
+    // 시작 시점의 세션 ID 를 반환해 정리 단계로 전달 — 요청 대기 중 다른 탭에서
+    // 새 계정이 로그인했으면 그 세션을 지우면 안 되기 때문 (조건부 삭제)
+    mutationFn: async (): Promise<string | null> => {
+      const auth = getAuthSnapshot();
+      if (!auth) return null; // 이미 로그아웃 상태 — API 생략
       try {
         await postLogout();
       } catch {
         // 멱등 계약 — 서버 폐기가 실패해도 로컬 정리는 진행한다
       }
+      return auth.sessionId;
     },
-    onSettled: async () => {
-      await clearTokens();
-      clearSignupSession(); // 이전 가입 흐름의 임시 인증 정보도 함께 폐기
-      queryClient.clear(); // SPA 이동이라 이전 세션 캐시가 메모리에 남는 것 방지
+    onSettled: async (sessionId) => {
+      if (sessionId) await clearTokens(sessionId); // 내 세션일 때만 삭제 — 새 로그인 보호
+      clearSignupSession(); // 탭 로컬(sessionStorage) — 이전 가입 흐름의 임시 정보 폐기
+      // 캐시는 무조건 비운다 — 이 탭의 캐시는 로그아웃한 세션의 데이터라,
+      // 새 세션이 활성이어도 보존하면 이전 계정 데이터가 노출된다 (재조회만 발생)
+      queryClient.clear();
       nav("landing");
     },
   });

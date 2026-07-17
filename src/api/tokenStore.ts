@@ -95,9 +95,17 @@ export function getAuthSessionId(): string | null {
   return getAuthSnapshot()?.sessionId ?? null;
 }
 
-export function clearTokens(): Promise<void> {
+/** 세션 삭제 — expectedSessionId 를 주면 **잠금 안에서 현재 세션과 대조해 일치할 때만**
+    삭제한다(불일치 = 그 사이 다른 계정이 로그인 → 남의 세션 파괴 금지, false 반환).
+    인자 생략 시 무조건 삭제(테스트·강제 정리용). */
+export function clearTokens(expectedSessionId?: string | null): Promise<boolean> {
   return withAuthLock(() => {
+    if (expectedSessionId !== undefined) {
+      const current = getAuthSnapshot()?.sessionId ?? null;
+      if (current !== expectedSessionId) return false;
+    }
     localStorage.removeItem(AUTH_KEY);
+    return true;
   });
 }
 

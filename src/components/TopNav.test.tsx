@@ -164,6 +164,33 @@ describe("TopNav — 로그아웃", () => {
     expect(getRefreshToken()).toBeNull();
   });
 
+  it("로그아웃 요청 대기 중 다른 계정이 로그인하면 그 세션을 지우지 않는다", async () => {
+    await setTokens("at-A", "rt-A");
+    let releaseLogout: (() => void) | null = null;
+    const mock = vi.fn<(input: RequestInfo | URL, init?: RequestInit) => Promise<Response>>(
+      (input) => {
+        if (String(input).endsWith("/api/v1/auth/logout")) {
+          return new Promise<Response>((resolve) => {
+            releaseLogout = () => resolve(envelope(null));
+          });
+        }
+        return Promise.reject(new Error(`unexpected fetch: ${String(input)}`));
+      },
+    );
+    vi.stubGlobal("fetch", mock);
+    const user = userEvent.setup();
+    renderTopNav();
+
+    await clickLogout(user);
+    await vi.waitFor(() => expect(releaseLogout).not.toBeNull());
+    await setTokens("at-B", "rt-B"); // 다른 탭에서 계정 B 로 로그인
+    releaseLogout!();
+
+    await screen.findByText(/랜딩-도착/);
+    expect(getAccessToken()).toBe("at-B"); // B 세션 보존 — 조건부 삭제
+    expect(getRefreshToken()).toBe("rt-B");
+  });
+
   it("RT 가 없으면 API 호출 없이 로컬 정리만 하고 랜딩으로 이동한다", async () => {
     const mock = stubApi();
     const user = userEvent.setup();

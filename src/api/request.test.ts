@@ -433,6 +433,54 @@ describe("request — 자동 재발급", () => {
     expect(redirect).not.toHaveBeenCalled(); // 비 terminal — 새 세션 파괴 금지
   });
 
+  it("다른 세션의 재발급을 공유하지 않는다 — A 의 실패가 B 를 로그아웃시키지 않음", async () => {
+    const redirect = spyRedirect();
+    let releaseReissueA: (() => void) | null = null;
+    const mock = vi.fn<(input: RequestInfo | URL, init?: RequestInit) => Promise<Response>>(
+      (input, init) => {
+        const url = String(input);
+        if (url.endsWith("/api/v1/auth/reissue")) {
+          if (init?.body === JSON.stringify({ refreshToken: "rt-A" })) {
+            // A 세션의 재발급은 보류 — 진행 중에 B 가 로그인하는 상황을 재현
+            return new Promise<Response>((resolve) => {
+              releaseReissueA = () => resolve(errorResponse("A007", 401));
+            });
+          }
+          return Promise.resolve(tokenPairResponse("at-B2", "rt-B2")); // B 의 재발급은 성공
+        }
+        const auth = (init?.headers as Record<string, string>)["Authorization"];
+        if (auth === "Bearer at-B2") {
+          return Promise.resolve(jsonResponse({ success: true, data: "ok" }));
+        }
+        return Promise.resolve(errorResponse("C005", 401));
+      },
+    );
+    vi.stubGlobal("fetch", mock);
+
+    await setTokens("at-A", "rt-A");
+    const pendingA = request("GET", "/api/v1/user"); // A 세션 — 401 → 재발급 보류
+    await vi.waitFor(() => expect(releaseReissueA).not.toBeNull());
+
+    await setTokens("at-B", "rt-B"); // 다른 탭에서 계정 B 로 로그인
+    // B 의 401 은 A 의 재발급 promise 를 공유하지 않고 자기 RT 로 별도 재발급한다
+    await expect(request("GET", "/api/v1/user")).resolves.toBe("ok");
+
+    releaseReissueA!(); // A 의 재발급이 A007 로 종결
+    const errA = await catchApiError(pendingA);
+    expect(errA.code).toBe("A007");
+
+    // A 의 terminal 실패가 B 세션을 건드리지 않는다 — 조건부 삭제 + 리다이렉트 생략
+    expect(getAccessToken()).toBe("at-B2"); // B 의 회전 결과 유지
+    expect(getRefreshToken()).toBe("rt-B2");
+    expect(redirect).not.toHaveBeenCalled();
+
+    const reissueBodies = callsTo(mock, "/api/v1/auth/reissue").map((c) => c[1].body);
+    expect(reissueBodies).toEqual([
+      JSON.stringify({ refreshToken: "rt-A" }), // A 는 자기 RT 로
+      JSON.stringify({ refreshToken: "rt-B" }), // B 도 자기 RT 로
+    ]);
+  });
+
   it("bodyFactory 는 매 시도 직전에 재평가된다", async () => {
     setTokens("at-old", "rt-1");
     let n = 0;
