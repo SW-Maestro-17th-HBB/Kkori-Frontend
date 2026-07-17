@@ -66,12 +66,14 @@ interface RequestOptions {
   /** 객체는 JSON 직렬화, FormData 는 그대로 전송(Content-Type 은 브라우저가 지정) */
   body?: unknown;
   signal?: AbortSignal;
+  /** HTTP 캐시 모드 — 캐시 재사용이 계약 위반인 조회(동의 카탈로그 등)는 "no-store" 지정 */
+  cache?: RequestCache;
 }
 
 export async function request<T>(
   method: Method,
   path: string,
-  { body, signal }: RequestOptions = {},
+  { body, signal, cache }: RequestOptions = {},
 ): Promise<T> {
   const isForm = body instanceof FormData;
   const headers: Record<string, string> = {};
@@ -85,6 +87,7 @@ export async function request<T>(
       headers,
       body: body === undefined ? undefined : isForm ? (body as FormData) : JSON.stringify(body),
       signal,
+      cache,
     });
   } catch (e) {
     // 중단(abort)은 호출자의 의도이므로 그대로 전파
