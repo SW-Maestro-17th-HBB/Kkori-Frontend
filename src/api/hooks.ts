@@ -79,7 +79,12 @@ export const useLogout = () => {
       return auth.sessionId;
     },
     onSettled: async (sessionId) => {
-      if (sessionId) await clearTokens(sessionId); // 내 세션일 때만 삭제 — 새 로그인 보호
+      try {
+        if (sessionId) await clearTokens(sessionId); // 내 세션일 때만 삭제 — 새 로그인 보호
+      } catch {
+        // 저장소·잠금 오류 — 로컬 삭제는 best-effort. 실패해도 아래 캐시 정리와
+        // 랜딩 이동은 반드시 진행한다 (중단 시 이전 계정 화면·캐시에 갇힘)
+      }
       clearSignupSession(); // 탭 로컬(sessionStorage) — 이전 가입 흐름의 임시 정보 폐기
       // 캐시는 무조건 비운다 — 이 탭의 캐시는 로그아웃한 세션의 데이터라,
       // 새 세션이 활성이어도 보존하면 이전 계정 데이터가 노출된다 (재조회만 발생)

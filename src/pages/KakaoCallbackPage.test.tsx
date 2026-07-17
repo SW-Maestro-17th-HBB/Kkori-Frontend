@@ -142,6 +142,24 @@ describe("KakaoCallbackPage — 판정 분기", () => {
     await screen.findByText("동의화면-도착");
     expect(mock).toHaveBeenCalledTimes(1);
   });
+
+  it("로그인 성공 처리도 1회만 수행한다 (setTokens 중복 호출 방지)", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(
+        envelope({
+          isNewUser: false,
+          isRestored: false,
+          accessToken: "at-once",
+          refreshToken: "rt-once",
+        }),
+      ),
+    );
+    const setTokensSpy = vi.spyOn(tokenStore, "setTokens");
+    renderCallback(validCallbackRoute("valid-code"));
+    await screen.findByText("대시보드-도착");
+    expect(setTokensSpy).toHaveBeenCalledTimes(1); // 재호출은 세션 ID 를 갈아치운다
+  });
 });
 
 describe("KakaoCallbackPage — 원 목적지 복귀", () => {

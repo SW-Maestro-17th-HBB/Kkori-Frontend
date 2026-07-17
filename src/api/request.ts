@@ -218,6 +218,10 @@ async function applyReauth(policy: ReauthPolicy, expectedSessionId: string | nul
     // 보호 경로만 저장 (로그인·가입·콜백 같은 인증 플로우 경로는 복귀 대상이 아님)
     const { pathname, search } = window.location;
     if (isProtectedPath(pathname)) setPostLoginRedirect(pathname + search);
+    // 삭제(잠금 내 조건부)와 이동 사이에 다른 탭이 새 계정으로 로그인하는 잔여
+    // 경쟁은 의도적으로 허용한다 — location.assign 커밋이 비동기라 이동까지의
+    // 원자화는 불가능하고, 그 경우에도 /login 도착 시 게스트 가드가 새 세션을
+    // 감지해 대시보드로 즉시 교정한다 (새 세션의 토큰·데이터 손실 없음)
     hardRedirect.to(ROUTES.auth);
   }
 }

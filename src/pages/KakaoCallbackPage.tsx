@@ -44,9 +44,14 @@ export function KakaoCallbackPage() {
     }
   }, [setSearchParams]);
 
-  // 판정 결과에 따른 라우팅 (side effect — 렌더 중 navigate 금지)
+  // 판정 결과에 따른 라우팅 (side effect — 렌더 중 navigate 금지).
+  // 1회 처리 가드 — effect 재실행(StrictMode 재마운트, 의존성 변화)에도 토큰 저장·
+  // 목적지 소비·이동이 중복되지 않게 한다 (setTokens 재호출은 세션 ID 를 갈아치우고,
+  // 재소비는 원 목적지를 잃는다)
+  const handled = useRef(false);
   useEffect(() => {
-    if (!data) return;
+    if (!data || handled.current) return;
+    handled.current = true;
     if (data.accessToken && data.refreshToken) {
       // 기존 유저 — 즉시 로그인 완료 (저장 완료 후 이동 — 대시보드가 토큰을 읽음).
       // 가드·재인증이 저장해 둔 원 목적지가 있으면 그리로 복귀.
