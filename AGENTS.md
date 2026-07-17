@@ -36,7 +36,7 @@ pnpm preview           # 빌드 결과 미리보기
 
 ## 프로젝트 구조
 
-```
+```text
 src/
   routes.ts            # 라우트 테이블 (키·경로 매핑) — 화면 추가 시 여기부터
   App.tsx              # <Routes> 정의

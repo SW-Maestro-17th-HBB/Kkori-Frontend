@@ -69,7 +69,7 @@
 
 - 라우트: `/login`, `/auth/kakao/callback` (`src/routes.ts`)
 - API: `POST /api/v1/auth/kakao` — 요청/응답 타입은 `src/api/schema.ts`
-- 환경 변수: 카카오 JavaScript 키·redirect_uri (변수명은 구현 시 확정, `.env.example`에 문서화)
+- 환경 변수: `VITE_KAKAO_CLIENT_ID` — 카카오 REST API 키 (JavaScript 키 아님, 백엔드가 code 교환에 쓰는 키와 동일). redirect_uri 는 origin 에서 파생 (`.env.example` 참고)
 
 ### 제약사항
 
