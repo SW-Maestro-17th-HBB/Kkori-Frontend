@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { focusManager } from "@tanstack/react-query";
 import { screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { Route, Routes } from "react-router";
@@ -447,6 +448,48 @@ describe("ConsentPage — 카탈로그 오류", () => {
 
     expect(await screen.findByText("약관을 불러오지 못했어요")).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "동의하고 시작하기" })).not.toBeInTheDocument();
+  });
+});
+
+describe("ConsentPage — 카탈로그 백그라운드 갱신 차단", () => {
+  it("탭 포커스 복귀가 카탈로그를 재조회하지 않는다 (체크 상태가 새 버전에 승계되는 증적 오염 방지)", async () => {
+    setSignupSession("st-1", false);
+    let privacyVersion = 1;
+    const mock = stubApi({
+      catalog: () =>
+        envelope({
+          consents: [
+            { type: "privacy", required: true, version: privacyVersion },
+            { type: "audio_usage", required: true, version: 1 },
+            { type: "resume_usage", required: true, version: 1 },
+            { type: "marketing", required: false, version: 1 },
+          ],
+        }),
+      signup: () => envelope({ accessToken: "at-1", refreshToken: "rt-1" }, 201),
+    });
+    const user = userEvent.setup();
+    renderConsent();
+
+    try {
+      await agreeRequired(user);
+      privacyVersion = 2; // 사용자가 다른 탭에 다녀오는 사이 서버가 개정됐다고 가정
+
+      const catalogCalls = () =>
+        mock.mock.calls.filter(([url]) => String(url).endsWith("/api/v1/consents")).length;
+      const before = catalogCalls();
+      focusManager.setFocused(false);
+      focusManager.setFocused(true);
+      await new Promise((r) => setTimeout(r, 50));
+      expect(catalogCalls()).toBe(before); // 포커스 복귀로는 재조회하지 않는다
+
+      // 제출은 사용자가 실제로 확인한 v1 을 반향한다 — 개정 반영은 U005 → 체크 리셋 → 재동의 흐름에서만
+      await user.click(cta());
+      await screen.findByText("대시보드-도착");
+      const body = JSON.parse((signupCalls(mock)[0][1] as RequestInit).body as string);
+      expect(body.consents).toContainEqual({ type: "privacy", agreed: true, version: 1 });
+    } finally {
+      focusManager.setFocused(undefined); // 전역 포커스 오버라이드 해제
+    }
   });
 });
 
