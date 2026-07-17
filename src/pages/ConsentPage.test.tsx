@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { focusManager } from "@tanstack/react-query";
+import { focusManager, onlineManager } from "@tanstack/react-query";
 import { screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { Route, Routes } from "react-router";
@@ -318,6 +318,30 @@ describe("ConsentPage — 제출 에러 분기", () => {
     ).toBeInTheDocument();
     expect(cta()).toBeEnabled();
   });
+
+  it("비엔벨로프 제출 응답: 일반 안내를 표시하고 세션을 유지한 채 재제출할 수 있다", async () => {
+    setSignupSession("st-1", false);
+    stubApi({
+      // success 필드 없는 JSON — 게이트웨이 오류 페이지 등 엔벨로프 계약 위반 응답
+      signup: () =>
+        new Response(JSON.stringify({ message: "upstream error" }), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        }),
+    });
+    const user = userEvent.setup();
+    renderConsent();
+
+    await agreeRequired(user);
+    await user.click(cta());
+
+    expect(
+      await screen.findByText("요청을 처리하지 못했어요. 잠시 후 다시 시도해 주세요."),
+    ).toBeInTheDocument();
+    expect(getSignupSession()).toEqual({ signupToken: "st-1", isRestored: false });
+    expect(getAccessToken()).toBeNull();
+    expect(cta()).toBeEnabled();
+  });
 });
 
 describe("ConsentPage — U005 동의서 개정", () => {
@@ -430,6 +454,24 @@ describe("ConsentPage — 카탈로그 오류", () => {
     expect(screen.queryByRole("button", { name: "마케팅 정보 수신" })).not.toBeInTheDocument();
   });
 
+  it("consents 가 배열이 아니면 크래시 없이 전체를 오류 처리한다", async () => {
+    setSignupSession("st-1", false);
+    stubApi({ catalog: () => envelope({ consents: "oops" }) });
+    renderConsent();
+
+    expect(await screen.findByText("약관을 불러오지 못했어요")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "동의하고 시작하기" })).not.toBeInTheDocument();
+  });
+
+  it("항목에 null 이 섞인 카탈로그도 크래시 없이 전체를 오류 처리한다", async () => {
+    setSignupSession("st-1", false);
+    stubApi({ catalog: () => envelope({ consents: [null] }) });
+    renderConsent();
+
+    expect(await screen.findByText("약관을 불러오지 못했어요")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "동의하고 시작하기" })).not.toBeInTheDocument();
+  });
+
   it("중복 타입 카탈로그도 전체를 오류 처리한다", async () => {
     setSignupSession("st-1", false);
     stubApi({
@@ -452,7 +494,7 @@ describe("ConsentPage — 카탈로그 오류", () => {
 });
 
 describe("ConsentPage — 카탈로그 백그라운드 갱신 차단", () => {
-  it("탭 포커스 복귀가 카탈로그를 재조회하지 않는다 (체크 상태가 새 버전에 승계되는 증적 오염 방지)", async () => {
+  it("탭 포커스·재연결 복귀가 카탈로그를 재조회하지 않는다 (체크 상태가 새 버전에 승계되는 증적 오염 방지)", async () => {
     setSignupSession("st-1", false);
     let privacyVersion = 1;
     const mock = stubApi({
@@ -482,13 +524,19 @@ describe("ConsentPage — 카탈로그 백그라운드 갱신 차단", () => {
       await new Promise((r) => setTimeout(r, 50));
       expect(catalogCalls()).toBe(before); // 포커스 복귀로는 재조회하지 않는다
 
+      onlineManager.setOnline(false);
+      onlineManager.setOnline(true);
+      await new Promise((r) => setTimeout(r, 50));
+      expect(catalogCalls()).toBe(before); // 오프라인→온라인 복귀로도 재조회하지 않는다
+
       // 제출은 사용자가 실제로 확인한 v1 을 반향한다 — 개정 반영은 U005 → 체크 리셋 → 재동의 흐름에서만
       await user.click(cta());
       await screen.findByText("대시보드-도착");
       const body = JSON.parse((signupCalls(mock)[0][1] as RequestInit).body as string);
       expect(body.consents).toContainEqual({ type: "privacy", agreed: true, version: 1 });
     } finally {
-      focusManager.setFocused(undefined); // 전역 포커스 오버라이드 해제
+      focusManager.setFocused(undefined); // 전역 오버라이드 해제
+      onlineManager.setOnline(true);
     }
   });
 });
