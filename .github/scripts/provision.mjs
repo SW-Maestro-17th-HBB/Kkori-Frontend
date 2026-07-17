@@ -1,6 +1,6 @@
 //   1) Jira 에서 Story 조회 (제목, 담당자)
 //   2) Jira 에서 그 Story 의 Subtask 목록 조회 (제목, 담당자)
-//   3) TARGET_LABEL 이 붙은 Subtask 만 자식 Issue 로 가져간다. 
+//   3) TARGET_LABEL 이 붙은 Subtask 만 자식 Issue 로 가져간다.
 //   4) GitHub 에 부모 Issue 생성 (담당자 매핑 적용)
 //   5) 각 Subtask → 자식 Issue 생성 → sub-issue 로 연결
 //
@@ -16,7 +16,7 @@ const JIRA_BASE = (process.env.JIRA_BASE_URL || "").replace(/\/+$/, "");
 const JIRA_EMAIL = process.env.JIRA_EMAIL;
 const JIRA_TOKEN = process.env.JIRA_API_TOKEN;
 
-//TARGET_LABEL 없으면 모든 Subtask 
+//TARGET_LABEL 없으면 모든 Subtask
 const TARGET_LABEL = (process.env.TARGET_LABEL || "").trim();
 
 // workflow_dispatch 에서는 client_payload 가 없어 toJSON() 이 문자열 "null" 을 만든다
@@ -180,10 +180,10 @@ async function main() {
     let stAssignee = null;
     let stLabels = [];
     try {
-      const st = await jira(`/rest/api/3/issue/${stKey}?fields=summary,assignee`);
+      const st = await jira(`/rest/api/3/issue/${stKey}?fields=summary,assignee,labels`);
       stTitle = st.fields.summary;
       stAssignee = st.fields.assignee?.displayName || null;
-      stLabels = st.fields.fields.labels || [];
+      stLabels = st.fields.labels || [];
     } catch (e) {
       console.warn(`  Subtask ${stKey} 상세 조회 실패, 건너뜀: ${e.message}`);
     }
