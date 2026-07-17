@@ -362,12 +362,7 @@ export function ConsentPage() {
                           color: "var(--fg-strong)",
                         }}
                       >
-                        {copy.title}{" "}
-                        <span
-                          style={{ fontSize: 12, fontWeight: 500, color: "var(--fg-tertiary)" }}
-                        >
-                          v{c.version}
-                        </span>
+                        {copy.title}
                       </span>
                       <Badge variant={c.required ? "brand" : "neutral"}>
                         {c.required ? "필수" : "선택"}

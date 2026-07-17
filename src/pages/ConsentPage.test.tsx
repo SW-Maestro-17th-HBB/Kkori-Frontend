@@ -21,7 +21,7 @@ vi.mock("./consentCopy", async (importOriginal) => {
       ...actual.CONSENT_COPY,
       privacy: {
         ...actual.CONSENT_COPY.privacy,
-        2: { title: "개인정보 수집·이용 동의 (v2)", body: "개정된 개인정보 v2 본문" },
+        2: { title: "개인정보 수집·이용 (v2)", body: "개정된 개인정보 v2 본문" },
       },
     },
   };
@@ -83,11 +83,7 @@ function renderConsent() {
   );
 }
 
-const REQUIRED_TITLES = [
-  "개인정보 수집·이용 동의",
-  "음성 데이터 활용 동의",
-  "이력서 자료 활용 동의",
-];
+const REQUIRED_TITLES = ["개인정보 수집·이용", "음성 데이터 활용", "이력서 자료 활용"];
 
 async function agreeRequired(user: ReturnType<typeof userEvent.setup>) {
   for (const title of REQUIRED_TITLES) {
@@ -113,7 +109,7 @@ describe("ConsentPage — 진입 가드", () => {
 });
 
 describe("ConsentPage — 카탈로그 렌더", () => {
-  it("서버 카탈로그로 항목·버전을 렌더하고 캐시를 우회해 조회한다", async () => {
+  it("서버 카탈로그로 항목을 렌더하고 캐시를 우회해 조회한다", async () => {
     setSignupSession("st-1", false);
     const mock = stubApi();
     renderConsent();
@@ -121,11 +117,9 @@ describe("ConsentPage — 카탈로그 렌더", () => {
     for (const title of REQUIRED_TITLES) {
       expect(await screen.findByRole("button", { name: title })).toBeInTheDocument();
     }
-    expect(screen.getByRole("button", { name: "마케팅 정보 수신 동의" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "마케팅 정보 수신" })).toBeInTheDocument();
     expect(screen.getAllByText("필수")).toHaveLength(3);
     expect(screen.getAllByText("선택")).toHaveLength(1);
-    expect(screen.getAllByText("v1")).toHaveLength(4);
-
     const getCall = mock.mock.calls.find(([url]) => String(url).endsWith("/api/v1/consents"));
     expect((getCall![1] as RequestInit).cache).toBe("no-store");
   });
@@ -134,7 +128,7 @@ describe("ConsentPage — 카탈로그 렌더", () => {
     setSignupSession("st-1", false);
     stubApi();
     renderConsent();
-    expect(await screen.findByRole("button", { name: "개인정보 수집·이용 동의" })).toHaveAttribute(
+    expect(await screen.findByRole("button", { name: "개인정보 수집·이용" })).toHaveAttribute(
       "aria-pressed",
       "false",
     );
@@ -151,7 +145,7 @@ describe("ConsentPage — 동의 게이팅", () => {
 
     await agreeRequired(user);
     expect(cta()).toBeEnabled();
-    expect(screen.getByRole("button", { name: "마케팅 정보 수신 동의" })).toHaveAttribute(
+    expect(screen.getByRole("button", { name: "마케팅 정보 수신" })).toHaveAttribute(
       "aria-pressed",
       "false",
     );
@@ -168,7 +162,7 @@ describe("ConsentPage — 동의 게이팅", () => {
 
     const allToggle = await screen.findByRole("button", { name: /약관 전체 동의/ });
     await user.click(allToggle);
-    expect(screen.getByRole("button", { name: "마케팅 정보 수신 동의" })).toHaveAttribute(
+    expect(screen.getByRole("button", { name: "마케팅 정보 수신" })).toHaveAttribute(
       "aria-pressed",
       "true",
     );
@@ -364,16 +358,15 @@ describe("ConsentPage — U005 동의서 개정", () => {
       await screen.findByText("약관이 개정되었어요. 변경된 약관을 다시 확인한 뒤 동의해 주세요."),
     ).toBeInTheDocument();
     // 재조회 완료 전 — 구버전 재제출 차단 (입력·제출 전부 잠금)
-    expect(screen.getByRole("button", { name: "개인정보 수집·이용 동의" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "개인정보 수집·이용" })).toBeDisabled();
     expect(cta()).toBeDisabled();
 
     releaseCatalog!();
     // 개정 문안(v2)이 표시되고 체크는 리셋되어 처음부터 재동의
     expect(await screen.findByText("개정된 개인정보 v2 본문")).toBeInTheDocument();
-    expect(screen.getByText("v2")).toBeInTheDocument();
-    await user.click(screen.getByRole("button", { name: "개인정보 수집·이용 동의 (v2)" }));
-    await user.click(screen.getByRole("button", { name: "음성 데이터 활용 동의" }));
-    await user.click(screen.getByRole("button", { name: "이력서 자료 활용 동의" }));
+    await user.click(screen.getByRole("button", { name: "개인정보 수집·이용 (v2)" }));
+    await user.click(screen.getByRole("button", { name: "음성 데이터 활용" }));
+    await user.click(screen.getByRole("button", { name: "이력서 자료 활용" }));
     await user.click(cta());
 
     expect(await screen.findByText("대시보드-도착")).toBeInTheDocument();
@@ -401,9 +394,7 @@ describe("ConsentPage — 카탈로그 오류", () => {
 
     fail = false;
     await user.click(screen.getByRole("button", { name: "다시 시도" }));
-    expect(
-      await screen.findByRole("button", { name: "개인정보 수집·이용 동의" }),
-    ).toBeInTheDocument();
+    expect(await screen.findByRole("button", { name: "개인정보 수집·이용" })).toBeInTheDocument();
   });
 
   it("문안 자산이 없는 버전이면 가입을 차단하고 새로고침을 안내한다", async () => {
@@ -435,7 +426,7 @@ describe("ConsentPage — 카탈로그 오류", () => {
 
     expect(await screen.findByText("약관을 불러오지 못했어요")).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "동의하고 시작하기" })).not.toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "마케팅 정보 수신 동의" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "마케팅 정보 수신" })).not.toBeInTheDocument();
   });
 
   it("중복 타입 카탈로그도 전체를 오류 처리한다", async () => {
