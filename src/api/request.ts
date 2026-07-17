@@ -104,6 +104,14 @@ export async function request<T>(
   }
 
   if (envelope?.success === true) {
+    // HTTP 상태줄이 유일 원천 — 비-2xx 인데 success 면 계약 위반이므로 성공 처리하지 않는다
+    if (!res.ok) {
+      throw new ApiError(
+        FE_ERROR_CODES.INVALID_RESPONSE,
+        `서버 응답이 계약과 다릅니다. (HTTP ${res.status})`,
+        res.status,
+      );
+    }
     // 무내용 응답(ApiResponseVoid)은 data: null — 호출부가 T 를 void/null 로 선언
     return envelope.data as T;
   }
