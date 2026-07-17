@@ -8,16 +8,23 @@
    - 1회용 code 를 URL·브라우저 기록에 남기지 않음: 첫 렌더에서 메모리로 캡처한 뒤
      주소를 즉시 정리하고, 모든 이동을 replace 로 처리. */
 import { useEffect, useRef, useState } from "react";
-import { useSearchParams } from "react-router";
+import { useNavigate, useSearchParams } from "react-router";
 import { useKakaoLogin } from "../api/hooks";
 import { isApiError } from "../api/request";
-import { clearOauthState, peekOauthState, setSignupSession, setTokens } from "../api/tokenStore";
+import {
+  clearOauthState,
+  consumePostLoginRedirect,
+  peekOauthState,
+  setSignupSession,
+  setTokens,
+} from "../api/tokenStore";
 import { Button } from "../components/ds";
 import { Display, Wordmark } from "../components/primitives";
 import { useNav } from "../hooks/useNav";
 
 export function KakaoCallbackPage() {
   const nav = useNav();
+  const navigate = useNavigate(); // 원 목적지 복귀 — 라우트 키가 아닌 저장된 경로로 이동
   const [params, setSearchParams] = useSearchParams();
 
   // URL 파라미터는 첫 렌더에서 한 번만 메모리로 캡처 (이후 URL 은 정리됨)
@@ -48,9 +55,14 @@ export function KakaoCallbackPage() {
     if (!data) return;
     if (data.accessToken && data.refreshToken) {
       // 기존 유저 — 즉시 로그인 완료 (저장 완료 후 이동 — 대시보드가 토큰을 읽음).
+      // 가드·재인증이 저장해 둔 원 목적지(검증된 내부 경로)가 있으면 그리로 복귀.
       // 저장 실패 시 무한 로딩에 갇히지 않도록 재로그인으로 복귀
       void setTokens(data.accessToken, data.refreshToken).then(
-        () => nav("dash", { replace: true }),
+        () => {
+          const dest = consumePostLoginRedirect();
+          if (dest) navigate(dest, { replace: true });
+          else nav("dash", { replace: true });
+        },
         () => nav("auth", { replace: true }),
       );
     } else if (data.signupToken) {
@@ -61,7 +73,7 @@ export function KakaoCallbackPage() {
       // 계약 위반 — 토큰도 signupToken 도 없음
       nav("auth", { replace: true });
     }
-  }, [data, nav]);
+  }, [data, nav, navigate]);
 
   const failed = isError || code === null;
   const message = initial.kakaoError

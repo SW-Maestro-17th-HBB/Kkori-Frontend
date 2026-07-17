@@ -9,6 +9,7 @@ import {
   getRefreshToken,
   getSignupSession,
   peekOauthState,
+  setPostLoginRedirect,
 } from "../api/tokenStore";
 import { KakaoCallbackPage } from "./KakaoCallbackPage";
 
@@ -45,6 +46,15 @@ function renderCallback(route: string) {
       <Route path="/dashboard" element={<div>대시보드-도착</div>} />
       <Route path="/signup" element={<div>동의화면-도착</div>} />
       <Route path="/login" element={<div>로그인화면-도착</div>} />
+      <Route
+        path="/reports"
+        element={
+          <>
+            <div>리포트-도착</div>
+            <LocationProbe />
+          </>
+        }
+      />
     </Routes>,
     { route },
   );
@@ -130,6 +140,40 @@ describe("KakaoCallbackPage — 판정 분기", () => {
     renderCallback(validCallbackRoute("valid-code"));
     await screen.findByText("동의화면-도착");
     expect(mock).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("KakaoCallbackPage — 원 목적지 복귀", () => {
+  it("저장된 원 목적지가 있으면 대시보드 대신 그 경로로 복귀한다 (query 보존, 1회 소비)", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(
+        envelope({
+          isNewUser: false,
+          isRestored: false,
+          accessToken: "at-123",
+          refreshToken: "rt-456",
+        }),
+      ),
+    );
+    setPostLoginRedirect("/reports?sort=latest");
+    renderCallback(validCallbackRoute("valid-code"));
+
+    expect(await screen.findByText("리포트-도착")).toBeInTheDocument();
+    expect(screen.getByTestId("loc-search")).toHaveTextContent("?sort=latest");
+    expect(sessionStorage.getItem("kkori.postLoginRedirect")).toBeNull(); // 소비됨
+  });
+
+  it("교환 실패 시 저장값을 유지한다 — TTL 내 재시도가 성공하면 복귀된다", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(errorEnvelope("A002", "카카오 인증에 실패했습니다.", 401)),
+    );
+    setPostLoginRedirect("/reports?sort=latest");
+    renderCallback(validCallbackRoute("expired-code"));
+
+    await screen.findByText("로그인에 실패했어요");
+    expect(sessionStorage.getItem("kkori.postLoginRedirect")).not.toBeNull(); // 실패는 소비 아님
   });
 });
 
