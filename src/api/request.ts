@@ -334,11 +334,14 @@ export async function request<T>(
         throw re;
       }
     }
-    // 재발급 대기 중 세션이 교체된 경우도 동일하게 중단 (이하 재시도는 동기 — 원자적)
-    if (getAuthSessionId() !== attemptSession) throw e;
+    // 재시도 직전 스냅샷 1회 읽기 — 세션 검증과 사용할 AT 가 **같은 레코드**에서
+    // 나오게 한다. 검증과 읽기를 분리하면 그 사이 다른 탭의 쓰기로
+    // "세션 A 검증 + B 의 AT 사용"이 가능해진다 (탭 간에는 문장 단위 원자성이 없음)
+    const retryAuth = getAuthSnapshot();
+    if ((retryAuth?.sessionId ?? null) !== attemptSession) throw e; // 재발급 대기 중 교체 포함
     try {
       // 정확히 1회 재시도 — bodyFactory 는 회전된 토큰을 반영해 재평가된다
-      return await rawRequest<T>(method, path, opts, getAccessToken());
+      return await rawRequest<T>(method, path, opts, retryAuth?.accessToken ?? null);
     } catch (e2) {
       // 2차 재발급 금지 — 재시도의 401 은 회복 불능
       if (isApiError(e2) && e2.status === 401) await applyReauth(policy, attemptSession);
