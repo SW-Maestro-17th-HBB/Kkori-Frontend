@@ -1,6 +1,6 @@
 /* ---------- 상단 네비게이션 (앱 셸) — 프로토타입 lib.jsx TopNav 이식 ---------- */
 import { Fragment, useState } from "react";
-import { useNotifications, useProfile } from "../api/hooks";
+import { useLogout, useNotifications, useProfile } from "../api/hooks";
 import type { NavKey } from "../routes";
 import { useNav } from "../hooks/useNav";
 import { Avatar, IconButton } from "./ds";
@@ -11,6 +11,7 @@ export type TopNavActive = "home" | "resume" | "report" | null;
 
 export function TopNav({ active }: { active: TopNavActive }) {
   const nav = useNav();
+  const logout = useLogout();
   const [notifOpen, setNotifOpen] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const { data: notifs = [] } = useNotifications();
@@ -359,10 +360,11 @@ export function TopNav({ active }: { active: TopNavActive }) {
                   <div style={{ padding: "6px", borderTop: "1px solid var(--border-subtle)" }}>
                     <button
                       className="linkbtn menu-item menu-item--danger"
-                      onClick={() => {
-                        setMenuOpen(false);
-                        nav("landing");
-                      }}
+                      // 메뉴를 닫지 않는다 — 진행 문구·비활성 상태가 보여야 하고,
+                      // 완료 시 랜딩 이동이 어차피 이 화면을 벗어난다
+                      onClick={() => logout.mutate()}
+                      disabled={logout.isPending}
+                      aria-busy={logout.isPending}
                       style={{
                         width: "100%",
                         display: "flex",
@@ -376,7 +378,8 @@ export function TopNav({ active }: { active: TopNavActive }) {
                         color: "var(--red-700)",
                       }}
                     >
-                      <Icon name="log-out" size={18} /> 로그아웃
+                      <Icon name="log-out" size={18} />{" "}
+                      {logout.isPending ? "로그아웃 중…" : "로그아웃"}
                     </button>
                   </div>
                 </div>
