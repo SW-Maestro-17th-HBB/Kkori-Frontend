@@ -3,9 +3,9 @@
    [실제] 인증(auth)  [목] 이력서·리포트·사용자·알림
    ============================================================ */
 import * as fixtures from "./fixtures";
-import { request } from "./request";
+import { ApiError, FE_ERROR_CODES, request } from "./request";
 import type { components } from "./schema";
-import { getRefreshToken } from "./tokenStore";
+import { getAuthSnapshot } from "./tokenStore";
 import type {
   NotificationItem,
   Profile,
@@ -40,11 +40,19 @@ export const postSignup = (body: SignupRequest): Promise<TokenResponse> =>
   request<TokenResponse>("POST", "/api/v1/auth/signup", { body });
 
 // 멱등 로그아웃 — bodyFactory: 만료 AT 로그아웃이 재발급으로 회전된 뒤의 재시도가
-// 최신 RT 를 전송해 서버측 폐기를 완성한다. onReauth: 자체 후처리(로컬 정리+랜딩)가
-// 있으므로 회복 불능이어도 /login 으로 이동하지 않는다.
-export const postLogout = (): Promise<null> =>
+// 최신 RT 를 전송해 서버측 폐기를 완성한다. 단 **소유 세션이 현재 세션일 때만** —
+// 대기 중 다른 계정이 로그인했으면 그 계정의 RT 를 전송(= 남의 세션을 서버에서
+// 폐기)하기 전에 중단한다. onReauth: 자체 후처리(로컬 정리+랜딩)가 있으므로
+// 회복 불능이어도 /login 으로 이동하지 않는다.
+export const postLogout = (expectedSessionId: string): Promise<null> =>
   request<null>("POST", "/api/v1/auth/logout", {
-    bodyFactory: () => ({ refreshToken: getRefreshToken() }),
+    bodyFactory: () => {
+      const auth = getAuthSnapshot();
+      if (!auth || auth.sessionId !== expectedSessionId) {
+        throw new ApiError(FE_ERROR_CODES.SESSION_REPLACED, "세션이 변경되었습니다.", 401);
+      }
+      return { refreshToken: auth.refreshToken };
+    },
     onReauth: "silent",
   });
 

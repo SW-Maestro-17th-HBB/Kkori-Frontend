@@ -186,16 +186,17 @@ export const hardRedirect = {
   to: (url: string) => window.location.assign(url),
 };
 
-/** 진행 중 재발급 — **요청한 세션에 바인딩**해 동일 세션의 대기자만 결과를 공유한다.
-    (A 세션의 재발급 실패를 B 세션 요청이 자기 실패로 오인하는 사고 방지) */
-let reissueInFlight: { sessionId: string | null; promise: Promise<void> } | null = null;
+/** 진행 중 재발급 — **세션별로 바인딩**해 동일 세션의 대기자만 결과를 공유한다.
+    (A 세션의 재발급 실패를 B 세션 요청이 자기 실패로 오인하거나, 슬롯 교체로
+    같은 세션의 재발급이 중복 시작되는 사고 방지) */
+const reissueInFlight = new Map<string | null, Promise<void>>();
 /** 강제 이동 1회 보장 — 동시 실패한 대기자들이 중복 이동하지 않도록.
     하드 리다이렉트로 페이지가 리셋되므로 실환경에선 자연 초기화된다. */
 let reauthHandled = false;
 
 /** 테스트 전용 — 모듈 상태 격리용 */
 export function __resetAuthForTests() {
-  reissueInFlight = null;
+  reissueInFlight.clear();
   reauthHandled = false;
 }
 
@@ -282,19 +283,16 @@ async function doReissue(expectedSessionId: string | null): Promise<void> {
 }
 
 /** 동시 다발 401 의 중복 재발급 단일화 — **같은 세션의** 대기자만 결과를 공유하고,
-    다른 세션의 요청은 자기 세션의 RT 로 별도 재발급을 시작한다 */
+    다른 세션의 요청은 자기 세션의 RT 로 별도 재발급을 시작한다.
+    세션별 Map 이라 서로 다른 세션의 진행 작업이 공존해도 서로를 밀어내지 않는다 */
 function reissueOnce(sessionId: string | null): Promise<void> {
-  if (reissueInFlight && reissueInFlight.sessionId === sessionId) {
-    return reissueInFlight.promise;
-  }
-  const entry = {
-    sessionId,
-    promise: doReissue(sessionId).finally(() => {
-      if (reissueInFlight === entry) reissueInFlight = null; // 내 슬롯일 때만 해제
-    }),
-  };
-  reissueInFlight = entry;
-  return entry.promise;
+  const existing = reissueInFlight.get(sessionId);
+  if (existing) return existing;
+  const promise = doReissue(sessionId).finally(() => {
+    if (reissueInFlight.get(sessionId) === promise) reissueInFlight.delete(sessionId);
+  });
+  reissueInFlight.set(sessionId, promise);
+  return promise;
 }
 
 export async function request<T>(
@@ -311,8 +309,16 @@ export async function request<T>(
     return await rawRequest<T>(method, path, opts, attemptToken);
   } catch (e) {
     // 재발급 트리거: 보호 요청의 401 만 — AT 유실·RT 생존의 부분 세션도 회복 대상.
-    // 공개 요청(가입 A005 등)·Abort·비 401 은 그대로 전파
-    if (isPublic || !isApiError(e) || e.status !== 401) throw e;
+    // 공개 요청(가입 A005 등)·Abort·비 401 은 그대로 전파.
+    // FE 합성 중단(SESSION_REPLACED — bodyFactory 세션 가드 등)은 서버 401 이 아니므로 제외
+    if (
+      isPublic ||
+      !isApiError(e) ||
+      e.status !== 401 ||
+      e.code === FE_ERROR_CODES.SESSION_REPLACED
+    ) {
+      throw e;
+    }
     const policy = opts.onReauth ?? "redirect";
     // 인증 세션이 교체·제거됐다면(다른 계정 로그인·로그아웃) 이 요청은 이전 세션의
     // 것이므로 재시도하지 않는다 — 다른 계정의 자격증명으로 재실행되는 사고 차단.

@@ -62,7 +62,7 @@ export const useLogout = () => {
       const auth = getAuthSnapshot();
       if (!auth) return null; // 이미 로그아웃 상태 — API 생략
       try {
-        await postLogout();
+        await postLogout(auth.sessionId); // 소유 세션 전달 — 세션 교체 시 전송 전 중단
       } catch {
         // 멱등 계약 — 서버 폐기가 실패해도 로컬 정리는 진행한다
       }

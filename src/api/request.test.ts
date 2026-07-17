@@ -7,6 +7,7 @@ import {
   isApiError,
   request,
 } from "./request";
+import { postLogout } from "./client";
 import {
   clearTokens,
   getAccessToken,
@@ -433,9 +434,10 @@ describe("request — 자동 재발급", () => {
     expect(redirect).not.toHaveBeenCalled(); // 비 terminal — 새 세션 파괴 금지
   });
 
-  it("다른 세션의 재발급을 공유하지 않는다 — A 의 실패가 B 를 로그아웃시키지 않음", async () => {
+  it("세션별 재발급 격리 — A 실패가 B 를 건드리지 않고, 같은 세션끼리만 공유한다", async () => {
     const redirect = spyRedirect();
     let releaseReissueA: (() => void) | null = null;
+    let releaseReissueB: (() => void) | null = null;
     const mock = vi.fn<(input: RequestInfo | URL, init?: RequestInit) => Promise<Response>>(
       (input, init) => {
         const url = String(input);
@@ -446,7 +448,10 @@ describe("request — 자동 재발급", () => {
               releaseReissueA = () => resolve(errorResponse("A007", 401));
             });
           }
-          return Promise.resolve(tokenPairResponse("at-B2", "rt-B2")); // B 의 재발급은 성공
+          // B 의 재발급도 보류 — 두 세션의 진행 작업이 Map 에 공존하는 상태를 재현
+          return new Promise<Response>((resolve) => {
+            releaseReissueB = () => resolve(tokenPairResponse("at-B2", "rt-B2"));
+          });
         }
         const auth = (init?.headers as Record<string, string>)["Authorization"];
         if (auth === "Bearer at-B2") {
@@ -463,7 +468,14 @@ describe("request — 자동 재발급", () => {
 
     await setTokens("at-B", "rt-B"); // 다른 탭에서 계정 B 로 로그인
     // B 의 401 은 A 의 재발급 promise 를 공유하지 않고 자기 RT 로 별도 재발급한다
-    await expect(request("GET", "/api/v1/user")).resolves.toBe("ok");
+    const pendingB1 = request("GET", "/api/v1/user");
+    await vi.waitFor(() => expect(releaseReissueB).not.toBeNull());
+    // 같은 세션(B)의 두 번째 401 은 진행 중인 B 재발급을 공유한다 (Map — A 와 공존)
+    const pendingB2 = request("GET", "/api/v1/user/consents");
+
+    releaseReissueB!();
+    await expect(pendingB1).resolves.toBe("ok");
+    await expect(pendingB2).resolves.toBe("ok");
 
     releaseReissueA!(); // A 의 재발급이 A007 로 종결
     const errA = await catchApiError(pendingA);
@@ -476,9 +488,17 @@ describe("request — 자동 재발급", () => {
 
     const reissueBodies = callsTo(mock, "/api/v1/auth/reissue").map((c) => c[1].body);
     expect(reissueBodies).toEqual([
-      JSON.stringify({ refreshToken: "rt-A" }), // A 는 자기 RT 로
-      JSON.stringify({ refreshToken: "rt-B" }), // B 도 자기 RT 로
+      JSON.stringify({ refreshToken: "rt-A" }), // A 는 자기 RT 로 1회
+      JSON.stringify({ refreshToken: "rt-B" }), // B 도 자기 RT 로 1회 (B2 는 공유)
     ]);
+  });
+
+  it("postLogout: 소유 세션이 현재 세션이 아니면 전송 전에 중단한다", async () => {
+    await setTokens("at-B", "rt-B"); // 현재 저장소는 B 세션
+    const mock = stubFetchSeq();
+    const err = await catchApiError(postLogout("sess-A")); // A 세션 소유의 로그아웃 시도
+    expect(err.code).toBe(FE_ERROR_CODES.SESSION_REPLACED);
+    expect(mock).not.toHaveBeenCalled(); // B 의 RT 가 전송되지 않음
   });
 
   it("bodyFactory 는 매 시도 직전에 재평가된다", async () => {
