@@ -42,12 +42,18 @@ type CatalogCheck =
 /** 카탈로그 정제 — 스키마 필드가 전부 optional 이라 런타임 검증이 필요하다.
     타입 4종이 정확히 한 번씩(미지·중복·누락 차단) + required boolean +
     version 양의 정수 + 해당 버전 문안 자산 존재까지 확인하고,
-    하나라도 어긋나면 전체를 오류로 반환한다(부분 필터링 금지). */
-function validateCatalog(consents: CatalogItem[] | undefined): CatalogCheck {
-  if (!consents) return { ok: false, reason: "malformed" };
+    하나라도 어긋나면 전체를 오류로 반환한다(부분 필터링 금지).
+    입력은 unknown — 비배열·null 항목 같은 형태 위반이 렌더 크래시가 아니라
+    오류 블록으로 흡수되도록 배열·객체 여부부터 검증한다. */
+function validateCatalog(consents: unknown): CatalogCheck {
+  if (!Array.isArray(consents)) return { ok: false, reason: "malformed" };
   const seen = new Set<ConsentType>();
   const items: ValidItem[] = [];
-  for (const c of consents) {
+  for (const value of consents) {
+    if (typeof value !== "object" || value === null) {
+      return { ok: false, reason: "malformed" };
+    }
+    const c = value as CatalogItem;
     if (
       c.type === undefined ||
       !(c.type in CONSENT_COPY) ||
