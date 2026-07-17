@@ -275,18 +275,23 @@ export async function request<T>(
   opts: RequestOptions = {},
 ): Promise<T> {
   const isPublic = PUBLIC_REQUESTS.has(`${method} ${path}`);
+  const attemptToken = isPublic ? null : getAccessToken();
   try {
-    return await rawRequest<T>(method, path, opts, isPublic ? null : getAccessToken());
+    return await rawRequest<T>(method, path, opts, attemptToken);
   } catch (e) {
     // 재발급 트리거: 보호 요청의 401 만 — AT 유실·RT 생존의 부분 세션도 회복 대상.
     // 공개 요청(가입 A005 등)·Abort·비 401 은 그대로 전파
     if (isPublic || !isApiError(e) || e.status !== 401) throw e;
     const policy = opts.onReauth ?? "redirect";
-    try {
-      await reissueOnce();
-    } catch (re) {
-      if (isTerminalReissueFailure(re)) applyReauth(policy);
-      throw re;
+    // 늦게 도착한 401 방어: 이 요청이 쓴 토큰이 이미 교체됐다면(선행 요청·다른 탭이
+    // 회전을 마침) 재발급을 건너뛰고 새 토큰으로 재시도만 한다 — 불필요한 중복 회전 방지
+    if (getAccessToken() === attemptToken) {
+      try {
+        await reissueOnce();
+      } catch (re) {
+        if (isTerminalReissueFailure(re)) applyReauth(policy);
+        throw re;
+      }
     }
     try {
       // 정확히 1회 재시도 — bodyFactory 는 회전된 토큰을 반영해 재평가된다

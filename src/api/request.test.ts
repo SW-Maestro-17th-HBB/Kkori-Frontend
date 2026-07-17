@@ -316,6 +316,38 @@ describe("request — 자동 재발급", () => {
     expect(redirect).toHaveBeenCalledTimes(1);
   });
 
+  it("늦게 도착한 401: 토큰이 이미 교체됐으면 재발급 없이 새 AT 로 재시도만 한다", async () => {
+    setTokens("at-old", "rt-1");
+    let release401: (() => void) | null = null;
+    const mock = vi.fn<(input: RequestInfo | URL, init?: RequestInit) => Promise<Response>>(
+      (input, init) => {
+        const url = String(input);
+        if (url.endsWith("/api/v1/auth/reissue")) {
+          return Promise.resolve(tokenPairResponse("at-3", "rt-3"));
+        }
+        const auth = (init?.headers as Record<string, string>)["Authorization"];
+        if (auth === "Bearer at-old") {
+          // 구 AT 요청의 401 을 보류 — 회전 완료 이후에 도착하는 상황을 재현
+          return new Promise<Response>((resolve) => {
+            release401 = () => resolve(errorResponse("C005", 401));
+          });
+        }
+        return Promise.resolve(jsonResponse({ success: true, data: "ok" }));
+      },
+    );
+    vi.stubGlobal("fetch", mock);
+
+    const pending = request("GET", "/api/v1/user"); // at-old 로 발사
+    await vi.waitFor(() => expect(release401).not.toBeNull());
+    setTokens("at-2", "rt-2"); // 선행 요청·다른 탭이 회전을 마친 상황
+    release401!();
+
+    await expect(pending).resolves.toBe("ok");
+    expect(callsTo(mock, "/api/v1/auth/reissue")).toHaveLength(0); // 중복 회전 없음
+    const [, retryInit] = mock.mock.calls.at(-1) as [string, RequestInit];
+    expect(authHeaderOf(retryInit)).toBe("Bearer at-2"); // 교체된 토큰으로 재시도만
+  });
+
   it("bodyFactory 는 매 시도 직전에 재평가된다", async () => {
     setTokens("at-old", "rt-1");
     let n = 0;

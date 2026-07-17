@@ -5,7 +5,13 @@ import { Route, Routes } from "react-router";
 import { useQueryClient } from "@tanstack/react-query";
 import { renderWithProviders } from "../test/render";
 import { __resetAuthForTests } from "../api/request";
-import { getAccessToken, getRefreshToken, setTokens } from "../api/tokenStore";
+import {
+  getAccessToken,
+  getRefreshToken,
+  getSignupSession,
+  setSignupSession,
+  setTokens,
+} from "../api/tokenStore";
 import { TopNav } from "./TopNav";
 
 const envelope = (data: unknown, status = 200) =>
@@ -84,8 +90,9 @@ afterEach(() => {
 });
 
 describe("TopNav — 로그아웃", () => {
-  it("서버 RT 폐기 후 로컬 토큰·쿼리 캐시를 정리하고 랜딩으로 이동한다", async () => {
+  it("서버 RT 폐기 후 로컬 토큰·가입 세션·쿼리 캐시를 정리하고 랜딩으로 이동한다", async () => {
     setTokens("at-1", "rt-1");
+    setSignupSession("st-leftover", false); // 이전 가입 흐름의 잔존 임시 인증 정보
     const mock = stubApi({ logout: [envelope(null)] });
     const user = userEvent.setup();
     renderTopNav();
@@ -98,6 +105,7 @@ describe("TopNav — 로그아웃", () => {
     expect(bodyOf(call)).toEqual({ refreshToken: "rt-1" });
     expect(getAccessToken()).toBeNull();
     expect(getRefreshToken()).toBeNull();
+    expect(getSignupSession()).toBeNull(); // 가입 세션도 함께 폐기
   });
 
   it("만료 AT: 재발급 후 재시도가 회전된 새 RT 를 전송해 서버측 폐기를 완성한다", async () => {

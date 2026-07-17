@@ -12,7 +12,7 @@ import {
   postLogout,
   postSignup,
 } from "./client";
-import { clearTokens, getRefreshToken } from "./tokenStore";
+import { clearSignupSession, clearTokens, getRefreshToken } from "./tokenStore";
 import { useNav } from "../hooks/useNav";
 
 /* ---------- 인증 ---------- */
@@ -66,6 +66,7 @@ export const useLogout = () => {
     },
     onSettled: () => {
       clearTokens();
+      clearSignupSession(); // 이전 가입 흐름의 임시 인증 정보도 함께 폐기
       queryClient.clear(); // SPA 이동이라 이전 세션 캐시가 메모리에 남는 것 방지
       nav("landing");
     },
