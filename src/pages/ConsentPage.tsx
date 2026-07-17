@@ -19,7 +19,7 @@ import { clearSignupSession, getSignupSession, setTokens } from "../api/tokenSto
 import { Badge, Button } from "../components/ds";
 import { Icon } from "../components/Icon";
 import { Checkbox, Display, Wordmark } from "../components/primitives";
-import { useNav } from "../hooks/useNav";
+import { useNav, usePostLoginRedirect } from "../hooks/useNav";
 import { ROUTES } from "../routes";
 import { CONSENT_COPY, CONSENT_ORDER } from "./consentCopy";
 
@@ -100,6 +100,7 @@ function submitErrorMessage(e: unknown): string {
 
 export function ConsentPage() {
   const nav = useNav();
+  const redirectAfterLogin = usePostLoginRedirect(); // 원 목적지 복귀 (없으면 대시보드)
   // 가입 세션은 마운트 시 1회만 캡처 — 성공 시 clearSignupSession() 후에도
   // 렌더가 안정적이어야 대시보드 이동 전에 /login 으로 튕기지 않는다
   const [session] = useState(() => getSignupSession());
@@ -157,7 +158,9 @@ export function ConsentPage() {
             return;
           }
           clearSignupSession(); // 2. 그 다음 임시 토큰 폐기
-          nav("dash", { replace: true }); // 3. replace — 뒤로가기로 죽은 동의화면 복귀 방지
+          // 3. 가입도 "로그인 후 원래 화면 복귀" 계약에 포함 — 저장된 원 목적지가
+          //    있으면 그리로, 없으면 대시보드 (replace — 죽은 동의화면 복귀 방지)
+          redirectAfterLogin();
         },
         onError: (e) => {
           if (!isApiError(e)) return;

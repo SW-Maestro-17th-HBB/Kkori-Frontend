@@ -10,6 +10,7 @@ import {
 import { postLogout } from "./client";
 import {
   clearTokens,
+  consumePostLoginRedirect,
   getAccessToken,
   getAuthSessionId,
   getRefreshToken,
@@ -629,6 +630,36 @@ describe("request — 강제 재로그인 (REAUTH)", () => {
     await setTokens("at-1", "rt-1"); // 직후 redirect 정책 요청은 정상적으로 이동해야 함
     await expect(request("GET", "/api/v1/user")).rejects.toThrow();
     expect(redirect).toHaveBeenCalledTimes(1);
+  });
+
+  it("보호 경로의 REAUTH 는 하드 리다이렉트 전에 원 목적지를 저장한다 (가드 미경유 보완)", async () => {
+    history.replaceState(null, "", "/reports/3?tab=score");
+    try {
+      await setTokens("at-old", "rt-1");
+      const redirect = spyRedirect();
+      stubFetchSeq(errorResponse("C005", 401), errorResponse("A007", 401));
+      await catchApiError(request("GET", "/api/v1/user"));
+
+      expect(redirect).toHaveBeenCalledWith("/login");
+      expect(consumePostLoginRedirect()).toBe("/reports/3?tab=score"); // query 까지 보존
+    } finally {
+      history.replaceState(null, "", "/");
+    }
+  });
+
+  it("비보호 경로의 REAUTH 는 원 목적지를 저장하지 않는다 (인증 플로우 경로 제외)", async () => {
+    history.replaceState(null, "", "/login");
+    try {
+      await setTokens("at-old", "rt-1");
+      const redirect = spyRedirect();
+      stubFetchSeq(errorResponse("C005", 401), errorResponse("A007", 401));
+      await catchApiError(request("GET", "/api/v1/user"));
+
+      expect(redirect).toHaveBeenCalledTimes(1);
+      expect(consumePostLoginRedirect()).toBeNull();
+    } finally {
+      history.replaceState(null, "", "/");
+    }
   });
 
   it("재발급 네트워크 실패 2연속은 non-terminal — 토큰을 유지하고 이동하지 않는다", async () => {

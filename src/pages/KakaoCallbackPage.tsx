@@ -14,10 +14,11 @@ import { isApiError } from "../api/request";
 import { clearOauthState, peekOauthState, setSignupSession, setTokens } from "../api/tokenStore";
 import { Button } from "../components/ds";
 import { Display, Wordmark } from "../components/primitives";
-import { useNav } from "../hooks/useNav";
+import { useNav, usePostLoginRedirect } from "../hooks/useNav";
 
 export function KakaoCallbackPage() {
   const nav = useNav();
+  const redirectAfterLogin = usePostLoginRedirect(); // 원 목적지 복귀 (없으면 대시보드)
   const [params, setSearchParams] = useSearchParams();
 
   // URL 파라미터는 첫 렌더에서 한 번만 메모리로 캡처 (이후 URL 은 정리됨)
@@ -48,9 +49,10 @@ export function KakaoCallbackPage() {
     if (!data) return;
     if (data.accessToken && data.refreshToken) {
       // 기존 유저 — 즉시 로그인 완료 (저장 완료 후 이동 — 대시보드가 토큰을 읽음).
+      // 가드·재인증이 저장해 둔 원 목적지가 있으면 그리로 복귀.
       // 저장 실패 시 무한 로딩에 갇히지 않도록 재로그인으로 복귀
       void setTokens(data.accessToken, data.refreshToken).then(
-        () => nav("dash", { replace: true }),
+        () => redirectAfterLogin(),
         () => nav("auth", { replace: true }),
       );
     } else if (data.signupToken) {
@@ -61,7 +63,7 @@ export function KakaoCallbackPage() {
       // 계약 위반 — 토큰도 signupToken 도 없음
       nav("auth", { replace: true });
     }
-  }, [data, nav]);
+  }, [data, nav, redirectAfterLogin]);
 
   const failed = isError || code === null;
   const message = initial.kakaoError

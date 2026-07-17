@@ -5,15 +5,27 @@ import { render } from "@testing-library/react";
 import { MemoryRouter } from "react-router";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 
-export function renderWithProviders(ui: ReactElement, { route = "/" } = {}) {
-  const queryClient = new QueryClient({
-    defaultOptions: { queries: { retry: false } },
-  });
-  return render(
-    <StrictMode>
-      <QueryClientProvider client={queryClient}>
-        <MemoryRouter initialEntries={[route]}>{ui}</MemoryRouter>
-      </QueryClientProvider>
-    </StrictMode>,
-  );
+interface Options {
+  /** 초기 경로 — location.state 가 필요한 테스트는 객체 형태로 전달 */
+  route?: string | { pathname: string; search?: string; state?: unknown };
+  /** 캐시를 시드·검증할 테스트가 자기 인스턴스를 주입한다 (기본: 매 렌더 새로 생성) */
+  queryClient?: QueryClient;
+}
+
+export function renderWithProviders(ui: ReactElement, { route = "/", queryClient }: Options = {}) {
+  const client =
+    queryClient ??
+    new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    });
+  return {
+    ...render(
+      <StrictMode>
+        <QueryClientProvider client={client}>
+          <MemoryRouter initialEntries={[route]}>{ui}</MemoryRouter>
+        </QueryClientProvider>
+      </StrictMode>,
+    ),
+    queryClient: client,
+  };
 }

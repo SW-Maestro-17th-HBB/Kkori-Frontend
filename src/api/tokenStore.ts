@@ -133,6 +133,57 @@ export function clearOauthState() {
   sessionStorage.removeItem(OAUTH_STATE_KEY);
 }
 
+/* ---------- 로그인 후 복귀 목적지 ----------
+   보호 라우트에서 로그인으로 보내질 때의 원 목적지(명세 §라우팅 가드).
+   카카오 인가 왕복(외부 리다이렉트)에서 router state 가 유실되므로
+   sessionStorage 로 나른다. 저장은 "로그인으로 보내는 쪽"(AuthPage 클릭·
+   request.ts 재인증)만, 소비는 로그인 완료 지점(콜백·가입 성공)만 수행하고,
+   OAuth 취소·실패 시엔 지우지 않는다 — TTL 내 재시도가 성공하면 복귀된다.
+   수명 상한은 TTL: 묵은 의도가 한참 뒤의 평범한 로그인을 과거 화면으로
+   보내지 않게 한다. */
+
+const REDIRECT_KEY = "kkori.postLoginRedirect";
+
+/** 원 목적지 수명 — 재인증·OAuth 재시도(수 분)는 살리고 묵은 의도는 버린다 */
+export const POST_LOGIN_REDIRECT_TTL_MS = 10 * 60 * 1000;
+
+export function setPostLoginRedirect(path: string) {
+  sessionStorage.setItem(REDIRECT_KEY, JSON.stringify({ path, ts: Date.now() }));
+}
+
+/** 읽는 즉시 제거(1회용 — 잘못된 값이 반복 소비되지 않게 파싱 전에 지운다)하고,
+    구조·TTL·내부 경로 검증을 모두 통과한 경로만 반환한다. 위반은 전부 null. */
+export function consumePostLoginRedirect(): string | null {
+  const raw = sessionStorage.getItem(REDIRECT_KEY);
+  sessionStorage.removeItem(REDIRECT_KEY);
+  if (!raw) return null;
+  let record: unknown;
+  try {
+    record = JSON.parse(raw);
+  } catch {
+    return null;
+  }
+  if (typeof record !== "object" || record === null) return null;
+  const { path, ts } = record as { path?: unknown; ts?: unknown };
+  if (typeof path !== "string" || typeof ts !== "number" || !Number.isFinite(ts)) return null;
+  const age = Date.now() - ts;
+  if (age < 0 || age > POST_LOGIN_REDIRECT_TTL_MS) return null; // 미래 시각·만료 모두 폐기
+  return sanitizeInternalPath(path);
+}
+
+/** 내부 경로만 통과 — origin 대조라 //host 는 물론 백슬래시 우회(/\evil)까지 차단된다 */
+function sanitizeInternalPath(path: string): string | null {
+  if (!path.startsWith("/")) return null;
+  let url: URL;
+  try {
+    url = new URL(path, window.location.origin);
+  } catch {
+    return null;
+  }
+  if (url.origin !== window.location.origin) return null;
+  return url.pathname + url.search;
+}
+
 /* ---------- 가입/복구 진행 상태 (임시) ----------
    만료(10분)는 클라이언트에서 검사하지 않는다 — 서버가 서명·만료를 검증해
    만료 시 A005(INVALID_SIGNUP_TOKEN)를 반환하고, 화면은 재로그인 유도로 처리한다. */

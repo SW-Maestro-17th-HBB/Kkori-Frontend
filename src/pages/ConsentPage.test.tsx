@@ -9,6 +9,7 @@ import {
   getAccessToken,
   getRefreshToken,
   getSignupSession,
+  setPostLoginRedirect,
   setSignupSession,
 } from "../api/tokenStore";
 import { ConsentPage } from "./ConsentPage";
@@ -80,6 +81,7 @@ function renderConsent() {
       <Route path="/signup" element={<ConsentPage />} />
       <Route path="/dashboard" element={<div>대시보드-도착</div>} />
       <Route path="/login" element={<div>로그인화면-도착</div>} />
+      <Route path="/reports" element={<div>리포트-도착</div>} />
     </Routes>,
     { route: "/signup" },
   );
@@ -202,6 +204,20 @@ describe("ConsentPage — 가입 제출", () => {
     expect(getAccessToken()).toBe("at-1");
     expect(getRefreshToken()).toBe("rt-1");
     expect(getSignupSession()).toBeNull();
+  });
+
+  it("가입 완료도 '로그인 후 복귀' 계약에 포함 — 저장된 원 목적지로 이동한다 (1회 소비)", async () => {
+    setSignupSession("st-1", false);
+    setPostLoginRedirect("/reports?sort=latest"); // 보호 라우트에서 튕겨나 가입까지 온 상황
+    stubApi({ signup: () => envelope({ accessToken: "at-1", refreshToken: "rt-1" }, 201) });
+    const user = userEvent.setup();
+    renderConsent();
+
+    await agreeRequired(user);
+    await user.click(cta());
+
+    expect(await screen.findByText("리포트-도착")).toBeInTheDocument();
+    expect(sessionStorage.getItem("kkori.postLoginRedirect")).toBeNull(); // 소비됨
   });
 
   it("마케팅까지 전체 동의하면 마케팅도 version 과 함께 제출된다", async () => {

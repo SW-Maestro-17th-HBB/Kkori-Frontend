@@ -9,6 +9,8 @@ import {
   getRefreshToken,
   getSignupSession,
   peekOauthState,
+  POST_LOGIN_REDIRECT_TTL_MS,
+  setPostLoginRedirect,
 } from "../api/tokenStore";
 import { KakaoCallbackPage } from "./KakaoCallbackPage";
 
@@ -45,6 +47,15 @@ function renderCallback(route: string) {
       <Route path="/dashboard" element={<div>대시보드-도착</div>} />
       <Route path="/signup" element={<div>동의화면-도착</div>} />
       <Route path="/login" element={<div>로그인화면-도착</div>} />
+      <Route
+        path="/reports"
+        element={
+          <>
+            <div>리포트-도착</div>
+            <LocationProbe />
+          </>
+        }
+      />
     </Routes>,
     { route },
   );
@@ -130,6 +141,78 @@ describe("KakaoCallbackPage — 판정 분기", () => {
     renderCallback(validCallbackRoute("valid-code"));
     await screen.findByText("동의화면-도착");
     expect(mock).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("KakaoCallbackPage — 원 목적지 복귀", () => {
+  it("저장된 원 목적지가 있으면 대시보드 대신 그 경로로 복귀한다 (query 보존, 1회 소비)", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(
+        envelope({
+          isNewUser: false,
+          isRestored: false,
+          accessToken: "at-123",
+          refreshToken: "rt-456",
+        }),
+      ),
+    );
+    setPostLoginRedirect("/reports?sort=latest");
+    renderCallback(validCallbackRoute("valid-code"));
+
+    expect(await screen.findByText("리포트-도착")).toBeInTheDocument();
+    expect(screen.getByTestId("loc-search")).toHaveTextContent("?sort=latest");
+    expect(sessionStorage.getItem("kkori.postLoginRedirect")).toBeNull(); // 소비됨
+  });
+
+  it("만료된 원 목적지(TTL 초과)는 폐기하고 대시보드로 폴백한다", async () => {
+    setPostLoginRedirect("/reports?sort=latest"); // 실제 시각으로 저장
+    // 소비 시점만 TTL 초과 이후로 이동 — 경계 자체는 tokenStore.test 가 고정
+    vi.spyOn(Date, "now").mockReturnValue(Date.now() + POST_LOGIN_REDIRECT_TTL_MS + 1);
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(
+        envelope({
+          isNewUser: false,
+          isRestored: false,
+          accessToken: "at-late",
+          refreshToken: "rt-late",
+        }),
+      ),
+    );
+    renderCallback(validCallbackRoute("valid-code"));
+
+    expect(await screen.findByText("대시보드-도착")).toBeInTheDocument(); // 묵은 목적지 미사용
+    expect(sessionStorage.getItem("kkori.postLoginRedirect")).toBeNull(); // 폐기됨
+  });
+
+  it("교환 실패 시 저장값을 유지한다 — TTL 내 재시도가 성공하면 복귀된다", async () => {
+    setPostLoginRedirect("/reports?sort=latest");
+    // 1차 시도: 교환 실패 — 저장값은 소비되지 않는다
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(errorEnvelope("A002", "카카오 인증에 실패했습니다.", 401)),
+    );
+    const first = renderCallback(validCallbackRoute("expired-code"));
+    await screen.findByText("로그인에 실패했어요");
+    expect(sessionStorage.getItem("kkori.postLoginRedirect")).not.toBeNull();
+    first.unmount();
+
+    // 재시도: 새 state·code 로 성공 — 유지된 원 목적지로 복귀하고 1회 소비된다
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(
+        envelope({
+          isNewUser: false,
+          isRestored: false,
+          accessToken: "at-retry",
+          refreshToken: "rt-retry",
+        }),
+      ),
+    );
+    renderCallback(validCallbackRoute("fresh-code"));
+    expect(await screen.findByText("리포트-도착")).toBeInTheDocument();
+    expect(sessionStorage.getItem("kkori.postLoginRedirect")).toBeNull();
   });
 });
 

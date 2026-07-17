@@ -20,8 +20,9 @@ import {
   getAuthSessionId,
   getAuthSnapshot,
   rotateTokens,
+  setPostLoginRedirect,
 } from "./tokenStore";
-import { ROUTES } from "../routes";
+import { isProtectedPath, ROUTES } from "../routes";
 
 /** 검증 실패 시 필드 단위 에러 (백엔드 FieldError) */
 export interface FieldError {
@@ -212,6 +213,11 @@ async function applyReauth(policy: ReauthPolicy, expectedSessionId: string | nul
   clearSignupSession();
   if (policy === "redirect" && !reauthHandled) {
     reauthHandled = true;
+    // 하드 리다이렉트는 가드(RequireAuth)를 거치지 않으므로 원 목적지를 직접
+    // 저장한다 — 로그인 완료 지점이 소비해 "로그인 후 원래 화면 복귀"를 지킨다.
+    // 보호 경로만 저장 (로그인·가입·콜백 같은 인증 플로우 경로는 복귀 대상이 아님)
+    const { pathname, search } = window.location;
+    if (isProtectedPath(pathname)) setPostLoginRedirect(pathname + search);
     hardRedirect.to(ROUTES.auth);
   }
 }
