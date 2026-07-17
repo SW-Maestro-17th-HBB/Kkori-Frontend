@@ -44,6 +44,8 @@
 - 신규 유저(`isNewUser`): signupToken을 보관하고 `/signup`으로 이동한다.
 - 복구 대상(`isRestored`): `/signup`으로 이동하되 "탈퇴 후 유예 기간 내 재로그인 시 복구" 안내를 함께 노출한다 (기존 약관 화면의 복구 모드 변형).
 - 실패(A001·A002·A003): 안내 문구와 함께 `/login`으로 복귀시킨다.
+- 인가 요청에 무작위 state 를 포함하고, 콜백에서 세션 저장값과 대조 후 즉시 폐기한다(Login CSRF 방어). 불일치하면 교환 없이 실패 처리한다.
+- code·state 는 첫 렌더에서 메모리로 캡처한 뒤 즉시 주소에서 제거하고, 실패 화면의 이동도 replace 로 처리해 브라우저 기록에 남기지 않는다.
 
 ### 실행 조건
 
@@ -56,6 +58,8 @@
 - 신규 유저는 동의 화면으로 이동하는지 확인
 - 복구 대상(`isRestored`)은 복구 안내가 표시된 동의 화면으로 이동하는지 확인
 - 카카오 인증 실패(A002) 시 재시도 안내와 함께 로그인 화면으로 복귀하는지 확인
+- state 가 세션 저장값과 불일치하거나 없으면 code 교환 없이 실패 안내가 표시되는지 확인
+- 교환 실패 후에도 code 가 URL·브라우저 기록에 남지 않는지(뒤로가기 재진입 포함) 확인
 
 ### 성능 요구사항
 
@@ -65,7 +69,7 @@
 
 - 라우트: `/login`, `/auth/kakao/callback` (`src/routes.ts`)
 - API: `POST /api/v1/auth/kakao` — 요청/응답 타입은 `src/api/schema.ts`
-- 환경 변수: 카카오 JavaScript 키·redirect_uri (변수명은 구현 시 확정, `.env.example`에 문서화)
+- 환경 변수: `VITE_KAKAO_CLIENT_ID` — 카카오 REST API 키 (JavaScript 키 아님, 백엔드가 code 교환에 쓰는 키와 동일). redirect_uri 는 origin 에서 파생 (`.env.example` 참고)
 
 ### 제약사항
 
