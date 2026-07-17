@@ -140,14 +140,14 @@ export function ConsentPage() {
     signup.mutate(
       { signupToken: session.signupToken, consents },
       {
-        onSuccess: (data) => {
+        onSuccess: async (data) => {
           if (!data.accessToken || !data.refreshToken) {
             // 계약 위반 — 서버는 이미 signupToken 을 소비했으므로 세션은 죽은 상태
             clearSignupSession();
             nav("auth", { replace: true });
             return;
           }
-          setTokens(data.accessToken, data.refreshToken); // 1. 로그인 세션 확보가 먼저
+          await setTokens(data.accessToken, data.refreshToken); // 1. 로그인 세션 확보가 먼저
           clearSignupSession(); // 2. 그 다음 임시 토큰 폐기
           nav("dash", { replace: true }); // 3. replace — 뒤로가기로 죽은 동의화면 복귀 방지
         },

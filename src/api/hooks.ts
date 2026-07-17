@@ -64,8 +64,8 @@ export const useLogout = () => {
         // 멱등 계약 — 서버 폐기가 실패해도 로컬 정리는 진행한다
       }
     },
-    onSettled: () => {
-      clearTokens();
+    onSettled: async () => {
+      await clearTokens();
       clearSignupSession(); // 이전 가입 흐름의 임시 인증 정보도 함께 폐기
       queryClient.clear(); // SPA 이동이라 이전 세션 캐시가 메모리에 남는 것 방지
       nav("landing");

@@ -47,9 +47,10 @@ export function KakaoCallbackPage() {
   useEffect(() => {
     if (!data) return;
     if (data.accessToken && data.refreshToken) {
-      // 기존 유저 — 즉시 로그인 완료
-      setTokens(data.accessToken, data.refreshToken);
-      nav("dash", { replace: true });
+      // 기존 유저 — 즉시 로그인 완료 (저장 완료 후 이동 — 대시보드가 토큰을 읽음)
+      void setTokens(data.accessToken, data.refreshToken).then(() =>
+        nav("dash", { replace: true }),
+      );
     } else if (data.signupToken) {
       // 신규(isNewUser) 또는 복구(isRestored) — 동의 화면으로
       setSignupSession(data.signupToken, data.isRestored === true);

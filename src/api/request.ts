@@ -18,7 +18,7 @@ import {
   clearTokens,
   getAccessToken,
   getAuthSessionId,
-  getRefreshToken,
+  getAuthSnapshot,
   rotateTokens,
 } from "./tokenStore";
 import { ROUTES } from "../routes";
@@ -198,8 +198,8 @@ export function __resetAuthForTests() {
 }
 
 /** 세션 회복 불능 확정 시 처리 — silent 정책은 이동하지 않고 가드도 점유하지 않는다 */
-function applyReauth(policy: ReauthPolicy) {
-  clearTokens();
+async function applyReauth(policy: ReauthPolicy): Promise<void> {
+  await clearTokens();
   clearSignupSession();
   if (policy === "redirect" && !reauthHandled) {
     reauthHandled = true;
@@ -235,11 +235,12 @@ type TokenPair = components["schemas"]["TokenResponse"];
     토큰 누락은 예외가 아닌 루프 내 데이터 검증으로 다루며, SESSION_EXPIRED 는
     ① RT 부재(사전) ② 시도 소진 시 마지막 실패가 누락일 때 — 두 지점에서만 생성. */
 async function doReissue(): Promise<void> {
-  const refreshToken = getRefreshToken(); // 지역 고정 — 재시도도 같은 RT (Grace 계약)
-  const sessionAtStart = getAuthSessionId(); // 회전 결과가 남의 세션을 덮어쓰지 않도록 캡처
-  if (!refreshToken) {
+  // 단일 스냅샷으로 캡처 — RT 와 세션 ID 가 서로 다른 세션의 것일 수 없다
+  const auth = getAuthSnapshot();
+  if (!auth) {
     throw new ApiError(FE_ERROR_CODES.SESSION_EXPIRED, "다시 로그인해 주세요.", 401);
   }
+  const { refreshToken, sessionId } = auth; // 지역 고정 — 재시도도 같은 RT (Grace 계약)
   let lastUncertain: unknown = null;
   for (let attempt = 0; attempt < 2; attempt++) {
     let data: TokenPair;
@@ -256,13 +257,13 @@ async function doReissue(): Promise<void> {
       continue;
     }
     if (data?.accessToken && data?.refreshToken) {
-      // 재발급 대기 중 세션이 교체됐으면(다른 계정 로그인) 회전 결과를 폐기 —
-      // A 세션의 회전 쌍이 B 세션의 저장소를 덮어쓰는 사고 방지. 비 terminal 코드라
+      // 회전 저장은 탭 간 잠금 안에서 세션 재확인 후 수행(tokenStore.rotateTokens).
+      // 대기 중 세션이 교체됐으면(다른 계정 로그인) 결과를 폐기 — 비 terminal 코드라
       // REAUTH 를 유발하지 않아 새 세션은 그대로 보존된다.
-      if (getAuthSessionId() !== sessionAtStart) {
+      const stored = await rotateTokens(data.accessToken, data.refreshToken, sessionId);
+      if (!stored) {
         throw new ApiError(FE_ERROR_CODES.SESSION_REPLACED, "세션이 변경되었습니다.", 401);
       }
-      rotateTokens(data.accessToken, data.refreshToken); // 세션 ID 유지 — 같은 세션의 회전
       return;
     }
     // 200 인데 토큰 쌍 누락 — 계약 위반이지만 응답 유실과 동급의 불확실 실패로 취급해 재시도
@@ -285,8 +286,10 @@ export async function request<T>(
   opts: RequestOptions = {},
 ): Promise<T> {
   const isPublic = PUBLIC_REQUESTS.has(`${method} ${path}`);
-  const attemptToken = isPublic ? null : getAccessToken();
-  const attemptSession = isPublic ? null : getAuthSessionId();
+  // 단일 스냅샷 캡처 — 토큰과 세션 ID 가 서로 다른 시점의 조합일 수 없다
+  const attempt = isPublic ? null : getAuthSnapshot();
+  const attemptToken = attempt?.accessToken ?? null;
+  const attemptSession = attempt?.sessionId ?? null;
   try {
     return await rawRequest<T>(method, path, opts, attemptToken);
   } catch (e) {
@@ -304,7 +307,7 @@ export async function request<T>(
       try {
         await reissueOnce();
       } catch (re) {
-        if (isTerminalReissueFailure(re)) applyReauth(policy);
+        if (isTerminalReissueFailure(re)) await applyReauth(policy);
         throw re;
       }
     }
@@ -314,7 +317,7 @@ export async function request<T>(
       // 정확히 1회 재시도 — bodyFactory 는 회전된 토큰을 반영해 재평가된다
       return await rawRequest<T>(method, path, opts, getAccessToken());
     } catch (e2) {
-      if (isApiError(e2) && e2.status === 401) applyReauth(policy); // 2차 재발급 금지
+      if (isApiError(e2) && e2.status === 401) await applyReauth(policy); // 2차 재발급 금지
       throw e2;
     }
   }

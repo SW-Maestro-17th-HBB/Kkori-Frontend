@@ -9,49 +9,100 @@
      생명주기면 충분하므로 sessionStorage 에 보관하고 가입 완료 시 제거.
    ============================================================ */
 
-const AT_KEY = "kkori.accessToken";
-const RT_KEY = "kkori.refreshToken";
-const SESSION_KEY = "kkori.authSession";
+const AUTH_KEY = "kkori.auth";
 const SIGNUP_KEY = "kkori.signupToken";
 const RESTORE_KEY = "kkori.isRestored";
 
-/** 로그인·가입 성공 — 토큰 쌍 저장 + **새 인증 세션 ID 발급**.
-    세션 ID 는 "누구의 세션인가"의 안정 식별자다: 재발급(rotateTokens)으로 AT/RT 가
-    회전해도 유지되고, 다른 계정 로그인·로그아웃 시에만 바뀌거나 사라진다.
-    지연된 401 처리에서 "같은 세션의 회전"(재시도 가능)과 "세션 교체"(재시도 금지 —
-    다른 계정의 자격증명으로 재실행되는 사고)를 구분하는 근거. localStorage 라 멀티탭 공유. */
-export function setTokens(accessToken: string, refreshToken: string) {
-  localStorage.setItem(AT_KEY, accessToken);
-  localStorage.setItem(RT_KEY, refreshToken);
-  localStorage.setItem(SESSION_KEY, crypto.randomUUID());
+/** 인증 세션 스냅샷 — AT/RT/세션 ID 를 **하나의 JSON 레코드**로 저장한다.
+    키를 분산하면 다른 탭이 쓰기 도중의 찢어진 조합(AT-B + RT-A 등)을 읽을 수 있다.
+    세션 ID 는 "누구의 세션인가"의 안정 식별자: 재발급(rotateTokens)으로 토큰이
+    회전해도 유지되고, 다른 계정 로그인·로그아웃 시에만 바뀌거나 사라진다 —
+    지연된 401 처리에서 "같은 세션의 회전"(재시도 가능)과 "세션 교체"(재시도 금지)를
+    구분하는 근거. localStorage 라 멀티탭 공유. */
+export interface AuthSnapshot {
+  accessToken: string;
+  refreshToken: string;
+  sessionId: string;
 }
 
-/** 재발급 회전 — 토큰 쌍만 교체하고 세션 ID 는 유지한다 (request.ts 전용) */
-export function rotateTokens(accessToken: string, refreshToken: string) {
-  localStorage.setItem(AT_KEY, accessToken);
-  localStorage.setItem(RT_KEY, refreshToken);
+/** 불완전·변조 레코드는 세션 없음으로 취급 — 부분 상태가 존재할 수 없게 한다 */
+export function getAuthSnapshot(): AuthSnapshot | null {
+  const raw = localStorage.getItem(AUTH_KEY);
+  if (!raw) return null;
+  try {
+    const r: unknown = JSON.parse(raw);
+    if (
+      typeof r === "object" &&
+      r !== null &&
+      typeof (r as AuthSnapshot).accessToken === "string" &&
+      typeof (r as AuthSnapshot).refreshToken === "string" &&
+      typeof (r as AuthSnapshot).sessionId === "string"
+    ) {
+      return r as AuthSnapshot;
+    }
+    return null;
+  } catch {
+    return null;
+  }
 }
 
-export function getAuthSessionId(): string | null {
-  return localStorage.getItem(SESSION_KEY);
+/* 탭 간 변이 직렬화 — "검사 후 쓰기"(회전)와 다른 탭의 로그인·로그아웃 쓰기가
+   교차하지 않도록 Web Locks 로 잠근다. 미지원 환경(jsdom 등)은 단일 프로세스라
+   즉시 실행 폴백으로 충분하다. 쓰기 자체는 단일 키라 개별적으로 원자적. */
+const LOCK_NAME = "kkori.auth";
+
+function withAuthLock<T>(fn: () => T): Promise<T> {
+  if (typeof navigator !== "undefined" && navigator.locks) {
+    return navigator.locks.request(LOCK_NAME, () => fn());
+  }
+  return Promise.resolve(fn());
+}
+
+/** 로그인·가입 성공 — 토큰 쌍 저장 + **새 인증 세션 ID 발급** */
+export function setTokens(accessToken: string, refreshToken: string): Promise<void> {
+  return withAuthLock(() => {
+    const record: AuthSnapshot = { accessToken, refreshToken, sessionId: crypto.randomUUID() };
+    localStorage.setItem(AUTH_KEY, JSON.stringify(record));
+  });
+}
+
+/** 재발급 회전 (request.ts 전용) — **잠금 안에서 세션 ID 를 재확인**한 뒤 저장한다.
+    대기 중 세션이 교체·제거됐으면(다른 계정 로그인/로그아웃) 저장하지 않고 false —
+    A 세션의 회전 쌍이 B 세션의 저장소를 덮어쓰는 사고를 탭 간에도 차단. */
+export function rotateTokens(
+  accessToken: string,
+  refreshToken: string,
+  expectedSessionId: string,
+): Promise<boolean> {
+  return withAuthLock(() => {
+    const current = getAuthSnapshot();
+    if (!current || current.sessionId !== expectedSessionId) return false;
+    const record: AuthSnapshot = { accessToken, refreshToken, sessionId: current.sessionId };
+    localStorage.setItem(AUTH_KEY, JSON.stringify(record));
+    return true;
+  });
 }
 
 export function getAccessToken(): string | null {
-  return localStorage.getItem(AT_KEY);
+  return getAuthSnapshot()?.accessToken ?? null;
 }
 
 export function getRefreshToken(): string | null {
-  return localStorage.getItem(RT_KEY);
+  return getAuthSnapshot()?.refreshToken ?? null;
 }
 
-export function clearTokens() {
-  localStorage.removeItem(AT_KEY);
-  localStorage.removeItem(RT_KEY);
-  localStorage.removeItem(SESSION_KEY);
+export function getAuthSessionId(): string | null {
+  return getAuthSnapshot()?.sessionId ?? null;
+}
+
+export function clearTokens(): Promise<void> {
+  return withAuthLock(() => {
+    localStorage.removeItem(AUTH_KEY);
+  });
 }
 
 export function isLoggedIn(): boolean {
-  return getAccessToken() !== null;
+  return getAuthSnapshot() !== null;
 }
 
 /* ---------- OAuth state (Login CSRF 방어) ----------

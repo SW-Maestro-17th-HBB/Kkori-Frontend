@@ -10,6 +10,7 @@ import {
 import {
   clearTokens,
   getAccessToken,
+  getAuthSessionId,
   getRefreshToken,
   rotateTokens,
   setTokens,
@@ -254,18 +255,19 @@ describe("request — 자동 재발급", () => {
     expect(callsTo(mock, "/api/v1/auth/reissue")).toHaveLength(1);
   });
 
-  it("RT 만 남은 부분 세션도 회복한다 (AT 유실)", async () => {
-    setTokens("at-x", "rt-1");
-    localStorage.removeItem("kkori.accessToken"); // AT 만 유실된 부분 세션
-    const mock = stubFetchSeq(
-      errorResponse("C005", 401),
-      tokenPairResponse("at-2", "rt-2"),
-      jsonResponse({ success: true, data: "ok" }),
-    );
-    await expect(request("GET", "/api/v1/user")).resolves.toBe("ok");
-    const [, origInit] = mock.mock.calls[0] as [string, RequestInit];
-    expect(authHeaderOf(origInit)).toBeUndefined();
-    expect(getAccessToken()).toBe("at-2");
+  it("불완전·변조 레코드는 세션 없음으로 취급한다 (부분 상태 불가 불변식)", async () => {
+    // 단일 JSON 레코드 저장이라 'AT 만 유실' 같은 부분 상태는 존재할 수 없다 —
+    // 필드가 빠진 레코드는 통째로 무효(로그아웃 상태)로 읽힌다
+    localStorage.setItem("kkori.auth", JSON.stringify({ accessToken: "at-only" }));
+    expect(getAccessToken()).toBeNull();
+    expect(getRefreshToken()).toBeNull();
+
+    const redirect = spyRedirect();
+    const mock = stubFetchSeq(errorResponse("C005", 401));
+    const err = await catchApiError(request("GET", "/api/v1/user"));
+    expect(err.code).toBe(FE_ERROR_CODES.SESSION_EXPIRED); // 토큰 전무와 동일 처리
+    expect(mock).toHaveBeenCalledTimes(1);
+    expect(redirect).toHaveBeenCalledTimes(1);
   });
 
   it("불확실 실패(네트워크)는 동일 RT 로 1회 재시도해 Grace 응답으로 복구한다", async () => {
@@ -345,7 +347,8 @@ describe("request — 자동 재발급", () => {
 
     const pending = request("GET", "/api/v1/user"); // at-old 로 발사
     await vi.waitFor(() => expect(release401).not.toBeNull());
-    rotateTokens("at-2", "rt-2"); // 같은 세션에서 선행 요청·다른 탭이 회전을 마친 상황
+    // 같은 세션에서 선행 요청·다른 탭이 회전을 마친 상황
+    await rotateTokens("at-2", "rt-2", getAuthSessionId()!);
     release401!();
 
     await expect(pending).resolves.toBe("ok");
