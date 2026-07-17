@@ -1,5 +1,13 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { ApiError, FE_ERROR_CODES, isApiError, request } from "./request";
+import {
+  __resetAuthForTests,
+  ApiError,
+  FE_ERROR_CODES,
+  hardRedirect,
+  isApiError,
+  request,
+} from "./request";
+import { getAccessToken, getRefreshToken, setTokens } from "./tokenStore";
 
 /** fetch 를 지정한 Response 로 스텁하고 호출 기록을 돌려준다 */
 function stubFetch(response: Response | Promise<Response>) {
@@ -25,8 +33,38 @@ async function catchApiError(p: Promise<unknown>): Promise<ApiError> {
   throw new Error("에러가 발생하지 않음");
 }
 
+/** 응답을 순서대로 돌려주는 fetch 스텁 — 재발급·재시도처럼 다단계 흐름 검증용 */
+function stubFetchSeq(...responses: (Response | Error)[]) {
+  const mock = vi.fn();
+  for (const r of responses) {
+    if (r instanceof Error) mock.mockRejectedValueOnce(r);
+    else mock.mockResolvedValueOnce(r);
+  }
+  vi.stubGlobal("fetch", mock);
+  return mock;
+}
+
+const errorResponse = (code: string, status: number) =>
+  jsonResponse({ success: false, data: null, error: { code, message: "err" } }, status);
+
+const tokenPairResponse = (at = "at-2", rt = "rt-2") =>
+  jsonResponse({ success: true, data: { accessToken: at, refreshToken: rt } });
+
+/** jsdom 은 location.assign 미구현 — 강제 이동은 seam 스파이로 관찰한다 */
+const spyRedirect = () => vi.spyOn(hardRedirect, "to").mockImplementation(() => {});
+
+const authHeaderOf = (init: RequestInit) =>
+  (init.headers as Record<string, string>)["Authorization"];
+
+const callsTo = (mock: ReturnType<typeof vi.fn>, suffix: string) =>
+  mock.mock.calls.filter(([url]) => String(url).endsWith(suffix));
+
 afterEach(() => {
   vi.unstubAllGlobals();
+  vi.restoreAllMocks();
+  localStorage.clear();
+  sessionStorage.clear();
+  __resetAuthForTests();
 });
 
 describe("request — 엔벨로프 언래핑", () => {
@@ -127,5 +165,278 @@ describe("request — 요청 직렬화", () => {
     const [, init] = mock.mock.calls[0] as [string, RequestInit];
     expect(init.body).toBeUndefined();
     expect((init.headers as Record<string, string>)["Content-Type"]).toBeUndefined();
+  });
+});
+
+describe("request — 토큰 부착", () => {
+  it("보호 요청에 AT 가 있으면 Bearer 를 부착한다", async () => {
+    setTokens("at-1", "rt-1");
+    const mock = stubFetch(jsonResponse({ success: true, data: null }));
+    await request("GET", "/api/v1/user");
+    const [, init] = mock.mock.calls[0] as [string, RequestInit];
+    expect(authHeaderOf(init)).toBe("Bearer at-1");
+  });
+
+  it("AT 가 없으면 보호 요청에도 Authorization 을 넣지 않는다", async () => {
+    const mock = stubFetch(jsonResponse({ success: true, data: null }));
+    await request("GET", "/api/v1/user");
+    const [, init] = mock.mock.calls[0] as [string, RequestInit];
+    expect(authHeaderOf(init)).toBeUndefined();
+  });
+
+  it("공개 요청은 AT 가 있어도 부착하지 않는다 (stale 토큰의 가입 흐름 오염 방지)", async () => {
+    setTokens("at-stale", "rt-stale");
+    // Response body 는 1회용 — 호출마다 새로 생성
+    const mock = vi.fn(() => Promise.resolve(jsonResponse({ success: true, data: null })));
+    vi.stubGlobal("fetch", mock);
+    await request("POST", "/api/v1/auth/signup", { body: {} });
+    await request("GET", "/api/v1/consents");
+    for (const [, init] of mock.mock.calls as [string, RequestInit][]) {
+      expect(authHeaderOf(init)).toBeUndefined();
+    }
+  });
+});
+
+describe("request — 자동 재발급", () => {
+  it("보호 요청 401 → 재발급 성공 → 회전 쌍 저장 + 새 AT 로 1회 재시도", async () => {
+    setTokens("at-old", "rt-1");
+    const mock = stubFetchSeq(
+      errorResponse("C005", 401),
+      tokenPairResponse("at-2", "rt-2"),
+      jsonResponse({ success: true, data: "ok" }),
+    );
+    await expect(request("GET", "/api/v1/user")).resolves.toBe("ok");
+
+    expect(mock).toHaveBeenCalledTimes(3);
+    const [origUrl, origInit] = mock.mock.calls[0] as [string, RequestInit];
+    const [reissueUrl, reissueInit] = mock.mock.calls[1] as [string, RequestInit];
+    const [retryUrl, retryInit] = mock.mock.calls[2] as [string, RequestInit];
+    expect(origUrl).toBe("/api/v1/user");
+    expect(authHeaderOf(origInit)).toBe("Bearer at-old");
+    expect(reissueUrl).toBe("/api/v1/auth/reissue");
+    expect(authHeaderOf(reissueInit)).toBeUndefined(); // RT 가 곧 자격증명 — Bearer 미부착
+    expect(reissueInit.body).toBe(JSON.stringify({ refreshToken: "rt-1" }));
+    expect(retryUrl).toBe("/api/v1/user");
+    expect(authHeaderOf(retryInit)).toBe("Bearer at-2");
+    expect(getAccessToken()).toBe("at-2");
+    expect(getRefreshToken()).toBe("rt-2");
+  });
+
+  it("동시 다발 401 은 재발급을 1회로 단일화한다 (single-flight)", async () => {
+    setTokens("at-old", "rt-1");
+    const mock = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      if (url.endsWith("/api/v1/auth/reissue")) {
+        return Promise.resolve(tokenPairResponse("at-2", "rt-2"));
+      }
+      const auth = (init?.headers as Record<string, string>)["Authorization"];
+      return Promise.resolve(
+        auth === "Bearer at-2"
+          ? jsonResponse({ success: true, data: "ok" })
+          : errorResponse("C005", 401),
+      );
+    });
+    vi.stubGlobal("fetch", mock);
+
+    const results = await Promise.all([
+      request("GET", "/api/v1/user"),
+      request("GET", "/api/v1/user/consents"),
+    ]);
+    expect(results).toEqual(["ok", "ok"]);
+    expect(callsTo(mock, "/api/v1/auth/reissue")).toHaveLength(1);
+  });
+
+  it("RT 만 남은 부분 세션도 회복한다 (AT 유실)", async () => {
+    setTokens("at-x", "rt-1");
+    localStorage.removeItem("kkori.accessToken"); // AT 만 유실된 부분 세션
+    const mock = stubFetchSeq(
+      errorResponse("C005", 401),
+      tokenPairResponse("at-2", "rt-2"),
+      jsonResponse({ success: true, data: "ok" }),
+    );
+    await expect(request("GET", "/api/v1/user")).resolves.toBe("ok");
+    const [, origInit] = mock.mock.calls[0] as [string, RequestInit];
+    expect(authHeaderOf(origInit)).toBeUndefined();
+    expect(getAccessToken()).toBe("at-2");
+  });
+
+  it("불확실 실패(네트워크)는 동일 RT 로 1회 재시도해 Grace 응답으로 복구한다", async () => {
+    setTokens("at-old", "rt-1");
+    const redirect = spyRedirect();
+    const mock = stubFetchSeq(
+      errorResponse("C005", 401),
+      new TypeError("Failed to fetch"), // reissue#1 응답 유실
+      tokenPairResponse("at-2", "rt-2"), // reissue#2 — Grace 가 원래 발급쌍 반환
+      jsonResponse({ success: true, data: "ok" }),
+    );
+    await expect(request("GET", "/api/v1/user")).resolves.toBe("ok");
+
+    const reissues = callsTo(mock, "/api/v1/auth/reissue");
+    expect(reissues).toHaveLength(2);
+    for (const [, init] of reissues as [string, RequestInit][]) {
+      expect(init.body).toBe(JSON.stringify({ refreshToken: "rt-1" })); // 두 번 모두 같은 RT
+    }
+    expect(getRefreshToken()).toBe("rt-2");
+    expect(redirect).not.toHaveBeenCalled();
+  });
+
+  it("불확실 실패(5xx) 후 정상 응답이면 복구한다", async () => {
+    setTokens("at-old", "rt-1");
+    stubFetchSeq(
+      errorResponse("C005", 401),
+      errorResponse("C001", 500),
+      tokenPairResponse("at-2", "rt-2"),
+      jsonResponse({ success: true, data: "ok" }),
+    );
+    await expect(request("GET", "/api/v1/user")).resolves.toBe("ok");
+    expect(getAccessToken()).toBe("at-2");
+  });
+
+  it("재발급 200 인데 토큰 누락 1회 → 재시도 정상 응답이면 복구한다", async () => {
+    setTokens("at-old", "rt-1");
+    stubFetchSeq(
+      errorResponse("C005", 401),
+      jsonResponse({ success: true, data: {} }), // 토큰 쌍 누락 — 불확실 실패
+      tokenPairResponse("at-2", "rt-2"),
+      jsonResponse({ success: true, data: "ok" }),
+    );
+    await expect(request("GET", "/api/v1/user")).resolves.toBe("ok");
+    expect(getRefreshToken()).toBe("rt-2");
+  });
+
+  it("재발급의 명시적 401(A007)은 내부 재시도 없이 즉시 실패한다", async () => {
+    setTokens("at-old", "rt-1");
+    const redirect = spyRedirect();
+    const mock = stubFetchSeq(errorResponse("C005", 401), errorResponse("A007", 401));
+    const err = await catchApiError(request("GET", "/api/v1/user"));
+    expect(err.code).toBe("A007");
+    expect(callsTo(mock, "/api/v1/auth/reissue")).toHaveLength(1); // 재시도 금지
+    expect(redirect).toHaveBeenCalledTimes(1);
+  });
+
+  it("bodyFactory 는 매 시도 직전에 재평가된다", async () => {
+    setTokens("at-old", "rt-1");
+    let n = 0;
+    const mock = stubFetchSeq(
+      errorResponse("C005", 401),
+      tokenPairResponse("at-2", "rt-2"),
+      jsonResponse({ success: true, data: null }),
+    );
+    await request("POST", "/api/v1/auth/logout", { bodyFactory: () => ({ v: n++ }) });
+    const [, origInit] = mock.mock.calls[0] as [string, RequestInit];
+    const [, retryInit] = mock.mock.calls[2] as [string, RequestInit];
+    expect(origInit.body).toBe(JSON.stringify({ v: 0 }));
+    expect(retryInit.body).toBe(JSON.stringify({ v: 1 })); // 재시도에서 새로 평가
+  });
+});
+
+describe("request — 강제 재로그인 (REAUTH)", () => {
+  it("재발급 실패(A007) 시 동시 대기자가 있어도 세션 정리 + /login 이동은 1회다", async () => {
+    setTokens("at-old", "rt-1");
+    const redirect = spyRedirect();
+    const mock = vi.fn((input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.endsWith("/api/v1/auth/reissue")) {
+        return Promise.resolve(errorResponse("A007", 401));
+      }
+      return Promise.resolve(errorResponse("C005", 401));
+    });
+    vi.stubGlobal("fetch", mock);
+
+    const results = await Promise.allSettled([
+      request("GET", "/api/v1/user"),
+      request("GET", "/api/v1/user/consents"),
+    ]);
+    expect(results.every((r) => r.status === "rejected")).toBe(true);
+    expect(getAccessToken()).toBeNull();
+    expect(getRefreshToken()).toBeNull();
+    expect(redirect).toHaveBeenCalledTimes(1);
+    expect(redirect).toHaveBeenCalledWith("/login");
+  });
+
+  it("재발급 토큰 누락 2연속 → FE_SESSION_EXPIRED terminal", async () => {
+    setTokens("at-old", "rt-1");
+    const redirect = spyRedirect();
+    stubFetchSeq(
+      errorResponse("C005", 401),
+      jsonResponse({ success: true, data: {} }),
+      jsonResponse({ success: true, data: {} }),
+    );
+    const err = await catchApiError(request("GET", "/api/v1/user"));
+    expect(err.code).toBe(FE_ERROR_CODES.SESSION_EXPIRED);
+    expect(getAccessToken()).toBeNull();
+    expect(redirect).toHaveBeenCalledTimes(1);
+  });
+
+  it("토큰이 전무한 보호 요청의 401 은 재발급 시도 없이 terminal 처리한다", async () => {
+    const redirect = spyRedirect();
+    const mock = stubFetchSeq(errorResponse("C005", 401));
+    const err = await catchApiError(request("GET", "/api/v1/user"));
+    expect(err.code).toBe(FE_ERROR_CODES.SESSION_EXPIRED);
+    expect(mock).toHaveBeenCalledTimes(1); // reissue fetch 없음
+    expect(redirect).toHaveBeenCalledTimes(1);
+  });
+
+  it("재시도 후에도 401 이면 2차 재발급 없이 REAUTH 처리한다", async () => {
+    setTokens("at-old", "rt-1");
+    const redirect = spyRedirect();
+    const mock = stubFetchSeq(
+      errorResponse("C005", 401),
+      tokenPairResponse("at-2", "rt-2"),
+      errorResponse("C005", 401),
+    );
+    const err = await catchApiError(request("GET", "/api/v1/user"));
+    expect(err.code).toBe("C005");
+    expect(mock).toHaveBeenCalledTimes(3); // 원요청 + reissue + 재시도 — 2차 reissue 금지
+    expect(getAccessToken()).toBeNull();
+    expect(redirect).toHaveBeenCalledTimes(1);
+  });
+
+  it("공개 요청의 401(A005)은 재발급·이동 없이 그대로 전파한다 (가입 흐름 보호)", async () => {
+    setTokens("at-stale", "rt-stale");
+    const redirect = spyRedirect();
+    const mock = stubFetchSeq(errorResponse("A005", 401));
+    const err = await catchApiError(request("POST", "/api/v1/auth/signup", { body: {} }));
+    expect(err.code).toBe("A005");
+    expect(mock).toHaveBeenCalledTimes(1);
+    expect(redirect).not.toHaveBeenCalled();
+    expect(getRefreshToken()).toBe("rt-stale"); // 토큰도 건드리지 않음
+  });
+
+  it("silent 정책은 세션만 정리하고 이동하지 않으며, 이동 가드도 점유하지 않는다", async () => {
+    const redirect = spyRedirect();
+    const mock = vi.fn((input: RequestInfo | URL) => {
+      const url = String(input);
+      return Promise.resolve(
+        url.endsWith("/api/v1/auth/reissue")
+          ? errorResponse("A007", 401)
+          : errorResponse("C005", 401),
+      );
+    });
+    vi.stubGlobal("fetch", mock);
+
+    setTokens("at-1", "rt-1");
+    await expect(request("POST", "/api/v1/auth/logout", { onReauth: "silent" })).rejects.toThrow();
+    expect(getAccessToken()).toBeNull(); // 세션 정리는 수행
+    expect(redirect).not.toHaveBeenCalled(); // 이동은 안 함
+
+    setTokens("at-1", "rt-1"); // 직후 redirect 정책 요청은 정상적으로 이동해야 함
+    await expect(request("GET", "/api/v1/user")).rejects.toThrow();
+    expect(redirect).toHaveBeenCalledTimes(1);
+  });
+
+  it("재발급 네트워크 실패 2연속은 non-terminal — 토큰을 유지하고 이동하지 않는다", async () => {
+    setTokens("at-old", "rt-1");
+    const redirect = spyRedirect();
+    stubFetchSeq(
+      errorResponse("C005", 401),
+      new TypeError("Failed to fetch"),
+      new TypeError("Failed to fetch"),
+    );
+    const err = await catchApiError(request("GET", "/api/v1/user"));
+    expect(err.code).toBe(FE_ERROR_CODES.NETWORK);
+    expect(getAccessToken()).toBe("at-old"); // 일시 장애 — 세션 파괴 금지
+    expect(getRefreshToken()).toBe("rt-1");
+    expect(redirect).not.toHaveBeenCalled();
   });
 });
