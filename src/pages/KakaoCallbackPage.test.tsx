@@ -165,15 +165,32 @@ describe("KakaoCallbackPage — 원 목적지 복귀", () => {
   });
 
   it("교환 실패 시 저장값을 유지한다 — TTL 내 재시도가 성공하면 복귀된다", async () => {
+    setPostLoginRedirect("/reports?sort=latest");
+    // 1차 시도: 교환 실패 — 저장값은 소비되지 않는다
     vi.stubGlobal(
       "fetch",
       vi.fn().mockResolvedValue(errorEnvelope("A002", "카카오 인증에 실패했습니다.", 401)),
     );
-    setPostLoginRedirect("/reports?sort=latest");
-    renderCallback(validCallbackRoute("expired-code"));
-
+    const first = renderCallback(validCallbackRoute("expired-code"));
     await screen.findByText("로그인에 실패했어요");
-    expect(sessionStorage.getItem("kkori.postLoginRedirect")).not.toBeNull(); // 실패는 소비 아님
+    expect(sessionStorage.getItem("kkori.postLoginRedirect")).not.toBeNull();
+    first.unmount();
+
+    // 재시도: 새 state·code 로 성공 — 유지된 원 목적지로 복귀하고 1회 소비된다
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(
+        envelope({
+          isNewUser: false,
+          isRestored: false,
+          accessToken: "at-retry",
+          refreshToken: "rt-retry",
+        }),
+      ),
+    );
+    renderCallback(validCallbackRoute("fresh-code"));
+    expect(await screen.findByText("리포트-도착")).toBeInTheDocument();
+    expect(sessionStorage.getItem("kkori.postLoginRedirect")).toBeNull();
   });
 });
 

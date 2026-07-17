@@ -10,21 +10,16 @@
      걸러내지 않고 화면 전체를 오류로 처리한다 — 필수 약관이 빠진 채
      CTA 가 활성화되는 것을 막기 위함. */
 import { useState } from "react";
-import { Navigate, useNavigate } from "react-router";
+import { Navigate } from "react-router";
 import type { CatalogItem, ConsentItem, ConsentType } from "../api/client";
 import { ERROR_CODES } from "../api/errorCodes";
 import { useConsentCatalog, useSignup } from "../api/hooks";
 import { isApiError } from "../api/request";
-import {
-  clearSignupSession,
-  consumePostLoginRedirect,
-  getSignupSession,
-  setTokens,
-} from "../api/tokenStore";
+import { clearSignupSession, getSignupSession, setTokens } from "../api/tokenStore";
 import { Badge, Button } from "../components/ds";
 import { Icon } from "../components/Icon";
 import { Checkbox, Display, Wordmark } from "../components/primitives";
-import { useNav } from "../hooks/useNav";
+import { useNav, usePostLoginRedirect } from "../hooks/useNav";
 import { ROUTES } from "../routes";
 import { CONSENT_COPY, CONSENT_ORDER } from "./consentCopy";
 
@@ -105,7 +100,7 @@ function submitErrorMessage(e: unknown): string {
 
 export function ConsentPage() {
   const nav = useNav();
-  const navigate = useNavigate(); // 원 목적지 복귀 — 라우트 키가 아닌 저장된 경로로 이동
+  const redirectAfterLogin = usePostLoginRedirect(); // 원 목적지 복귀 (없으면 대시보드)
   // 가입 세션은 마운트 시 1회만 캡처 — 성공 시 clearSignupSession() 후에도
   // 렌더가 안정적이어야 대시보드 이동 전에 /login 으로 튕기지 않는다
   const [session] = useState(() => getSignupSession());
@@ -164,10 +159,8 @@ export function ConsentPage() {
           }
           clearSignupSession(); // 2. 그 다음 임시 토큰 폐기
           // 3. 가입도 "로그인 후 원래 화면 복귀" 계약에 포함 — 저장된 원 목적지가
-          //    있으면 그리로, 없으면 대시보드. replace — 뒤로가기로 죽은 동의화면 복귀 방지
-          const dest = consumePostLoginRedirect();
-          if (dest) navigate(dest, { replace: true });
-          else nav("dash", { replace: true });
+          //    있으면 그리로, 없으면 대시보드 (replace — 죽은 동의화면 복귀 방지)
+          redirectAfterLogin();
         },
         onError: (e) => {
           if (!isApiError(e)) return;

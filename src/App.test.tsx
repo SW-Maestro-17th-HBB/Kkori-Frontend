@@ -4,6 +4,8 @@ import userEvent from "@testing-library/user-event";
 import { QueryClient } from "@tanstack/react-query";
 import { renderWithProviders } from "./test/render";
 import * as apiClient from "./api/client";
+import { consumePostLoginRedirect } from "./api/tokenStore";
+import { kakaoAuthorizeRedirect } from "./utils/kakaoLogin";
 import { ROUTE_ACCESS, ROUTES, type NavKey } from "./routes";
 import App from "./App";
 
@@ -57,6 +59,7 @@ beforeEach(() => {
 
 afterEach(() => {
   authStatusOverride.value = null;
+  vi.unstubAllEnvs();
   vi.restoreAllMocks();
   localStorage.clear();
   sessionStorage.clear();
@@ -101,11 +104,19 @@ describe("라우팅 가드 — 로그인 상태", () => {
 });
 
 describe("라우팅 가드 — 원 목적지 전달", () => {
-  it("보호 라우트에서 튕겨난 로그인 화면은 카카오 클릭 시 원 경로를 저장할 수 있는 state 를 가진다", async () => {
-    // 가드 → AuthPage(state.from) → 클릭 시 저장 흐름의 가드 쪽 절반:
-    // 저장 자체는 AuthPage.test 가, 여기서는 리다이렉트가 로그인 화면에 닿는 것까지 검증
-    renderWithProviders(<App />, { route: "/reports/1" });
+  it("보호 라우트에서 튕겨난 뒤 카카오 클릭까지 하면 원 경로(query 포함)가 저장된다", async () => {
+    // 가드(state.from 전달) → AuthPage(클릭 시 저장) 전체 연계 —
+    // RequireAuth 가 state 전달을 빠뜨리면 이 테스트가 잡는다
+    vi.stubEnv("VITE_KAKAO_CLIENT_ID", "test-client-id");
+    const redirect = vi.spyOn(kakaoAuthorizeRedirect, "to").mockImplementation(() => {});
+    const user = userEvent.setup();
+    renderWithProviders(<App />, { route: "/reports/1?tab=score" });
     expect(await screen.findByText(LOGIN_HEADING)).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: /카카오로 계속하기/ }));
+
+    expect(redirect).toHaveBeenCalledTimes(1);
+    expect(consumePostLoginRedirect()).toBe("/reports/1?tab=score");
   });
 });
 
