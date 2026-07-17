@@ -1,5 +1,5 @@
 /* ============================================================
-   백엔드 에러 코드 (2026-07-16 스냅샷)
+   백엔드 에러 코드 (2026-07-17 스냅샷)
    ============================================================ */
 export const ERROR_CODES = {
   // ---------- 공통 (C) ----------
@@ -57,6 +57,12 @@ export const ERROR_CODES = {
   INVALID_NAME: "U001",
   /** 409 — 탈퇴 처리 중인 계정입니다. 잠시 후 다시 시도해 주세요. */
   PURGE_IN_PROGRESS: "U002",
+  /** 400 — 알 수 없는 동의 항목입니다. */
+  INVALID_CONSENT_TYPE: "U003",
+  /** 400 — 필수 동의 항목은 변경할 수 없습니다. 철회는 탈퇴로만 가능합니다. */
+  CONSENT_NOT_CHANGEABLE: "U004",
+  /** 409 — 동의서 버전이 현재 버전과 일치하지 않습니다. 최신 동의서를 확인한 뒤 다시 제출해 주세요. */
+  CONSENT_VERSION_MISMATCH: "U005",
 } as const;
 
 export type ErrorCodeName = keyof typeof ERROR_CODES;
