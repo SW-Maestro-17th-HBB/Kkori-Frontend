@@ -4,6 +4,7 @@ import userEvent from "@testing-library/user-event";
 import { Route, Routes } from "react-router";
 import { useQueryClient } from "@tanstack/react-query";
 import { renderWithProviders } from "../test/render";
+import { LOGOUT_TIMEOUT } from "../api/hooks";
 import { __resetAuthForTests } from "../api/request";
 import {
   getAccessToken,
@@ -91,7 +92,7 @@ afterEach(() => {
 
 describe("TopNav — 로그아웃", () => {
   it("서버 RT 폐기 후 로컬 토큰·가입 세션·쿼리 캐시를 정리하고 랜딩으로 이동한다", async () => {
-    setTokens("at-1", "rt-1");
+    await setTokens("at-1", "rt-1");
     setSignupSession("st-leftover", false); // 이전 가입 흐름의 잔존 임시 인증 정보
     const mock = stubApi({ logout: [envelope(null)] });
     const user = userEvent.setup();
@@ -109,7 +110,7 @@ describe("TopNav — 로그아웃", () => {
   });
 
   it("만료 AT: 재발급 후 재시도가 회전된 새 RT 를 전송해 서버측 폐기를 완성한다", async () => {
-    setTokens("at-old", "rt-1");
+    await setTokens("at-old", "rt-1");
     const mock = stubApi({
       logout: [errorEnvelope("C005", 401), envelope(null)],
       reissue: [tokenPair("at-2", "rt-2")],
@@ -131,7 +132,7 @@ describe("TopNav — 로그아웃", () => {
   });
 
   it("재발급 응답 유실: 동일 RT 재시도(Grace)로 복구한 뒤 새 RT 를 폐기한다", async () => {
-    setTokens("at-old", "rt-1");
+    await setTokens("at-old", "rt-1");
     const mock = stubApi({
       logout: [errorEnvelope("C005", 401), envelope(null)],
       reissue: [new TypeError("Failed to fetch"), tokenPair("at-2", "rt-2")],
@@ -152,7 +153,7 @@ describe("TopNav — 로그아웃", () => {
   });
 
   it("서버 폐기가 실패(500)해도 로컬 정리 후 랜딩으로 이동한다 (멱등 계약)", async () => {
-    setTokens("at-1", "rt-1");
+    await setTokens("at-1", "rt-1");
     stubApi({ logout: [errorEnvelope("C001", 500)] });
     const user = userEvent.setup();
     renderTopNav();
@@ -189,6 +190,53 @@ describe("TopNav — 로그아웃", () => {
     await screen.findByText(/랜딩-도착/);
     expect(getAccessToken()).toBe("at-B"); // B 세션 보존 — 조건부 삭제
     expect(getRefreshToken()).toBe("rt-B");
+  });
+
+  it("로그아웃 진행 중에는 버튼이 잠기고 진행 문구를 보여준다", async () => {
+    await setTokens("at-1", "rt-1");
+    // 응답이 오지 않는 상태 유지 — pending UI 관찰
+    const mock = vi.fn<(input: RequestInfo | URL, init?: RequestInit) => Promise<Response>>(
+      () => new Promise<Response>(() => {}),
+    );
+    vi.stubGlobal("fetch", mock);
+    const user = userEvent.setup();
+    renderTopNav();
+
+    await clickLogout(user);
+
+    const pending = await screen.findByRole("button", { name: /로그아웃 중/ });
+    expect(pending).toBeDisabled();
+    expect(pending).toHaveAttribute("aria-busy", "true");
+  });
+
+  it("서버 응답이 없으면 시간 초과 후 로컬 로그아웃을 완료한다", async () => {
+    await setTokens("at-1", "rt-1");
+    let aborted = false;
+    // 영원히 응답하지 않지만 abort 신호에는 반응하는 fetch — 타임아웃 동작 검증
+    const mock = vi.fn<(input: RequestInfo | URL, init?: RequestInit) => Promise<Response>>(
+      (_input, init) =>
+        new Promise<Response>((_resolve, reject) => {
+          init?.signal?.addEventListener("abort", () => {
+            aborted = true;
+            reject(new DOMException("Aborted", "AbortError"));
+          });
+        }),
+    );
+    vi.stubGlobal("fetch", mock);
+    LOGOUT_TIMEOUT.ms = 30; // seam — 상한을 줄여 실타이머로 검증
+    try {
+      const user = userEvent.setup();
+      renderTopNav();
+
+      await clickLogout(user);
+
+      expect(await screen.findByText(/랜딩-도착/)).toBeInTheDocument();
+      expect(aborted).toBe(true); // 상한 경과로 요청이 끊겼고
+      expect(getAccessToken()).toBeNull(); // 로컬 로그아웃은 완료됐다
+      expect(getRefreshToken()).toBeNull();
+    } finally {
+      LOGOUT_TIMEOUT.ms = 5000;
+    }
   });
 
   it("RT 가 없으면 API 호출 없이 로컬 정리만 하고 랜딩으로 이동한다", async () => {

@@ -144,6 +144,25 @@ describe("request — 계약 위반·네트워크", () => {
     expect(err).toBeInstanceOf(DOMException);
     expect((err as DOMException).name).toBe("AbortError");
   });
+
+  it("401 본문 파싱 중의 중단(abort)도 그대로 전파한다 — 재발급·이동 미발동", async () => {
+    await setTokens("at-1", "rt-1");
+    const redirect = spyRedirect();
+    // 본문 스트림 읽기 도중 취소된 401 응답 — 계약 위반(FE_INVALID_RESPONSE)으로
+    // 둔갑하면 재발급/강제 이동 분기를 오발동시킨다
+    const abortedBody = {
+      ok: false,
+      status: 401,
+      json: () => Promise.reject(new DOMException("Aborted", "AbortError")),
+    } as unknown as Response;
+    const mock = stubFetchSeq(abortedBody);
+    const err: unknown = await request("GET", "/api/v1/user").catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(DOMException);
+    expect((err as DOMException).name).toBe("AbortError");
+    expect(mock).toHaveBeenCalledTimes(1); // 재발급 fetch 없음
+    expect(redirect).not.toHaveBeenCalled();
+    expect(getAccessToken()).toBe("at-1"); // 세션 유지
+  });
 });
 
 describe("request — 요청 직렬화", () => {
@@ -178,7 +197,7 @@ describe("request — 요청 직렬화", () => {
 
 describe("request — 토큰 부착", () => {
   it("보호 요청에 AT 가 있으면 Bearer 를 부착한다", async () => {
-    setTokens("at-1", "rt-1");
+    await setTokens("at-1", "rt-1");
     const mock = stubFetch(jsonResponse({ success: true, data: null }));
     await request("GET", "/api/v1/user");
     const [, init] = mock.mock.calls[0] as [string, RequestInit];
@@ -193,7 +212,7 @@ describe("request — 토큰 부착", () => {
   });
 
   it("공개 요청은 AT 가 있어도 부착하지 않는다 (stale 토큰의 가입 흐름 오염 방지)", async () => {
-    setTokens("at-stale", "rt-stale");
+    await setTokens("at-stale", "rt-stale");
     // Response body 는 1회용 — 호출마다 새로 생성 (제네릭으로 fetch 시그니처만 지정)
     const mock = vi.fn<(input: RequestInfo | URL, init?: RequestInit) => Promise<Response>>(() =>
       Promise.resolve(jsonResponse({ success: true, data: null })),
@@ -209,7 +228,7 @@ describe("request — 토큰 부착", () => {
 
 describe("request — 자동 재발급", () => {
   it("보호 요청 401 → 재발급 성공 → 회전 쌍 저장 + 새 AT 로 1회 재시도", async () => {
-    setTokens("at-old", "rt-1");
+    await setTokens("at-old", "rt-1");
     const mock = stubFetchSeq(
       errorResponse("C005", 401),
       tokenPairResponse("at-2", "rt-2"),
@@ -233,7 +252,7 @@ describe("request — 자동 재발급", () => {
   });
 
   it("동시 다발 401 은 재발급을 1회로 단일화한다 (single-flight)", async () => {
-    setTokens("at-old", "rt-1");
+    await setTokens("at-old", "rt-1");
     const mock = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
       const url = String(input);
       if (url.endsWith("/api/v1/auth/reissue")) {
@@ -272,7 +291,7 @@ describe("request — 자동 재발급", () => {
   });
 
   it("불확실 실패(네트워크)는 동일 RT 로 1회 재시도해 Grace 응답으로 복구한다", async () => {
-    setTokens("at-old", "rt-1");
+    await setTokens("at-old", "rt-1");
     const redirect = spyRedirect();
     const mock = stubFetchSeq(
       errorResponse("C005", 401),
@@ -292,7 +311,7 @@ describe("request — 자동 재발급", () => {
   });
 
   it("불확실 실패(5xx) 후 정상 응답이면 복구한다", async () => {
-    setTokens("at-old", "rt-1");
+    await setTokens("at-old", "rt-1");
     stubFetchSeq(
       errorResponse("C005", 401),
       errorResponse("C001", 500),
@@ -304,7 +323,7 @@ describe("request — 자동 재발급", () => {
   });
 
   it("재발급 200 인데 토큰 누락 1회 → 재시도 정상 응답이면 복구한다", async () => {
-    setTokens("at-old", "rt-1");
+    await setTokens("at-old", "rt-1");
     stubFetchSeq(
       errorResponse("C005", 401),
       jsonResponse({ success: true, data: {} }), // 토큰 쌍 누락 — 불확실 실패
@@ -316,7 +335,7 @@ describe("request — 자동 재발급", () => {
   });
 
   it("재발급의 명시적 401(A007)은 내부 재시도 없이 즉시 실패한다", async () => {
-    setTokens("at-old", "rt-1");
+    await setTokens("at-old", "rt-1");
     const redirect = spyRedirect();
     const mock = stubFetchSeq(errorResponse("C005", 401), errorResponse("A007", 401));
     const err = await catchApiError(request("GET", "/api/v1/user"));
@@ -326,7 +345,7 @@ describe("request — 자동 재발급", () => {
   });
 
   it("늦게 도착한 401: 토큰이 이미 교체됐으면 재발급 없이 새 AT 로 재시도만 한다", async () => {
-    setTokens("at-old", "rt-1");
+    await setTokens("at-old", "rt-1");
     let release401: (() => void) | null = null;
     const mock = vi.fn<(input: RequestInfo | URL, init?: RequestInit) => Promise<Response>>(
       (input, init) => {
@@ -359,7 +378,7 @@ describe("request — 자동 재발급", () => {
   });
 
   it("세션 교체(다른 계정 로그인) 후 도착한 401 은 재시도 없이 중단한다", async () => {
-    setTokens("at-A", "rt-A");
+    await setTokens("at-A", "rt-A");
     const redirect = spyRedirect();
     let release401: (() => void) | null = null;
     const mock = vi.fn<(input: RequestInfo | URL, init?: RequestInit) => Promise<Response>>(
@@ -372,7 +391,7 @@ describe("request — 자동 재발급", () => {
 
     const pending = request("GET", "/api/v1/user"); // A 세션으로 발사
     await vi.waitFor(() => expect(release401).not.toBeNull());
-    setTokens("at-B", "rt-B"); // 다른 탭에서 계정 B 로 로그인 (새 세션 ID)
+    await setTokens("at-B", "rt-B"); // 다른 탭에서 계정 B 로 로그인 (새 세션 ID)
     release401!();
 
     const err = await catchApiError(pending);
@@ -384,7 +403,7 @@ describe("request — 자동 재발급", () => {
   });
 
   it("세션 제거(로그아웃) 후 도착한 401 도 재시도 없이 중단한다", async () => {
-    setTokens("at-A", "rt-A");
+    await setTokens("at-A", "rt-A");
     const redirect = spyRedirect();
     let release401: (() => void) | null = null;
     const mock = vi.fn<(input: RequestInfo | URL, init?: RequestInit) => Promise<Response>>(
@@ -397,7 +416,7 @@ describe("request — 자동 재발급", () => {
 
     const pending = request("GET", "/api/v1/user");
     await vi.waitFor(() => expect(release401).not.toBeNull());
-    clearTokens(); // 다른 탭에서 로그아웃
+    await clearTokens(); // 다른 탭에서 로그아웃
     release401!();
 
     const err = await catchApiError(pending);
@@ -407,7 +426,7 @@ describe("request — 자동 재발급", () => {
   });
 
   it("재발급 대기 중 세션이 교체되면 회전 결과를 폐기한다 (B 세션 클로버링 방지)", async () => {
-    setTokens("at-A", "rt-A");
+    await setTokens("at-A", "rt-A");
     const redirect = spyRedirect();
     let releaseReissue: (() => void) | null = null;
     const mock = vi.fn<(input: RequestInfo | URL, init?: RequestInit) => Promise<Response>>(
@@ -424,7 +443,7 @@ describe("request — 자동 재발급", () => {
 
     const pending = request("GET", "/api/v1/user"); // 401 → 재발급 진입
     await vi.waitFor(() => expect(releaseReissue).not.toBeNull());
-    setTokens("at-B", "rt-B"); // 재발급 대기 중 계정 B 로 로그인
+    await setTokens("at-B", "rt-B"); // 재발급 대기 중 계정 B 로 로그인
     releaseReissue!();
 
     const err = await catchApiError(pending);
@@ -502,7 +521,7 @@ describe("request — 자동 재발급", () => {
   });
 
   it("bodyFactory 는 매 시도 직전에 재평가된다", async () => {
-    setTokens("at-old", "rt-1");
+    await setTokens("at-old", "rt-1");
     let n = 0;
     const mock = stubFetchSeq(
       errorResponse("C005", 401),
@@ -519,7 +538,7 @@ describe("request — 자동 재발급", () => {
 
 describe("request — 강제 재로그인 (REAUTH)", () => {
   it("재발급 실패(A007) 시 동시 대기자가 있어도 세션 정리 + /login 이동은 1회다", async () => {
-    setTokens("at-old", "rt-1");
+    await setTokens("at-old", "rt-1");
     const redirect = spyRedirect();
     const mock = vi.fn((input: RequestInfo | URL) => {
       const url = String(input);
@@ -542,7 +561,7 @@ describe("request — 강제 재로그인 (REAUTH)", () => {
   });
 
   it("재발급 토큰 누락 2연속 → FE_SESSION_EXPIRED terminal", async () => {
-    setTokens("at-old", "rt-1");
+    await setTokens("at-old", "rt-1");
     const redirect = spyRedirect();
     stubFetchSeq(
       errorResponse("C005", 401),
@@ -565,7 +584,7 @@ describe("request — 강제 재로그인 (REAUTH)", () => {
   });
 
   it("재시도 후에도 401 이면 2차 재발급 없이 REAUTH 처리한다", async () => {
-    setTokens("at-old", "rt-1");
+    await setTokens("at-old", "rt-1");
     const redirect = spyRedirect();
     const mock = stubFetchSeq(
       errorResponse("C005", 401),
@@ -580,7 +599,7 @@ describe("request — 강제 재로그인 (REAUTH)", () => {
   });
 
   it("공개 요청의 401(A005)은 재발급·이동 없이 그대로 전파한다 (가입 흐름 보호)", async () => {
-    setTokens("at-stale", "rt-stale");
+    await setTokens("at-stale", "rt-stale");
     const redirect = spyRedirect();
     const mock = stubFetchSeq(errorResponse("A005", 401));
     const err = await catchApiError(request("POST", "/api/v1/auth/signup", { body: {} }));
@@ -602,18 +621,18 @@ describe("request — 강제 재로그인 (REAUTH)", () => {
     });
     vi.stubGlobal("fetch", mock);
 
-    setTokens("at-1", "rt-1");
+    await setTokens("at-1", "rt-1");
     await expect(request("POST", "/api/v1/auth/logout", { onReauth: "silent" })).rejects.toThrow();
     expect(getAccessToken()).toBeNull(); // 세션 정리는 수행
     expect(redirect).not.toHaveBeenCalled(); // 이동은 안 함
 
-    setTokens("at-1", "rt-1"); // 직후 redirect 정책 요청은 정상적으로 이동해야 함
+    await setTokens("at-1", "rt-1"); // 직후 redirect 정책 요청은 정상적으로 이동해야 함
     await expect(request("GET", "/api/v1/user")).rejects.toThrow();
     expect(redirect).toHaveBeenCalledTimes(1);
   });
 
   it("재발급 네트워크 실패 2연속은 non-terminal — 토큰을 유지하고 이동하지 않는다", async () => {
-    setTokens("at-old", "rt-1");
+    await setTokens("at-old", "rt-1");
     const redirect = spyRedirect();
     stubFetchSeq(
       errorResponse("C005", 401),

@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { screen } from "@testing-library/react";
 import { Route, Routes, useLocation } from "react-router";
 import { renderWithProviders } from "../test/render";
+import * as tokenStore from "../api/tokenStore";
 import {
   createOauthState,
   getAccessToken,
@@ -57,6 +58,7 @@ function validCallbackRoute(code: string) {
 
 afterEach(() => {
   vi.unstubAllGlobals();
+  vi.restoreAllMocks();
   localStorage.clear();
   sessionStorage.clear();
 });
@@ -78,6 +80,23 @@ describe("KakaoCallbackPage — 판정 분기", () => {
     expect(await screen.findByText("대시보드-도착")).toBeInTheDocument();
     expect(getAccessToken()).toBe("at-123");
     expect(getRefreshToken()).toBe("rt-456");
+  });
+
+  it("토큰 저장이 실패하면 무한 로딩 대신 로그인 화면으로 복귀한다", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(
+        envelope({
+          isNewUser: false,
+          isRestored: false,
+          accessToken: "at-123",
+          refreshToken: "rt-456",
+        }),
+      ),
+    );
+    vi.spyOn(tokenStore, "setTokens").mockRejectedValueOnce(new Error("quota exceeded"));
+    renderCallback(validCallbackRoute("valid-code"));
+    expect(await screen.findByText("로그인화면-도착")).toBeInTheDocument();
   });
 
   it("신규 유저: signupToken 을 보관하고 동의 화면으로 이동한다", async () => {

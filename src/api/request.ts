@@ -127,7 +127,10 @@ async function rawRequest<T>(
   let envelope: ApiEnvelope<T>;
   try {
     envelope = await res.json();
-  } catch {
+  } catch (e) {
+    // 본문 파싱 중 중단(abort)도 호출자의 의도 — 계약 위반으로 둔갑시키면
+    // 401 응답에서 재발급·강제 이동 분기를 오발동시킨다
+    if (e instanceof DOMException && e.name === "AbortError") throw e;
     throw new ApiError(
       FE_ERROR_CODES.INVALID_RESPONSE,
       `서버 응답을 해석할 수 없습니다. (HTTP ${res.status})`,

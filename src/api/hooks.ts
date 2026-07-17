@@ -50,6 +50,10 @@ export const useConsentCatalog = (enabled = true) =>
 /** 가입/복구 제출 — 계정을 생성하는 비멱등 POST 라 mutation (자동 재시도 없음, isPending 으로 이중 제출 방지) */
 export const useSignup = () => useMutation({ mutationFn: postSignup });
 
+/** 로그아웃 서버 폐기 대기 상한 — best-effort 라 초과 시 끊고 로컬 로그아웃을 마친다.
+    (객체 seam — 테스트에서 상한을 줄여 실타이머로 결정적으로 검증) */
+export const LOGOUT_TIMEOUT = { ms: 5000 };
+
 /** 로그아웃 — 서버 RT 폐기(멱등)를 시도하고, 결과와 무관하게 로컬 세션을 정리한 뒤 랜딩으로.
     화면은 이 훅만 쓰면 되고 storage 를 직접 만지지 않는다 (저장 전략 교체 대비 격리) */
 export const useLogout = () => {
@@ -61,10 +65,16 @@ export const useLogout = () => {
     mutationFn: async (): Promise<string | null> => {
       const auth = getAuthSnapshot();
       if (!auth) return null; // 이미 로그아웃 상태 — API 생략
+      // best-effort 서버 폐기 — 응답이 안 오면 상한 후 요청을 끊고 로컬 로그아웃을 완료한다
+      // (무한 대기 시 onSettled 가 오지 않아 토큰 정리·이동이 전부 멈춤)
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), LOGOUT_TIMEOUT.ms);
       try {
-        await postLogout(auth.sessionId); // 소유 세션 전달 — 세션 교체 시 전송 전 중단
+        await postLogout(auth.sessionId, controller.signal); // 소유 세션 전달 — 교체 시 전송 전 중단
       } catch {
-        // 멱등 계약 — 서버 폐기가 실패해도 로컬 정리는 진행한다
+        // 멱등 계약 — 서버 폐기가 실패·시간 초과해도 로컬 정리는 진행한다
+      } finally {
+        clearTimeout(timer);
       }
       return auth.sessionId;
     },

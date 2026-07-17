@@ -4,6 +4,7 @@ import { screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { Route, Routes } from "react-router";
 import { renderWithProviders } from "../test/render";
+import * as tokenStore from "../api/tokenStore";
 import {
   getAccessToken,
   getRefreshToken,
@@ -96,6 +97,7 @@ const cta = () => screen.getByRole("button", { name: "동의하고 시작하기"
 
 afterEach(() => {
   vi.unstubAllGlobals();
+  vi.restoreAllMocks();
   localStorage.clear();
   sessionStorage.clear();
 });
@@ -231,6 +233,21 @@ describe("ConsentPage — 가입 제출", () => {
     expect(pending).toBeDisabled();
     await user.click(pending);
     expect(signupCalls(mock)).toHaveLength(1);
+  });
+
+  it("토큰 저장 실패: 가입은 완료된 상태이므로 세션을 비우고 로그인으로 보낸다", async () => {
+    setSignupSession("st-1", false);
+    stubApi({ signup: () => envelope({ accessToken: "at-1", refreshToken: "rt-1" }, 201) });
+    // 저장소 오류(쿼터 초과 등) — 화면에 남기면 소비된 signupToken 으로 재시도만 반복
+    vi.spyOn(tokenStore, "setTokens").mockRejectedValueOnce(new Error("quota exceeded"));
+    const user = userEvent.setup();
+    renderConsent();
+
+    await agreeRequired(user);
+    await user.click(cta());
+
+    expect(await screen.findByText("로그인화면-도착")).toBeInTheDocument();
+    expect(getSignupSession()).toBeNull();
   });
 
   it("계약 위반(토큰 누락 201): 세션을 비우고 로그인으로 보낸다", async () => {

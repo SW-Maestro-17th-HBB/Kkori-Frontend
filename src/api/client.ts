@@ -44,7 +44,7 @@ export const postSignup = (body: SignupRequest): Promise<TokenResponse> =>
 // 대기 중 다른 계정이 로그인했으면 그 계정의 RT 를 전송(= 남의 세션을 서버에서
 // 폐기)하기 전에 중단한다. onReauth: 자체 후처리(로컬 정리+랜딩)가 있으므로
 // 회복 불능이어도 /login 으로 이동하지 않는다.
-export const postLogout = (expectedSessionId: string): Promise<null> =>
+export const postLogout = (expectedSessionId: string, signal?: AbortSignal): Promise<null> =>
   request<null>("POST", "/api/v1/auth/logout", {
     bodyFactory: () => {
       const auth = getAuthSnapshot();
@@ -54,6 +54,7 @@ export const postLogout = (expectedSessionId: string): Promise<null> =>
       return { refreshToken: auth.refreshToken };
     },
     onReauth: "silent",
+    signal,
   });
 
 export const fetchProfile = (): Promise<Profile> => delay(fixtures.profile);
