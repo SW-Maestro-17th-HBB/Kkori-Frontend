@@ -26,25 +26,25 @@ export const CONSENT_ORDER: readonly ConsentType[] = [
 export const CONSENT_COPY: Record<ConsentType, Record<number, ConsentCopy>> = {
   privacy: {
     1: {
-      title: "개인정보 수집·이용 동의",
+      title: "개인정보 수집·이용",
       body: "계정 생성과 운영을 위해 카카오 회원번호, 이메일, 닉네임을 수집·이용해요. 수집한 정보는 회원 식별과 서비스 제공 목적으로만 사용하고, 목적 달성 후 지체 없이 파기해요.",
     },
   },
   audio_usage: {
     1: {
-      title: "음성 데이터 활용 동의",
+      title: "음성 데이터 활용",
       body: "면접 연습 중 녹음된 음성을 수집해요. 수집한 음성은 답변 분석과 피드백 리포트 생성에만 사용하고, AI 모델 학습 등 다른 목적으로는 활용하지 않아요.",
     },
   },
   resume_usage: {
     1: {
-      title: "이력서 자료 활용 동의",
+      title: "이력서 자료 활용",
       body: "업로드한 이력서와 자료를 수집해요. 수집한 자료는 맞춤 면접 질문 생성에만 사용하고, 별도 동의 없이 제3자에게 제공하지 않아요.",
     },
   },
   marketing: {
     1: {
-      title: "마케팅 정보 수신 동의",
+      title: "마케팅 정보 수신",
       body: "신규 기능, 이벤트 등 소식을 이메일로 받아봐요. 언제든 수신을 거부할 수 있어요.",
     },
   },
