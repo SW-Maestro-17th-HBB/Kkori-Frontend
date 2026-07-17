@@ -186,8 +186,10 @@ describe("request — 토큰 부착", () => {
 
   it("공개 요청은 AT 가 있어도 부착하지 않는다 (stale 토큰의 가입 흐름 오염 방지)", async () => {
     setTokens("at-stale", "rt-stale");
-    // Response body 는 1회용 — 호출마다 새로 생성
-    const mock = vi.fn(() => Promise.resolve(jsonResponse({ success: true, data: null })));
+    // Response body 는 1회용 — 호출마다 새로 생성 (제네릭으로 fetch 시그니처만 지정)
+    const mock = vi.fn<(input: RequestInfo | URL, init?: RequestInit) => Promise<Response>>(() =>
+      Promise.resolve(jsonResponse({ success: true, data: null })),
+    );
     vi.stubGlobal("fetch", mock);
     await request("POST", "/api/v1/auth/signup", { body: {} });
     await request("GET", "/api/v1/consents");

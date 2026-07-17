@@ -5,6 +5,7 @@
 import * as fixtures from "./fixtures";
 import { request } from "./request";
 import type { components } from "./schema";
+import { getRefreshToken } from "./tokenStore";
 import type {
   NotificationItem,
   Profile,
@@ -37,6 +38,15 @@ export const getConsentCatalog = (): Promise<ConsentCatalogResponse> =>
 
 export const postSignup = (body: SignupRequest): Promise<TokenResponse> =>
   request<TokenResponse>("POST", "/api/v1/auth/signup", { body });
+
+// 멱등 로그아웃 — bodyFactory: 만료 AT 로그아웃이 재발급으로 회전된 뒤의 재시도가
+// 최신 RT 를 전송해 서버측 폐기를 완성한다. onReauth: 자체 후처리(로컬 정리+랜딩)가
+// 있으므로 회복 불능이어도 /login 으로 이동하지 않는다.
+export const postLogout = (): Promise<null> =>
+  request<null>("POST", "/api/v1/auth/logout", {
+    bodyFactory: () => ({ refreshToken: getRefreshToken() }),
+    onReauth: "silent",
+  });
 
 export const fetchProfile = (): Promise<Profile> => delay(fixtures.profile);
 

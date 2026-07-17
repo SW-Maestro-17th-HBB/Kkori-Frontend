@@ -1,6 +1,6 @@
 /* ---------- 상단 네비게이션 (앱 셸) — 프로토타입 lib.jsx TopNav 이식 ---------- */
 import { Fragment, useState } from "react";
-import { useNotifications, useProfile } from "../api/hooks";
+import { useLogout, useNotifications, useProfile } from "../api/hooks";
 import type { NavKey } from "../routes";
 import { useNav } from "../hooks/useNav";
 import { Avatar, IconButton } from "./ds";
@@ -11,6 +11,7 @@ export type TopNavActive = "home" | "resume" | "report" | null;
 
 export function TopNav({ active }: { active: TopNavActive }) {
   const nav = useNav();
+  const logout = useLogout();
   const [notifOpen, setNotifOpen] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const { data: notifs = [] } = useNotifications();
@@ -361,8 +362,9 @@ export function TopNav({ active }: { active: TopNavActive }) {
                       className="linkbtn menu-item menu-item--danger"
                       onClick={() => {
                         setMenuOpen(false);
-                        nav("landing");
+                        logout.mutate(); // 서버 RT 폐기 + 로컬 정리 + 랜딩 이동은 훅이 담당
                       }}
+                      disabled={logout.isPending}
                       style={{
                         width: "100%",
                         display: "flex",

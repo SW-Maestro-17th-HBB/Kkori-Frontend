@@ -1,4 +1,4 @@
-import { useMutation, useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   fetchNotifications,
   fetchProfile,
@@ -9,8 +9,11 @@ import {
   fetchSubscription,
   getConsentCatalog,
   postKakaoLogin,
+  postLogout,
   postSignup,
 } from "./client";
+import { clearTokens, getRefreshToken } from "./tokenStore";
+import { useNav } from "../hooks/useNav";
 
 /* ---------- 인증 ---------- */
 
@@ -46,6 +49,28 @@ export const useConsentCatalog = (enabled = true) =>
 
 /** 가입/복구 제출 — 계정을 생성하는 비멱등 POST 라 mutation (자동 재시도 없음, isPending 으로 이중 제출 방지) */
 export const useSignup = () => useMutation({ mutationFn: postSignup });
+
+/** 로그아웃 — 서버 RT 폐기(멱등)를 시도하고, 결과와 무관하게 로컬 세션을 정리한 뒤 랜딩으로.
+    화면은 이 훅만 쓰면 되고 storage 를 직접 만지지 않는다 (저장 전략 교체 대비 격리) */
+export const useLogout = () => {
+  const nav = useNav();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async () => {
+      if (!getRefreshToken()) return; // 이미 로그아웃 상태 — API 생략
+      try {
+        await postLogout();
+      } catch {
+        // 멱등 계약 — 서버 폐기가 실패해도 로컬 정리는 진행한다
+      }
+    },
+    onSettled: () => {
+      clearTokens();
+      queryClient.clear(); // SPA 이동이라 이전 세션 캐시가 메모리에 남는 것 방지
+      nav("landing");
+    },
+  });
+};
 
 export const useProfile = () => useQuery({ queryKey: ["profile"], queryFn: fetchProfile });
 
