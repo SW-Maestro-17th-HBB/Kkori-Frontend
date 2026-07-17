@@ -1,7 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { act, screen } from "@testing-library/react";
+import { act, screen, waitFor } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { QueryClient } from "@tanstack/react-query";
 import { renderWithProviders } from "./test/render";
+import * as apiClient from "./api/client";
 import { ROUTE_ACCESS, ROUTES, type NavKey } from "./routes";
 import App from "./App";
 
@@ -148,7 +150,38 @@ describe("탭 간 세션 반응 (storage 이벤트)", () => {
     }); // code 재전송 위험 차단
   });
 
-  it("다른 탭 계정 교체(A→B): 이전 계정의 캐시를 비운다", async () => {
+  it("계정 교체(A→B): 보호 화면이 이전 계정 캐시를 재사용하지 않는다 (세션 전용 클라이언트)", async () => {
+    const profileSpy = vi.spyOn(apiClient, "fetchProfile");
+    seedLogin("sess-A");
+    renderWithProviders(<App />, { route: ROUTES.dash });
+    await screen.findByText(DASH_TEXT);
+    await waitFor(() => expect(profileSpy).toHaveBeenCalledTimes(1));
+
+    crossTabAuthChange(() => seedLogin("sess-B"));
+
+    await screen.findByText(DASH_TEXT);
+    // 세션 경계 remount → 새 클라이언트가 다시 조회 — A 캐시가 B 화면에 렌더될 수 없다
+    await waitFor(() => expect(profileSpy).toHaveBeenCalledTimes(2));
+  });
+
+  it("계정 교체(A→B): 페이지 로컬 상태(모달 등)가 초기화된다 (세션 경계 remount)", async () => {
+    seedLogin("sess-A");
+    const user = userEvent.setup();
+    renderWithProviders(<App />, { route: ROUTES.dash });
+    await screen.findByText(DASH_TEXT);
+
+    await user.click(await screen.findByRole("button", { name: /이력서 변경/ }));
+    expect(
+      await screen.findByRole("dialog", { name: "바로 시작에 사용할 이력서" }),
+    ).toBeInTheDocument();
+
+    crossTabAuthChange(() => seedLogin("sess-B"));
+
+    await screen.findByText(DASH_TEXT);
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument(); // A 가 열어둔 모달 미승계
+  });
+
+  it("다른 탭 계정 교체(A→B): 루트 클라이언트도 비운다 (게스트 쿼리 위생)", async () => {
     seedLogin("sess-A");
     const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
     const clearSpy = vi.spyOn(queryClient, "clear");
