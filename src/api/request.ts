@@ -17,8 +17,9 @@ import {
   clearSignupSession,
   clearTokens,
   getAccessToken,
+  getAuthSessionId,
   getRefreshToken,
-  setTokens,
+  rotateTokens,
 } from "./tokenStore";
 import { ROUTES } from "../routes";
 
@@ -47,6 +48,8 @@ export const FE_ERROR_CODES = {
   NETWORK: "FE_NETWORK",
   /** 세션 회복 불능 — RT 부재 또는 재발급 응답의 토큰 쌍 누락 */
   SESSION_EXPIRED: "FE_SESSION_EXPIRED",
+  /** 재발급 도중 인증 세션이 교체됨(다른 계정 로그인 등) — 회전 결과 폐기, 세션은 건드리지 않음 */
+  SESSION_REPLACED: "FE_SESSION_REPLACED",
 } as const;
 
 /**
@@ -233,6 +236,7 @@ type TokenPair = components["schemas"]["TokenResponse"];
     ① RT 부재(사전) ② 시도 소진 시 마지막 실패가 누락일 때 — 두 지점에서만 생성. */
 async function doReissue(): Promise<void> {
   const refreshToken = getRefreshToken(); // 지역 고정 — 재시도도 같은 RT (Grace 계약)
+  const sessionAtStart = getAuthSessionId(); // 회전 결과가 남의 세션을 덮어쓰지 않도록 캡처
   if (!refreshToken) {
     throw new ApiError(FE_ERROR_CODES.SESSION_EXPIRED, "다시 로그인해 주세요.", 401);
   }
@@ -252,7 +256,13 @@ async function doReissue(): Promise<void> {
       continue;
     }
     if (data?.accessToken && data?.refreshToken) {
-      setTokens(data.accessToken, data.refreshToken);
+      // 재발급 대기 중 세션이 교체됐으면(다른 계정 로그인) 회전 결과를 폐기 —
+      // A 세션의 회전 쌍이 B 세션의 저장소를 덮어쓰는 사고 방지. 비 terminal 코드라
+      // REAUTH 를 유발하지 않아 새 세션은 그대로 보존된다.
+      if (getAuthSessionId() !== sessionAtStart) {
+        throw new ApiError(FE_ERROR_CODES.SESSION_REPLACED, "세션이 변경되었습니다.", 401);
+      }
+      rotateTokens(data.accessToken, data.refreshToken); // 세션 ID 유지 — 같은 세션의 회전
       return;
     }
     // 200 인데 토큰 쌍 누락 — 계약 위반이지만 응답 유실과 동급의 불확실 실패로 취급해 재시도
@@ -276,6 +286,7 @@ export async function request<T>(
 ): Promise<T> {
   const isPublic = PUBLIC_REQUESTS.has(`${method} ${path}`);
   const attemptToken = isPublic ? null : getAccessToken();
+  const attemptSession = isPublic ? null : getAuthSessionId();
   try {
     return await rawRequest<T>(method, path, opts, attemptToken);
   } catch (e) {
@@ -283,8 +294,12 @@ export async function request<T>(
     // 공개 요청(가입 A005 등)·Abort·비 401 은 그대로 전파
     if (isPublic || !isApiError(e) || e.status !== 401) throw e;
     const policy = opts.onReauth ?? "redirect";
-    // 늦게 도착한 401 방어: 이 요청이 쓴 토큰이 이미 교체됐다면(선행 요청·다른 탭이
-    // 회전을 마침) 재발급을 건너뛰고 새 토큰으로 재시도만 한다 — 불필요한 중복 회전 방지
+    // 인증 세션이 교체·제거됐다면(다른 계정 로그인·로그아웃) 이 요청은 이전 세션의
+    // 것이므로 재시도하지 않는다 — 다른 계정의 자격증명으로 재실행되는 사고 차단.
+    // REAUTH 도 발동하지 않는다(현재 세션은 유효할 수 있음 — 파괴 금지).
+    if (getAuthSessionId() !== attemptSession) throw e;
+    // 늦게 도착한 401 방어: 같은 세션에서 AT 만 이미 회전됐다면(선행 요청·다른 탭)
+    // 재발급을 건너뛰고 새 토큰으로 재시도만 한다 — 불필요한 중복 회전 방지
     if (getAccessToken() === attemptToken) {
       try {
         await reissueOnce();
@@ -293,6 +308,8 @@ export async function request<T>(
         throw re;
       }
     }
+    // 재발급 대기 중 세션이 교체된 경우도 동일하게 중단 (이하 재시도는 동기 — 원자적)
+    if (getAuthSessionId() !== attemptSession) throw e;
     try {
       // 정확히 1회 재시도 — bodyFactory 는 회전된 토큰을 반영해 재평가된다
       return await rawRequest<T>(method, path, opts, getAccessToken());

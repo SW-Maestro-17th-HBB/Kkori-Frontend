@@ -11,12 +11,29 @@
 
 const AT_KEY = "kkori.accessToken";
 const RT_KEY = "kkori.refreshToken";
+const SESSION_KEY = "kkori.authSession";
 const SIGNUP_KEY = "kkori.signupToken";
 const RESTORE_KEY = "kkori.isRestored";
 
+/** 로그인·가입 성공 — 토큰 쌍 저장 + **새 인증 세션 ID 발급**.
+    세션 ID 는 "누구의 세션인가"의 안정 식별자다: 재발급(rotateTokens)으로 AT/RT 가
+    회전해도 유지되고, 다른 계정 로그인·로그아웃 시에만 바뀌거나 사라진다.
+    지연된 401 처리에서 "같은 세션의 회전"(재시도 가능)과 "세션 교체"(재시도 금지 —
+    다른 계정의 자격증명으로 재실행되는 사고)를 구분하는 근거. localStorage 라 멀티탭 공유. */
 export function setTokens(accessToken: string, refreshToken: string) {
   localStorage.setItem(AT_KEY, accessToken);
   localStorage.setItem(RT_KEY, refreshToken);
+  localStorage.setItem(SESSION_KEY, crypto.randomUUID());
+}
+
+/** 재발급 회전 — 토큰 쌍만 교체하고 세션 ID 는 유지한다 (request.ts 전용) */
+export function rotateTokens(accessToken: string, refreshToken: string) {
+  localStorage.setItem(AT_KEY, accessToken);
+  localStorage.setItem(RT_KEY, refreshToken);
+}
+
+export function getAuthSessionId(): string | null {
+  return localStorage.getItem(SESSION_KEY);
 }
 
 export function getAccessToken(): string | null {
@@ -30,6 +47,7 @@ export function getRefreshToken(): string | null {
 export function clearTokens() {
   localStorage.removeItem(AT_KEY);
   localStorage.removeItem(RT_KEY);
+  localStorage.removeItem(SESSION_KEY);
 }
 
 export function isLoggedIn(): boolean {

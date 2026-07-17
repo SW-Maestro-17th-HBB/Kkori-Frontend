@@ -7,7 +7,13 @@ import {
   isApiError,
   request,
 } from "./request";
-import { getAccessToken, getRefreshToken, setTokens } from "./tokenStore";
+import {
+  clearTokens,
+  getAccessToken,
+  getRefreshToken,
+  rotateTokens,
+  setTokens,
+} from "./tokenStore";
 
 /** fetch 를 지정한 Response 로 스텁하고 호출 기록을 돌려준다 */
 function stubFetch(response: Response | Promise<Response>) {
@@ -339,13 +345,89 @@ describe("request — 자동 재발급", () => {
 
     const pending = request("GET", "/api/v1/user"); // at-old 로 발사
     await vi.waitFor(() => expect(release401).not.toBeNull());
-    setTokens("at-2", "rt-2"); // 선행 요청·다른 탭이 회전을 마친 상황
+    rotateTokens("at-2", "rt-2"); // 같은 세션에서 선행 요청·다른 탭이 회전을 마친 상황
     release401!();
 
     await expect(pending).resolves.toBe("ok");
     expect(callsTo(mock, "/api/v1/auth/reissue")).toHaveLength(0); // 중복 회전 없음
     const [, retryInit] = mock.mock.calls.at(-1) as [string, RequestInit];
     expect(authHeaderOf(retryInit)).toBe("Bearer at-2"); // 교체된 토큰으로 재시도만
+  });
+
+  it("세션 교체(다른 계정 로그인) 후 도착한 401 은 재시도 없이 중단한다", async () => {
+    setTokens("at-A", "rt-A");
+    const redirect = spyRedirect();
+    let release401: (() => void) | null = null;
+    const mock = vi.fn<(input: RequestInfo | URL, init?: RequestInit) => Promise<Response>>(
+      () =>
+        new Promise<Response>((resolve) => {
+          release401 = () => resolve(errorResponse("C005", 401));
+        }),
+    );
+    vi.stubGlobal("fetch", mock);
+
+    const pending = request("GET", "/api/v1/user"); // A 세션으로 발사
+    await vi.waitFor(() => expect(release401).not.toBeNull());
+    setTokens("at-B", "rt-B"); // 다른 탭에서 계정 B 로 로그인 (새 세션 ID)
+    release401!();
+
+    const err = await catchApiError(pending);
+    expect(err.code).toBe("C005"); // 원래 401 그대로 전파
+    expect(mock).toHaveBeenCalledTimes(1); // 재발급·재시도 없음 — B 자격증명으로 재실행 금지
+    expect(getAccessToken()).toBe("at-B"); // B 세션은 보존 (REAUTH 미발동)
+    expect(getRefreshToken()).toBe("rt-B");
+    expect(redirect).not.toHaveBeenCalled();
+  });
+
+  it("세션 제거(로그아웃) 후 도착한 401 도 재시도 없이 중단한다", async () => {
+    setTokens("at-A", "rt-A");
+    const redirect = spyRedirect();
+    let release401: (() => void) | null = null;
+    const mock = vi.fn<(input: RequestInfo | URL, init?: RequestInit) => Promise<Response>>(
+      () =>
+        new Promise<Response>((resolve) => {
+          release401 = () => resolve(errorResponse("C005", 401));
+        }),
+    );
+    vi.stubGlobal("fetch", mock);
+
+    const pending = request("GET", "/api/v1/user");
+    await vi.waitFor(() => expect(release401).not.toBeNull());
+    clearTokens(); // 다른 탭에서 로그아웃
+    release401!();
+
+    const err = await catchApiError(pending);
+    expect(err.code).toBe("C005");
+    expect(mock).toHaveBeenCalledTimes(1);
+    expect(redirect).not.toHaveBeenCalled();
+  });
+
+  it("재발급 대기 중 세션이 교체되면 회전 결과를 폐기한다 (B 세션 클로버링 방지)", async () => {
+    setTokens("at-A", "rt-A");
+    const redirect = spyRedirect();
+    let releaseReissue: (() => void) | null = null;
+    const mock = vi.fn<(input: RequestInfo | URL, init?: RequestInit) => Promise<Response>>(
+      (input) => {
+        if (String(input).endsWith("/api/v1/auth/reissue")) {
+          return new Promise<Response>((resolve) => {
+            releaseReissue = () => resolve(tokenPairResponse("at-A2", "rt-A2"));
+          });
+        }
+        return Promise.resolve(errorResponse("C005", 401));
+      },
+    );
+    vi.stubGlobal("fetch", mock);
+
+    const pending = request("GET", "/api/v1/user"); // 401 → 재발급 진입
+    await vi.waitFor(() => expect(releaseReissue).not.toBeNull());
+    setTokens("at-B", "rt-B"); // 재발급 대기 중 계정 B 로 로그인
+    releaseReissue!();
+
+    const err = await catchApiError(pending);
+    expect(err.code).toBe(FE_ERROR_CODES.SESSION_REPLACED);
+    expect(getAccessToken()).toBe("at-B"); // A 의 회전 쌍(at-A2)이 B 저장소를 덮지 않음
+    expect(getRefreshToken()).toBe("rt-B");
+    expect(redirect).not.toHaveBeenCalled(); // 비 terminal — 새 세션 파괴 금지
   });
 
   it("bodyFactory 는 매 시도 직전에 재평가된다", async () => {
