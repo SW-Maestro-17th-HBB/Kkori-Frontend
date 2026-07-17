@@ -9,6 +9,7 @@ import {
   getRefreshToken,
   getSignupSession,
   peekOauthState,
+  POST_LOGIN_REDIRECT_TTL_MS,
   setPostLoginRedirect,
 } from "../api/tokenStore";
 import { KakaoCallbackPage } from "./KakaoCallbackPage";
@@ -162,6 +163,27 @@ describe("KakaoCallbackPage — 원 목적지 복귀", () => {
     expect(await screen.findByText("리포트-도착")).toBeInTheDocument();
     expect(screen.getByTestId("loc-search")).toHaveTextContent("?sort=latest");
     expect(sessionStorage.getItem("kkori.postLoginRedirect")).toBeNull(); // 소비됨
+  });
+
+  it("만료된 원 목적지(TTL 초과)는 폐기하고 대시보드로 폴백한다", async () => {
+    setPostLoginRedirect("/reports?sort=latest"); // 실제 시각으로 저장
+    // 소비 시점만 TTL 초과 이후로 이동 — 경계 자체는 tokenStore.test 가 고정
+    vi.spyOn(Date, "now").mockReturnValue(Date.now() + POST_LOGIN_REDIRECT_TTL_MS + 1);
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(
+        envelope({
+          isNewUser: false,
+          isRestored: false,
+          accessToken: "at-late",
+          refreshToken: "rt-late",
+        }),
+      ),
+    );
+    renderCallback(validCallbackRoute("valid-code"));
+
+    expect(await screen.findByText("대시보드-도착")).toBeInTheDocument(); // 묵은 목적지 미사용
+    expect(sessionStorage.getItem("kkori.postLoginRedirect")).toBeNull(); // 폐기됨
   });
 
   it("교환 실패 시 저장값을 유지한다 — TTL 내 재시도가 성공하면 복귀된다", async () => {
