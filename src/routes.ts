@@ -5,6 +5,7 @@
 export const ROUTES = {
   landing: "/",
   auth: "/login",
+  kakaoCallback: "/auth/kakao/callback",
   consent: "/signup",
   dash: "/dashboard",
   resume: "/resumes",
@@ -19,3 +20,6 @@ export const ROUTES = {
 export type NavKey = keyof typeof ROUTES;
 
 export const reportDetailPath = (id: number | string) => `/reports/${id}`;
+
+/** 라우트 등록용 패턴 — ROUTES.reportDetail 은 이동용 대표 경로, 등록은 이 패턴을 쓴다 */
+export const REPORT_DETAIL_PATTERN = "/reports/:id";

@@ -1,11 +1,32 @@
 /* ============================ 로그인 (/login) ============================ */
+import { createOauthState } from "../api/tokenStore";
 import { Button } from "../components/ds";
 import { Icon } from "../components/Icon";
 import { Display, Wordmark } from "../components/primitives";
-import { useNav } from "../hooks/useNav";
+import { ROUTES } from "../routes";
+
+/* 카카오 REST API 키 — 인가 요청 client_id 는 백엔드가 code 교환에 쓰는 키와 동일해야 함 */
+const KAKAO_CONFIGURED = Boolean(import.meta.env.VITE_KAKAO_CLIENT_ID);
+
+/* 카카오 인가 페이지로 이동 */
+function startKakaoLogin() {
+  const clientId = import.meta.env.VITE_KAKAO_CLIENT_ID;
+  if (!clientId) {
+    console.warn("[auth] VITE_KAKAO_CLIENT_ID 가 설정되지 않았습니다 (.env.local 확인)");
+    return;
+  }
+  const redirectUri = `${window.location.origin}${ROUTES.kakaoCallback}`;
+  const params = new URLSearchParams({
+    response_type: "code",
+    client_id: clientId,
+    redirect_uri: redirectUri,
+    // Login CSRF 방어 — 콜백에서 세션에 저장한 값과 대조
+    state: createOauthState(),
+  });
+  window.location.assign(`https://kauth.kakao.com/oauth/authorize?${params}`);
+}
 
 export function AuthPage() {
-  const nav = useNav();
   return (
     <div style={{ minHeight: "100vh", background: "var(--bg-canvas)" }}>
       <div
@@ -58,11 +79,26 @@ export function AuthPage() {
               size="lg"
               fullWidth
               leadingIcon={<Icon name="message-circle" size={18} />}
-              onClick={() => nav("consent")}
-              style={{ background: "#FEE500", color: "#191600" }}
+              onClick={startKakaoLogin}
+              disabled={!KAKAO_CONFIGURED}
+              style={KAKAO_CONFIGURED ? { background: "#FEE500", color: "#191600" } : undefined}
             >
               카카오로 계속하기
             </Button>
+            {!KAKAO_CONFIGURED && (
+              <p
+                role="alert"
+                style={{
+                  fontFamily: "var(--font-sans)",
+                  fontSize: 13,
+                  fontWeight: 500,
+                  color: "var(--red-700)",
+                  margin: 0,
+                }}
+              >
+                카카오 로그인 설정이 아직 완료되지 않았어요. 잠시 후 다시 시도해 주세요.
+              </p>
+            )}
           </div>
           <div
             style={{

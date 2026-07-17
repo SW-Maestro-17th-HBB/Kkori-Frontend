@@ -78,6 +78,13 @@ describe("request — 계약 위반·네트워크", () => {
     expect(err.code).toBe(FE_ERROR_CODES.INVALID_RESPONSE);
   });
 
+  it("비-2xx 인데 success: true 인 응답은 성공으로 처리하지 않는다 (상태줄이 유일 원천)", async () => {
+    stubFetch(jsonResponse({ success: true, data: { accessToken: "at" } }, 500));
+    const err = await catchApiError(request("POST", "/api/v1/auth/kakao", { body: { code: "x" } }));
+    expect(err.code).toBe(FE_ERROR_CODES.INVALID_RESPONSE);
+    expect(err.status).toBe(500);
+  });
+
   it("네트워크 실패는 FE_NETWORK(status 0)로 변환한다", async () => {
     vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new TypeError("Failed to fetch")));
     const err = await catchApiError(request("GET", "/api/v1/user"));
