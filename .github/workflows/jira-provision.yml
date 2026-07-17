@@ -47,6 +47,7 @@ jobs:
           JIRA_BASE_URL: ${{ secrets.JIRA_BASE_URL }}
           JIRA_EMAIL: ${{ secrets.JIRA_EMAIL }}
           JIRA_API_TOKEN: ${{ secrets.JIRA_API_TOKEN }}
+          TARGET_LABEL: "Kkori-Frontend"
           CLIENT_PAYLOAD: ${{ toJSON(github.event.client_payload) }}
           INPUT_JIRA_KEY: ${{ inputs.jiraKey }}
         run: node .github/scripts/provision.mjs

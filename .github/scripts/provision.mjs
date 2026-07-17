@@ -1,7 +1,8 @@
 //   1) Jira 에서 Story 조회 (제목, 담당자)
 //   2) Jira 에서 그 Story 의 Subtask 목록 조회 (제목, 담당자)
-//   3) GitHub 에 부모 Issue 생성 (담당자 매핑 적용)
-//   4) 각 Subtask → 자식 Issue 생성 → sub-issue 로 연결
+//   3) TARGET_LABEL 이 붙은 Subtask 만 자식 Issue 로 가져간다. 
+//   4) GitHub 에 부모 Issue 생성 (담당자 매핑 적용)
+//   5) 각 Subtask → 자식 Issue 생성 → sub-issue 로 연결
 //
 // 제목의 [JIRA-KEY] 로 기존 Issue 를 검색해 있으면 재사용.
 
@@ -14,6 +15,9 @@ const REPO = process.env.GH_REPO;
 const JIRA_BASE = (process.env.JIRA_BASE_URL || "").replace(/\/+$/, "");
 const JIRA_EMAIL = process.env.JIRA_EMAIL;
 const JIRA_TOKEN = process.env.JIRA_API_TOKEN;
+
+//TARGET_LABEL 없으면 모든 Subtask 
+const TARGET_LABEL = (process.env.TARGET_LABEL || "").trim();
 
 // workflow_dispatch 에서는 client_payload 가 없어 toJSON() 이 문자열 "null" 을 만든다
 // ("null" 은 truthy 라 || 기본값을 안 탐) → 파싱 결과에 ?? {} 로 방어.
@@ -95,6 +99,12 @@ function mapAssignee(jiraDisplayName) {
   return ghUser ? [ghUser] : [];
 }
 
+// ---- 라벨 매칭: Subtask 의 labels 에 TARGET_LABEL 이 있는지 ----
+function subtaskMatchesTarget(labels) {
+  if (!TARGET_LABEL) return false;
+  return Array.isArray(labels) && labels.includes(TARGET_LABEL);
+}
+
 async function findExistingIssue(key) {
   for (let page = 1; page <= 10; page++) {
     const items = await gh(
@@ -163,16 +173,25 @@ async function main() {
   // 3) Subtask 각각 처리
   //    subtasks 필드는 요약 정보만 주므로, 담당자까지 필요하면 개별 조회.
   const results = [];
+  let skipped = 0;
   for (const ref of subtaskRefs) {
     const stKey = ref.key;
     let stTitle = ref.fields?.summary || stKey;
     let stAssignee = null;
+    let stLabels = [];
     try {
       const st = await jira(`/rest/api/3/issue/${stKey}?fields=summary,assignee`);
       stTitle = st.fields.summary;
       stAssignee = st.fields.assignee?.displayName || null;
+      stLabels = st.fields.fields.labels || [];
     } catch (e) {
-      console.warn(`  Subtask ${stKey} 상세 조회 실패, 요약 정보로 진행: ${e.message}`);
+      console.warn(`  Subtask ${stKey} 상세 조회 실패, 건너뜀: ${e.message}`);
+    }
+
+    // 이 repo 담당 라벨이 아닌 Subtask 는 skip (라벨 없는 것도 여기서 걸러짐)
+    if (!subtaskMatchesTarget(stLabels)) {
+      skipped++;
+      continue;
     }
 
     const child = await ensureIssue(
@@ -206,7 +225,9 @@ async function main() {
   for (const r of results) {
     console.log(`Sub    : ${r.key} → #${r.number} ${r.html_url}`);
   }
-  console.log("(브랜치는 생성하지 않음 — start-jira-issue 스킬이 착수 시 생성)");
+  if (TARGET_LABEL) {
+    console.log(`(라벨 '${TARGET_LABEL}' 매칭 ${results.length}개 생성, ${skipped}개 skip)`);
+  }
 }
 
 main().catch((e) => {
