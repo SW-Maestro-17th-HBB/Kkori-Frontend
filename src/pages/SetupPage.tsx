@@ -114,18 +114,26 @@ const DEVICE_NOTICE_TEXT: Record<DeviceNotice, string> = {
 
 type CheckTone = "pending" | "ok" | "fail";
 
-/** 정상 확인 3종 — 카메라 / 마이크 / 마이크 권한(필수 권한만 의미) */
-function checkChips(setup: DeviceSetupState): { label: string; tone: CheckTone }[] {
-  const { phase, error, videoTrack } = setup;
+/** 정상 확인 3종 — 카메라 / 마이크 / 마이크 권한(필수 권한만 의미).
+    카메라는 실제 프레임 도착, 마이크는 실입력 감지 후에만 "정상" (PRD 기능 2) */
+function checkChips(
+  setup: DeviceSetupState,
+  cameraLive: boolean,
+): { label: string; tone: CheckTone }[] {
+  const { phase, error, videoTrack, micInputDetected } = setup;
   const ready = phase === "ready";
   return [
     ready
       ? videoTrack
-        ? { label: "카메라 정상", tone: "ok" }
+        ? cameraLive
+          ? { label: "카메라 정상", tone: "ok" }
+          : { label: "카메라 확인 중", tone: "pending" }
         : { label: "카메라 사용 불가", tone: "fail" }
       : { label: "카메라 확인 전", tone: "pending" },
     ready
-      ? { label: "마이크 정상", tone: "ok" }
+      ? micInputDetected
+        ? { label: "마이크 정상", tone: "ok" }
+        : { label: "마이크 입력 대기", tone: "pending" }
       : error === "mic-not-found" || error === "mic-lost"
         ? { label: "마이크 없음", tone: "fail" }
         : { label: "마이크 확인 전", tone: "pending" },
@@ -200,66 +208,178 @@ function MicLevelMeter({ volume }: { volume: number }) {
   );
 }
 
-function DeviceSelect({
+/** 커스텀 장치 드롭다운 — 네이티브 select 는 열린 채로 목록을 못 갈아끼워서,
+    "클릭 → 점검 시작 → 같은 메뉴 안에서 연결 중 → 장치 목록" 흐름이 안 된다.
+    점검 전에도 활성 상태로 두고 클릭을 점검 트리거로 쓴다 (PRD 기능 1·3) */
+function DevicePicker({
   label,
   placeholder,
   devices,
   value,
   disabled,
-  onChange,
+  phase,
+  onTrigger,
+  onSelect,
 }: {
   label: string;
   placeholder: string;
   devices: MediaDeviceInfo[];
   value: string | null;
   disabled: boolean;
-  onChange: (deviceId: string) => void;
+  phase: DeviceSetupState["phase"];
+  /** idle·error 상태에서 클릭 시 점검 시작(재시도) */
+  onTrigger: () => void;
+  onSelect: (deviceId: string) => void;
 }) {
+  const [open, setOpen] = useState(false);
+  const selected = devices.find((d) => d.deviceId === value);
+  const menuVisible = open && (phase === "starting" || phase === "ready");
+
+  const handleClick = () => {
+    if (phase === "idle" || phase === "error") {
+      onTrigger(); // 점검 시작 — 메뉴를 열어 연결 진행을 보여준다
+      setOpen(true);
+      return;
+    }
+    setOpen((o) => !o);
+  };
+
   return (
     <div style={{ position: "relative" }}>
-      <select
+      <button
+        type="button"
+        className="linkbtn"
         aria-label={label}
-        value={value ?? ""}
-        disabled={disabled || devices.length === 0}
-        onChange={(e) => onChange(e.target.value)}
+        aria-haspopup="listbox"
+        aria-expanded={menuVisible}
+        disabled={disabled}
+        onClick={handleClick}
         style={{
           width: "100%",
           height: 40,
           border: "1px solid var(--border-default)",
           borderRadius: "var(--radius-btn-md)",
           background: "var(--bg-surface)",
-          padding: "0 36px 0 14px",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          gap: 8,
+          padding: "0 12px 0 14px",
           fontFamily: "var(--font-sans)",
           fontSize: 14,
           fontWeight: 500,
           color: "var(--fg-strong)",
-          appearance: "none",
+          opacity: disabled ? 0.5 : 1,
           cursor: disabled ? "not-allowed" : "pointer",
         }}
       >
-        {(devices.length === 0 || value === null) && <option value="">{placeholder}</option>}
-        {devices.map((d, i) => (
-          <option key={d.deviceId} value={d.deviceId}>
-            {d.label || `${placeholder} ${i + 1}`}
-          </option>
-        ))}
-      </select>
-      <Icon
-        name="chevron-down"
-        size={18}
-        style={{
-          position: "absolute",
-          right: 12,
-          top: 11,
-          color: "var(--fg-tertiary)",
-          pointerEvents: "none",
-        }}
-      />
+        <span
+          style={{
+            overflow: "hidden",
+            textOverflow: "ellipsis",
+            whiteSpace: "nowrap",
+          }}
+        >
+          {selected ? selected.label || placeholder : placeholder}
+        </span>
+        <Icon name="chevron-down" size={18} style={{ color: "var(--fg-tertiary)" }} />
+      </button>
+      {menuVisible && (
+        <div
+          role="listbox"
+          aria-label={label}
+          style={{
+            position: "absolute",
+            top: "calc(100% + 6px)",
+            left: 0,
+            right: 0,
+            zIndex: 20,
+            background: "var(--bg-elevated)",
+            border: "1px solid var(--border-subtle)",
+            borderRadius: "var(--radius-12)",
+            boxShadow: "var(--shadow-pop)",
+            overflow: "hidden",
+            padding: 6,
+          }}
+        >
+          {phase === "starting" ? (
+            <div
+              style={{
+                padding: "10px 12px",
+                fontFamily: "var(--font-sans)",
+                fontSize: 13,
+                fontWeight: 500,
+                color: "var(--fg-tertiary)",
+              }}
+            >
+              장비 연결 중…
+            </div>
+          ) : devices.length === 0 ? (
+            <div
+              style={{
+                padding: "10px 12px",
+                fontFamily: "var(--font-sans)",
+                fontSize: 13,
+                fontWeight: 500,
+                color: "var(--fg-tertiary)",
+              }}
+            >
+              장치 목록을 불러올 수 없어요
+            </div>
+          ) : (
+            devices.map((d, i) => (
+              <button
+                key={d.deviceId}
+                type="button"
+                role="option"
+                aria-selected={d.deviceId === value}
+                className="linkbtn menu-item"
+                onClick={() => {
+                  setOpen(false);
+                  if (d.deviceId !== value) onSelect(d.deviceId);
+                }}
+                style={{
+                  width: "100%",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 8,
+                  padding: "9px 12px",
+                  borderRadius: "var(--radius-8)",
+                  fontFamily: "var(--font-sans)",
+                  fontSize: 13.5,
+                  fontWeight: 600,
+                  color: "var(--fg-default)",
+                  textAlign: "left",
+                }}
+              >
+                <span style={{ flex: 1, overflow: "hidden", textOverflow: "ellipsis" }}>
+                  {d.label || `${placeholder} ${i + 1}`}
+                </span>
+                {d.deviceId === value && (
+                  <Icon
+                    name="check"
+                    size={14}
+                    strokeWidth={3}
+                    style={{ color: "var(--blue-800)" }}
+                  />
+                )}
+              </button>
+            ))
+          )}
+        </div>
+      )}
     </div>
   );
 }
 
-function SelfView({ setup }: { setup: DeviceSetupState }) {
+function SelfView({
+  setup,
+  onLive,
+}: {
+  setup: DeviceSetupState;
+  /** 비디오에 실제 프레임이 도착하면 해당 트랙을 보고한다 — "카메라 정상" 판정 근거 */
+  onLive: (track: NonNullable<DeviceSetupState["videoTrack"]>) => void;
+}) {
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const { videoTrack, phase } = setup;
 
@@ -268,10 +388,16 @@ function SelfView({ setup }: { setup: DeviceSetupState }) {
     const el = videoRef.current;
     if (!videoTrack || !el) return;
     videoTrack.attach(el);
+    const handleLive = () => onLive(videoTrack);
+    el.addEventListener("playing", handleLive);
+    el.addEventListener("loadeddata", handleLive);
+    if (el.readyState >= 2) handleLive(); // 부착 시점에 이미 프레임이 있는 경우
     return () => {
+      el.removeEventListener("playing", handleLive);
+      el.removeEventListener("loadeddata", handleLive);
       videoTrack.detach(el);
     };
-  }, [videoTrack]);
+  }, [videoTrack, onLive]);
 
   return (
     <div
@@ -351,10 +477,15 @@ function SelfView({ setup }: { setup: DeviceSetupState }) {
 
 function DeviceCheck({ setup }: { setup: DeviceSetupState }) {
   const { phase, error, notice } = setup;
+  // 프레임 도착을 보고한 트랙 — 현재 트랙과 일치할 때만 "카메라 정상" (트랙 교체 시 자동 리셋)
+  const [liveTrack, setLiveTrack] = useState<DeviceSetupState["videoTrack"]>(null);
+  const cameraLive = liveTrack !== null && liveTrack === setup.videoTrack;
+  const waitingForVoice = phase === "ready" && !setup.micBusy && !setup.micInputDetected;
+
   return (
     <Fragment>
       <div style={{ display: "flex", gap: 14, alignItems: "stretch" }}>
-        <SelfView setup={setup} />
+        <SelfView setup={setup} onLive={setLiveTrack} />
         <div
           style={{
             flex: 1,
@@ -377,27 +508,44 @@ function DeviceCheck({ setup }: { setup: DeviceSetupState }) {
               마이크 입력 레벨
             </div>
             <MicLevelMeter volume={setup.micVolume} />
+            {waitingForVoice && (
+              <p
+                style={{
+                  fontFamily: "var(--font-sans)",
+                  fontSize: 12,
+                  fontWeight: 500,
+                  color: "var(--fg-tertiary)",
+                  margin: "8px 0 0",
+                }}
+              >
+                마이크에 대고 말해보세요
+              </p>
+            )}
           </div>
-          <DeviceSelect
+          <DevicePicker
             label="카메라 선택"
             placeholder="기본 카메라"
             devices={setup.cameras}
             value={setup.cameraId}
-            disabled={phase !== "ready" || setup.cameraBusy || setup.videoTrack === null}
-            onChange={(deviceId) => void setup.selectCamera(deviceId)}
+            disabled={setup.cameraBusy || (phase === "ready" && setup.videoTrack === null)}
+            phase={phase}
+            onTrigger={() => void setup.start()}
+            onSelect={(deviceId) => void setup.selectCamera(deviceId)}
           />
-          <DeviceSelect
+          <DevicePicker
             label="마이크 선택"
             placeholder="기본 마이크"
             devices={setup.mics}
             value={setup.micId}
-            disabled={phase !== "ready" || setup.micBusy}
-            onChange={(deviceId) => void setup.selectMic(deviceId)}
+            disabled={setup.micBusy}
+            phase={phase}
+            onTrigger={() => void setup.start()}
+            onSelect={(deviceId) => void setup.selectMic(deviceId)}
           />
         </div>
       </div>
       <div style={{ display: "flex", gap: 18, marginTop: 16, flexWrap: "wrap" }}>
-        {checkChips(setup).map(({ label, tone }) => (
+        {checkChips(setup, cameraLive).map(({ label, tone }) => (
           <CheckChip key={label} label={label} tone={tone} />
         ))}
       </div>
@@ -701,7 +849,9 @@ export function SetupPage() {
                 marginBottom: 0,
               }}
             >
-              장비 점검을 완료하면 면접을 시작할 수 있어요.
+              {setup.phase === "ready" && setup.micId !== null && !setup.micBusy
+                ? "마이크에 대고 말해 입력을 확인해 주세요."
+                : "장비 점검을 완료하면 면접을 시작할 수 있어요."}
             </p>
           )}
         </div>

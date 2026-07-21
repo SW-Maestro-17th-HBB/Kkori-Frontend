@@ -14,6 +14,15 @@ const renderSetup = () => renderHook(() => useDeviceSetup(), { wrapper: StrictMo
 const audioTrack = () => FakeMedia.tracks.find((t) => t.kind === "audio")!;
 const videoTrack = () => FakeMedia.tracks.find((t) => t.kind === "video")!;
 
+/** 실입력 감지 통과 — 임계치 이상 볼륨을 잠깐 흘려 "마이크 정상"을 확정시킨다 */
+const speak = async (result: { current: ReturnType<typeof useDeviceSetup> }) => {
+  FakeMedia.volume = 0.2;
+  await waitFor(() => {
+    expect(result.current.micInputDetected).toBe(true);
+  });
+  FakeMedia.volume = 0;
+};
+
 /** jsdom 에는 navigator.mediaDevices 가 없다 — devicechange 를 쏠 수 있는 스텁 주입.
     renderSetup() 이전에 호출해야 activate 가 리스너를 등록한다 */
 function stubMediaDevices() {
@@ -51,9 +60,37 @@ describe("useDeviceSetup", () => {
     expect(result.current.videoTrack).not.toBeNull();
     expect(result.current.micId).toBe("mic-default");
     expect(result.current.cameraId).toBe("cam-default");
-    expect(result.current.canStart).toBe(true);
     expect(result.current.mics.map((d) => d.deviceId)).toEqual(["mic-default", "mic-usb"]);
     expect(result.current.cameras).toHaveLength(2);
+    // 트랙 획득만으로는 시작 불가 — 실입력 감지가 남았다
+    expect(result.current.micInputDetected).toBe(false);
+    expect(result.current.canStart).toBe(false);
+  });
+
+  it("마이크 입력이 임계치를 넘어야 canStart 가 된다", async () => {
+    const { result } = renderSetup();
+    await act(async () => {
+      await result.current.start();
+    });
+    expect(result.current.canStart).toBe(false);
+    await speak(result);
+    expect(result.current.canStart).toBe(true);
+  });
+
+  it("장치 전환 후에는 입력 감지가 리셋되어 다시 확인해야 한다", async () => {
+    const { result } = renderSetup();
+    await act(async () => {
+      await result.current.start();
+    });
+    await speak(result);
+    expect(result.current.canStart).toBe(true);
+    await act(async () => {
+      await result.current.selectMic("mic-usb");
+    });
+    expect(result.current.micInputDetected).toBe(false); // 새 장치는 미검증
+    expect(result.current.canStart).toBe(false);
+    await speak(result);
+    expect(result.current.canStart).toBe(true);
   });
 
   it("카메라가 없으면 마이크만으로 점검을 완료한다 (음성 진행)", async () => {
@@ -64,7 +101,8 @@ describe("useDeviceSetup", () => {
     });
     expect(result.current.phase).toBe("ready");
     expect(result.current.videoTrack).toBeNull();
-    expect(result.current.canStart).toBe(true);
+    await speak(result);
+    expect(result.current.canStart).toBe(true); // 카메라 없이도 음성만으로 시작 가능
   });
 
   it("카메라 문제로 결합 요청이 실패해도 마이크 단독 재확인으로 진행한다", async () => {
@@ -75,7 +113,6 @@ describe("useDeviceSetup", () => {
     });
     expect(result.current.phase).toBe("ready");
     expect(result.current.videoTrack).toBeNull();
-    expect(result.current.canStart).toBe(true);
     expect(FakeMedia.createLocalTracks).toHaveBeenNthCalledWith(1, { audio: true, video: true });
     expect(FakeMedia.createLocalTracks).toHaveBeenNthCalledWith(2, { audio: true });
   });
@@ -95,6 +132,7 @@ describe("useDeviceSetup", () => {
       await result.current.start();
     });
     expect(result.current.phase).toBe("ready");
+    await speak(result);
     expect(result.current.canStart).toBe(true);
   });
 
@@ -170,7 +208,7 @@ describe("useDeviceSetup", () => {
     expect(result.current.phase).toBe("ready");
     expect(result.current.micId).toBe("mic-default"); // 이전 장치로 복구
     expect(result.current.notice).toBe("mic-switch-failed");
-    expect(result.current.canStart).toBe(true);
+    expect(result.current.micInputDetected).toBe(false); // 복구된 장치도 재확인 대상
   });
 
   it("마이크 전환·복구가 모두 실패하면 점검을 무효화한다", async () => {
@@ -195,6 +233,7 @@ describe("useDeviceSetup", () => {
     await act(async () => {
       await result.current.start();
     });
+    await speak(result);
     FakeMedia.switchResults.set("video:cam-usb", ["throw"]);
     FakeMedia.switchResults.set("video:cam-default", ["throw"]);
     await act(async () => {
@@ -223,7 +262,7 @@ describe("useDeviceSetup", () => {
     });
     expect(result.current.phase).toBe("ready");
     expect(result.current.notice).toBe("mic-auto-switched");
-    expect(result.current.canStart).toBe(true);
+    expect(result.current.micInputDetected).toBe(false); // 자동 전환된 장치도 재확인 대상
   });
 
   it("남은 마이크가 없으면 점검을 무효화한다", async () => {
@@ -247,6 +286,7 @@ describe("useDeviceSetup", () => {
     await act(async () => {
       await result.current.start();
     });
+    await speak(result);
     act(() => {
       videoTrack().emitEnded();
     });
@@ -344,8 +384,9 @@ describe("useDeviceSetup", () => {
       await result.current.start();
     });
     expect(result.current.phase).toBe("ready");
+    await speak(result);
     expect(result.current.canStart).toBe(true);
-    expect(result.current.mics).toEqual([]); // 목록만 비어 select 는 자리 표시
+    expect(result.current.mics).toEqual([]); // 목록만 비어 드롭다운은 자리 표시
     expect(result.current.cameras).toEqual([]);
   });
 

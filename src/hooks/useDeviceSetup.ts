@@ -32,6 +32,8 @@ export interface DeviceSetupSnapshot {
   videoTrack: LocalVideoTrack | null;
   /** 마이크 입력 레벨 (0..1) — ready 가 아니면 0 */
   micVolume: number;
+  /** 실입력 감지 — 레벨이 임계치를 한 번 넘어야 true (장치 전환 시 리셋, PRD 기능 2) */
+  micInputDetected: boolean;
   cameras: MediaDeviceInfo[];
   mics: MediaDeviceInfo[];
   cameraId: string | null;
@@ -43,7 +45,7 @@ export interface DeviceSetupSnapshot {
 }
 
 export interface DeviceSetupState extends DeviceSetupSnapshot {
-  /** 면접 시작 가능 — 마이크 확보 + 전환·복구 중 아님 (카메라는 무관) */
+  /** 면접 시작 가능 — 마이크 확보 + 실입력 감지 + 전환·복구 중 아님 (카메라는 무관) */
   canStart: boolean;
   /** 장비 점검 시작·재시도 — 사용자 제스처 안에서 호출해야 권한 프롬프트가 뜬다 */
   start: () => Promise<void>;
@@ -73,11 +75,16 @@ const pickDefaultDevice = (
   return usable.find((d) => d.deviceId === "default")?.deviceId ?? usable[0]?.deviceId ?? null;
 };
 
+/** "마이크 정상" 확정 임계치 (calculateVolume 0..1 기준) — 실측 조정 여지.
+    일반 발화는 0.1 이상, 억제된 무음 노이즈는 0.01 미만으로 측정된다 */
+const MIC_INPUT_THRESHOLD = 0.04;
+
 const INITIAL: DeviceSetupSnapshot = {
   phase: "idle",
   error: null,
   videoTrack: null,
   micVolume: 0,
+  micInputDetected: false,
   cameras: [],
   mics: [],
   cameraId: null,
@@ -132,7 +139,13 @@ class DeviceSetupController {
     if (this.opRunning || this.snap.phase === "starting" || this.snap.phase === "ready") return;
     const gen = ++this.generation;
     this.opRunning = true;
-    this.update({ phase: "starting", error: null, notice: null, micVolume: 0 });
+    this.update({
+      phase: "starting",
+      error: null,
+      notice: null,
+      micVolume: 0,
+      micInputDetected: false,
+    });
     try {
       let tracks: LocalTrack[];
       try {
@@ -179,7 +192,8 @@ class DeviceSetupController {
     const gen = this.generation;
     const prevId = this.snap.micId;
     this.opRunning = true;
-    this.update({ micBusy: true, notice: null });
+    // 새 장치는 미검증 상태 — 입력 감지를 리셋해 다시 확인한다 (PRD 기능 2)
+    this.update({ micBusy: true, notice: null, micInputDetected: false });
     try {
       try {
         // exact 제약 — 사용자가 고른 장치를 그대로 요청한다. bare string(ideal)은
@@ -335,7 +349,7 @@ class DeviceSetupController {
       return;
     }
 
-    this.update({ micBusy: true });
+    this.update({ micBusy: true, micInputDetected: false });
     const fallback = pickDefaultDevice(this.snap.mics, this.snap.micId);
     let recovered = false;
     if (fallback) {
@@ -379,7 +393,11 @@ class DeviceSetupController {
     const { calculateVolume, cleanup } = createAudioAnalyser(this.audio);
     const timer = window.setInterval(() => {
       const next = calculateVolume();
-      if (next !== this.snap.micVolume) this.update({ micVolume: next });
+      // 임계치를 한 번 넘으면 실입력 감지 확정 — "마이크 정상" 판정 신호 (PRD 기능 2)
+      const detected = this.snap.micInputDetected || next >= MIC_INPUT_THRESHOLD;
+      if (next !== this.snap.micVolume || detected !== this.snap.micInputDetected) {
+        this.update({ micVolume: next, micInputDetected: detected });
+      }
     }, 120);
     this.stopVolume = () => {
       window.clearInterval(timer);
@@ -435,8 +453,10 @@ export function useDeviceSetup(): DeviceSetupState {
 
   return {
     ...snap,
-    // 마이크 전환·복구 중에는 유효한 마이크가 없는 순간이 있어 시작을 잠근다 (카메라는 무관)
-    canStart: snap.phase === "ready" && snap.micId !== null && !snap.micBusy,
+    // 마이크 전환·복구 중에는 유효한 마이크가 없는 순간이 있어 시작을 잠그고,
+    // 실입력이 감지되어야 활성화한다 (카메라는 무관 — PRD 기능 4)
+    canStart:
+      snap.phase === "ready" && snap.micId !== null && !snap.micBusy && snap.micInputDetected,
     start: controller.start,
     selectMic: controller.selectMic,
     selectCamera: controller.selectCamera,
