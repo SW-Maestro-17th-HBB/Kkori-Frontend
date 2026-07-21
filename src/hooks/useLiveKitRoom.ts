@@ -7,6 +7,7 @@ import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "
 import { ConnectionState, Room, RoomEvent, Track } from "livekit-client";
 import type { RemoteTrack } from "livekit-client";
 import type { LiveKitSession } from "../api/types";
+import { clearDevicePreferences, loadDevicePreferences } from "./devicePreferences";
 
 export { ConnectionState };
 
@@ -27,8 +28,17 @@ export interface LiveKitRoomState {
 }
 
 export function useLiveKitRoom(session: LiveKitSession | undefined): LiveKitRoomState {
-  // Room 인스턴스는 마운트 수명 동안 고정 — 접속/해제 사이클을 반복해도 재사용한다
-  const [room] = useState(() => new Room());
+  // Room 인스턴스는 마운트 수명 동안 고정 — 접속/해제 사이클을 반복해도 재사용한다.
+  // 장비 점검(/setup)에서 고른 마이크가 있으면 캡처 기본값으로 적용한다.
+  const [{ room, appliedMicId }] = useState(() => {
+    const { micId } = loadDevicePreferences();
+    return {
+      room: new Room(micId ? { audioCaptureDefaults: { deviceId: micId } } : undefined),
+      appliedMicId: micId ?? null,
+    };
+  });
+  // setup→live 사이 저장 마이크가 제거된 경우의 기본 장치 대체 — 세션당 1회만
+  const micFallbackRef = useRef(false);
   // 실패를 세션과 묶어 저장 — 세션이 교체되면 파생값이 자동 무효화되므로
   // effect 에서 상태를 리셋할 필요가 없다 (set-state-in-effect 규칙 대응)
   const [connectFailure, setConnectFailure] = useState<{
@@ -95,8 +105,25 @@ export function useLiveKitRoom(session: LiveKitSession | undefined): LiveKitRoom
   );
 
   const toggleMicrophone = useCallback(async () => {
-    await room.localParticipant.setMicrophoneEnabled(!room.localParticipant.isMicrophoneEnabled);
-  }, [room]);
+    const enable = !room.localParticipant.isMicrophoneEnabled;
+    try {
+      await room.localParticipant.setMicrophoneEnabled(
+        enable,
+        // 기본 장치 대체가 발동한 뒤의 켜기는 스테일 캡처 기본값 대신 기본 장치를 쓴다
+        enable && micFallbackRef.current ? { deviceId: "default" } : undefined,
+      );
+    } catch (err) {
+      // setup 에서 고른 마이크가 그 사이 제거된 경우: Room 캡처 기본값은 생성 시
+      // 고정이라 저장값 삭제만으로는 바뀌지 않으므로, 기본 장치를 명시해 1회
+      // 재시도한다. 권한 거부 등 다른 원인은 재시도 없이 그대로 실패시킨다.
+      const name = err instanceof Error ? err.name : "";
+      const deviceGone = name === "NotFoundError" || name === "OverconstrainedError";
+      if (!enable || appliedMicId === null || !deviceGone || micFallbackRef.current) throw err;
+      micFallbackRef.current = true;
+      clearDevicePreferences();
+      await room.localParticipant.setMicrophoneEnabled(true, { deviceId: "default" });
+    }
+  }, [room, appliedMicId]);
 
   const canPlayAudio = useSyncExternalStore(
     useCallback(

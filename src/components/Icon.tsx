@@ -33,6 +33,7 @@ import {
   Upload,
   UserRound,
   VideoOff,
+  X,
   type LucideIcon,
 } from "lucide-react";
 
@@ -72,6 +73,7 @@ const ICONS: Record<string, LucideIcon> = {
   "upload": Upload,
   "user-round": UserRound,
   "video-off": VideoOff,
+  "x": X,
 };
 
 /* ---------- Lucide 아이콘 (wanted-icons 대체 · 24그리드 2px 라인 currentColor) ---------- */
