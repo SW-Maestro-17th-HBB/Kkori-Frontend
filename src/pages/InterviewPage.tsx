@@ -2,10 +2,49 @@
 import { useState } from "react";
 import { Icon } from "../components/Icon";
 import { useNav } from "../hooks/useNav";
+import { useLiveKitSession } from "../api/hooks";
+import { ConnectionState, useLiveKitRoom, useRemoteAudio } from "../hooks/useLiveKitRoom";
+
+const CONNECTION_LABEL: Record<ConnectionState, string> = {
+  [ConnectionState.Disconnected]: "연결 끊김",
+  [ConnectionState.Connecting]: "연결 중…",
+  [ConnectionState.Connected]: "연결됨",
+  [ConnectionState.Reconnecting]: "재연결 중…",
+  [ConnectionState.SignalReconnecting]: "재연결 중…",
+};
+
+const CONNECTION_DOT: Record<ConnectionState, string> = {
+  [ConnectionState.Disconnected]: "var(--red-600)",
+  [ConnectionState.Connecting]: "var(--blue-400)",
+  [ConnectionState.Connected]: "var(--green-600)",
+  [ConnectionState.Reconnecting]: "var(--blue-400)",
+  [ConnectionState.SignalReconnecting]: "var(--blue-400)",
+};
 
 export function InterviewPage() {
   const nav = useNav();
   const [showQ, setShowQ] = useState(true);
+  const session = useLiveKitSession();
+  const {
+    room,
+    connectionState,
+    connectError,
+    micEnabled,
+    toggleMicrophone,
+    canPlayAudio,
+    startAudio,
+  } = useLiveKitRoom(session.data);
+  const remoteAudioRef = useRemoteAudio(room);
+
+  // 접속 정보(env) 미설정·접속 거부는 ConnectionState 밖의 실패 — 칩 문구로만 구분한다
+  const statusLabel = session.isError
+    ? "접속 정보 없음"
+    : connectError
+      ? "접속 실패"
+      : CONNECTION_LABEL[connectionState];
+  const statusDot =
+    session.isError || connectError ? "var(--red-600)" : CONNECTION_DOT[connectionState];
+
   return (
     <div
       style={{
@@ -54,10 +93,41 @@ export function InterviewPage() {
           />{" "}
           04:12 남음
         </span>
-        <button className="dark-btn" onClick={() => nav("reportDetail")}>
-          면접 종료
-        </button>
+        <span
+          role="status"
+          style={{
+            display: "inline-flex",
+            alignItems: "center",
+            gap: 8,
+            height: 32,
+            padding: "0 14px",
+            borderRadius: "var(--radius-full)",
+            background: "rgba(255,255,255,.08)",
+            border: "1px solid rgba(255,255,255,.18)",
+            color: "#e6e8ea",
+            fontFamily: "var(--font-sans)",
+            fontSize: 13,
+            fontWeight: 600,
+          }}
+        >
+          <span style={{ width: 8, height: 8, borderRadius: "50%", background: statusDot }} />{" "}
+          {statusLabel}
+        </span>
+        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+          {/* 자동재생 정책으로 원격 오디오가 막힌 경우 — 사용자 제스처로 재개 */}
+          {connectionState === ConnectionState.Connected && !canPlayAudio && (
+            <button className="dark-btn" onClick={() => void startAudio()}>
+              <Icon name="audio-lines" size={16} /> 소리 켜기
+            </button>
+          )}
+          <button className="dark-btn" onClick={() => nav("reportDetail")}>
+            면접 종료
+          </button>
+        </div>
       </div>
+
+      {/* 원격 오디오 부착 지점 — 화면에는 보이지 않고 <audio> 요소만 담는다 */}
+      <div ref={remoteAudioRef} style={{ display: "none" }} data-testid="remote-audio" />
 
       {/* self-view PiP */}
       <div
@@ -193,8 +263,17 @@ export function InterviewPage() {
           zIndex: 6,
         }}
       >
-        <button className="dark-btn dark-btn--round" aria-label="마이크">
-          <Icon name="mic" size={18} />
+        <button
+          className="dark-btn dark-btn--round"
+          aria-label="마이크"
+          aria-pressed={micEnabled}
+          disabled={connectionState !== ConnectionState.Connected}
+          onClick={() =>
+            // 권한 거부 등으로 실패하면 발행이 안 된 상태 그대로 — 아이콘이 곧 상태 표시
+            void toggleMicrophone().catch(() => {})
+          }
+        >
+          <Icon name={micEnabled ? "mic" : "mic-off"} size={18} />
         </button>
         <button className="dark-btn" onClick={() => setShowQ((s) => !s)}>
           <Icon name={showQ ? "eye-off" : "eye"} size={16} /> {showQ ? "질문 숨기기" : "질문 보기"}

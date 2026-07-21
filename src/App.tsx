@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { lazy, Suspense, useEffect, useRef, useState } from "react";
 import { Navigate, Outlet, Route, Routes, useLocation } from "react-router";
 import { QueryClientProvider, useQueryClient } from "@tanstack/react-query";
 import { makeQueryClient } from "./api/queryClient";
@@ -11,10 +11,19 @@ import { ConsentPage } from "./pages/ConsentPage";
 import { DashboardPage } from "./pages/DashboardPage";
 import { ResumePage } from "./pages/ResumePage";
 import { SetupPage } from "./pages/SetupPage";
-import { InterviewPage } from "./pages/InterviewPage";
 import { ReportListPage } from "./pages/ReportListPage";
 import { ReportDetailPage } from "./pages/ReportDetailPage";
 import { MyPage } from "./pages/MyPage";
+
+/* /live 만 지연 로드 — livekit-client(수백 kB)가 면접 화면 밖 번들에 실리지 않게 분리 */
+const InterviewPage = lazy(() =>
+  import("./pages/InterviewPage").then((m) => ({ default: m.InterviewPage })),
+);
+
+/** /live 청크 로딩 화면 — SDK 청크를 받는 동안 면접 화면과 같은 다크 배경 유지 */
+function InterviewLoadingScreen() {
+  return <div style={{ minHeight: "100vh", background: "var(--neutral-970)" }} />;
+}
 
 function ScrollToTop() {
   const { pathname } = useLocation();
@@ -131,7 +140,14 @@ export default function App() {
           <Route path={ROUTES.dash} element={<DashboardPage />} />
           <Route path={ROUTES.resume} element={<ResumePage />} />
           <Route path={ROUTES.setup} element={<SetupPage />} />
-          <Route path={ROUTES.interview} element={<InterviewPage />} />
+          <Route
+            path={ROUTES.interview}
+            element={
+              <Suspense fallback={<InterviewLoadingScreen />}>
+                <InterviewPage />
+              </Suspense>
+            }
+          />
           <Route path={ROUTES.reportList} element={<ReportListPage />} />
           <Route path={REPORT_DETAIL_PATTERN} element={<ReportDetailPage />} />
           <Route path={ROUTES.mypage} element={<MyPage />} />
