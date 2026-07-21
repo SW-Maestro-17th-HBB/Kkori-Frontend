@@ -24,6 +24,7 @@ const CONNECTION_DOT: Record<ConnectionState, string> = {
 export function InterviewPage() {
   const nav = useNav();
   const [showQ, setShowQ] = useState(true);
+  const [micFailed, setMicFailed] = useState(false);
   const session = useLiveKitSession();
   const {
     room,
@@ -257,30 +258,53 @@ export function InterviewPage() {
           right: 0,
           padding: "18px 20px 26px",
           display: "flex",
+          flexDirection: "column",
           alignItems: "center",
-          justifyContent: "center",
-          gap: 12,
+          gap: 10,
           zIndex: 6,
         }}
       >
-        <button
-          className="dark-btn dark-btn--round"
-          aria-label="마이크"
-          aria-pressed={micEnabled}
-          disabled={connectionState !== ConnectionState.Connected}
-          onClick={() =>
-            // 권한 거부 등으로 실패하면 발행이 안 된 상태 그대로 — 아이콘이 곧 상태 표시
-            void toggleMicrophone().catch(() => {})
-          }
-        >
-          <Icon name={micEnabled ? "mic" : "mic-off"} size={18} />
-        </button>
-        <button className="dark-btn" onClick={() => setShowQ((s) => !s)}>
-          <Icon name={showQ ? "eye-off" : "eye"} size={16} /> {showQ ? "질문 숨기기" : "질문 보기"}
-        </button>
-        <button className="dark-btn dark-btn--round" aria-label="카메라 끄기">
-          <Icon name="video-off" size={18} />
-        </button>
+        {/* 권한 거부 등 발행 실패의 최소 피드백 — 차단 오버레이는 후속 과제(PR #25 논의) */}
+        {micFailed && (
+          <span
+            role="alert"
+            style={{
+              color: "var(--fg-inverse)",
+              fontFamily: "var(--font-sans)",
+              fontSize: 12,
+              display: "inline-flex",
+              alignItems: "center",
+              gap: 6,
+            }}
+          >
+            <Icon name="mic-off" size={13} /> 마이크를 켤 수 없어요 — 브라우저 마이크 권한을 확인해
+            주세요
+          </span>
+        )}
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 12 }}>
+          <button
+            className="dark-btn dark-btn--round"
+            aria-label="마이크"
+            aria-pressed={micEnabled}
+            disabled={connectionState !== ConnectionState.Connected}
+            onClick={() =>
+              // 실패 시 발행이 안 된 상태 그대로(mic-off 아이콘 유지) + 안내 문구 노출
+              void toggleMicrophone().then(
+                () => setMicFailed(false),
+                () => setMicFailed(true),
+              )
+            }
+          >
+            <Icon name={micEnabled ? "mic" : "mic-off"} size={18} />
+          </button>
+          <button className="dark-btn" onClick={() => setShowQ((s) => !s)}>
+            <Icon name={showQ ? "eye-off" : "eye"} size={16} />{" "}
+            {showQ ? "질문 숨기기" : "질문 보기"}
+          </button>
+          <button className="dark-btn dark-btn--round" aria-label="카메라 끄기">
+            <Icon name="video-off" size={18} />
+          </button>
+        </div>
       </div>
     </div>
   );

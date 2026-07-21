@@ -16,10 +16,13 @@ export class FakeRoom {
   static instances: FakeRoom[] = [];
   /** "fail" 이면 connect 가 거부된다 — beforeEach 에서 "ok" 로 리셋 */
   static connectBehavior: "ok" | "fail" = "ok";
+  /** "fail" 이면 setMicrophoneEnabled 가 거부된다 (권한 거부 흉내) */
+  static micBehavior: "ok" | "fail" = "ok";
 
   static reset() {
     FakeRoom.instances = [];
     FakeRoom.connectBehavior = "ok";
+    FakeRoom.micBehavior = "ok";
   }
 
   private listeners = new Map<string, Set<Listener>>();
@@ -38,6 +41,7 @@ export class FakeRoom {
     this.localParticipant = {
       isMicrophoneEnabled: false,
       setMicrophoneEnabled: vi.fn(async (enabled: boolean) => {
+        if (FakeRoom.micBehavior === "fail") throw new Error("permission denied");
         this.localParticipant.isMicrophoneEnabled = enabled;
         this.emit(enabled ? "localTrackPublished" : "localTrackUnpublished");
       }),

@@ -29,7 +29,12 @@ export interface LiveKitRoomState {
 export function useLiveKitRoom(session: LiveKitSession | undefined): LiveKitRoomState {
   // Room 인스턴스는 마운트 수명 동안 고정 — 접속/해제 사이클을 반복해도 재사용한다
   const [room] = useState(() => new Room());
-  const [connectError, setConnectError] = useState<string | null>(null);
+  // 실패를 세션과 묶어 저장 — 세션이 교체되면 파생값이 자동 무효화되므로
+  // effect 에서 상태를 리셋할 필요가 없다 (set-state-in-effect 규칙 대응)
+  const [connectFailure, setConnectFailure] = useState<{
+    session: LiveKitSession;
+    message: string;
+  } | null>(null);
 
   // 접속·해제 — 세션이 준비되면 접속, 언마운트(또는 세션 교체) 시 해제.
   // StrictMode 이중 마운트: cleanup 의 disconnect 가 진행 중인 connect 를 중단시키고
@@ -37,14 +42,24 @@ export function useLiveKitRoom(session: LiveKitSession | undefined): LiveKitRoom
   useEffect(() => {
     if (!session) return;
     let active = true;
-    room.connect(session.url, session.token).catch((err: unknown) => {
-      if (active) setConnectError(err instanceof Error ? err.message : String(err));
-    });
+    room.connect(session.url, session.token).then(
+      // 이중 마운트에서 1차 시도만 실패했을 때 성공이 잔존 실패를 지우도록
+      () => {
+        if (active) setConnectFailure(null);
+      },
+      (err: unknown) => {
+        if (active)
+          setConnectFailure({ session, message: err instanceof Error ? err.message : String(err) });
+      },
+    );
     return () => {
       active = false;
       void room.disconnect();
     };
   }, [room, session]);
+
+  const connectError =
+    connectFailure !== null && connectFailure.session === session ? connectFailure.message : null;
 
   const connectionState = useSyncExternalStore(
     useCallback(

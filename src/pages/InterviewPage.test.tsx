@@ -57,6 +57,25 @@ describe("InterviewPage — LiveKit 룸 접속", () => {
     });
   });
 
+  it("마이크 발행이 실패하면 안내 문구를 보여주고, 이후 성공하면 지운다", async () => {
+    stubSessionEnv();
+    FakeRoom.micBehavior = "fail";
+    renderWithProviders(<InterviewPage />, { route: "/live" });
+    await screen.findByText("연결됨");
+
+    const mic = screen.getByRole("button", { name: "마이크" });
+    await userEvent.click(mic);
+    expect(await screen.findByRole("alert")).toHaveTextContent("마이크를 켤 수 없어요");
+    expect(mic).toHaveAttribute("aria-pressed", "false"); // 발행 안 된 상태 유지
+
+    FakeRoom.micBehavior = "ok";
+    await userEvent.click(mic);
+    await waitFor(() => {
+      expect(screen.queryByRole("alert")).toBeNull();
+    });
+    expect(mic).toHaveAttribute("aria-pressed", "true");
+  });
+
   it("구독된 원격 오디오 트랙이 숨김 컨테이너에 부착된다", async () => {
     stubSessionEnv();
     renderWithProviders(<InterviewPage />, { route: "/live" });

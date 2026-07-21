@@ -56,6 +56,26 @@ describe("useLiveKitRoom", () => {
     expect(result.current.connectionState).toBe(ConnectionState.Disconnected);
   });
 
+  it("접속 실패 후 새 세션으로 성공하면 connectError 가 사라진다", async () => {
+    FakeRoom.connectBehavior = "fail";
+    const { result, rerender } = renderHook(
+      ({ session }: { session: typeof SESSION }) => useLiveKitRoom(session),
+      { wrapper: StrictMode, initialProps: { session: SESSION } },
+    );
+    await waitFor(() => {
+      expect(result.current.connectError).toBe("connect refused");
+    });
+
+    FakeRoom.connectBehavior = "ok";
+    rerender({ session: { ...SESSION, token: "jwt-token-2" } });
+    // 세션이 교체되는 즉시 이전 세션의 실패는 무효 — "접속 실패" 잔존 표시 방지
+    expect(result.current.connectError).toBeNull();
+    await waitFor(() => {
+      expect(result.current.connectionState).toBe(ConnectionState.Connected);
+    });
+    expect(result.current.connectError).toBeNull();
+  });
+
   it("toggleMicrophone 이 마이크 발행 상태를 뒤집는다", async () => {
     const { result } = renderHook(() => useLiveKitRoom(SESSION), { wrapper: StrictMode });
     await waitFor(() => {
