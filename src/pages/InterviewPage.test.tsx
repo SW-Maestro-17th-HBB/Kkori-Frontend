@@ -32,6 +32,10 @@ describe("InterviewPage — LiveKit 룸 접속", () => {
   });
 
   it("접속 정보가 없으면 '접속 정보 없음' 상태를 보여준다", async () => {
+    // 명시적 빈 값 stub — Vitest 도 .env.local 을 로드하므로 unstub 만으로는
+    // 개발 머신의 실제 LiveKit 설정이 새어 들어와 접속에 성공해 버린다
+    vi.stubEnv("VITE_LIVEKIT_URL", "");
+    vi.stubEnv("VITE_LIVEKIT_TOKEN", "");
     renderWithProviders(<InterviewPage />, { route: "/live" });
     expect(await screen.findByText("접속 정보 없음")).toBeInTheDocument();
     expect(connectedRoom()).toBeUndefined();
