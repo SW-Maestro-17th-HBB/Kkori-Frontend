@@ -37,14 +37,20 @@ export function InterviewPage() {
   } = useLiveKitRoom(session.data);
   const remoteAudioRef = useRemoteAudio(room);
 
-  // 접속 정보(env) 미설정·접속 거부는 ConnectionState 밖의 실패 — 칩 문구로만 구분한다
-  const statusLabel = session.isError
-    ? "접속 정보 없음"
-    : connectError
-      ? "접속 실패"
-      : CONNECTION_LABEL[connectionState];
-  const statusDot =
-    session.isError || connectError ? "var(--red-600)" : CONNECTION_DOT[connectionState];
+  // 우선순위: 세션 조회 중 → 조회 실패 → 접속 거부 → SDK 연결 상태
+  // (조회 중을 구분하지 않으면 초기 렌더가 '연결 끊김'으로 보인다)
+  const statusLabel = session.isPending
+    ? "접속 준비 중…"
+    : session.isError
+      ? "접속 정보 없음"
+      : connectError
+        ? "접속 실패"
+        : CONNECTION_LABEL[connectionState];
+  const statusDot = session.isPending
+    ? "var(--blue-400)"
+    : session.isError || connectError
+      ? "var(--red-600)"
+      : CONNECTION_DOT[connectionState];
 
   return (
     <div
@@ -117,7 +123,13 @@ export function InterviewPage() {
         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
           {/* 자동재생 정책으로 원격 오디오가 막힌 경우 — 사용자 제스처로 재개 */}
           {connectionState === ConnectionState.Connected && !canPlayAudio && (
-            <button className="dark-btn" onClick={() => void startAudio()}>
+            <button
+              className="dark-btn"
+              onClick={() =>
+                // 실패해도 canPlayAudio 가 false 로 남아 버튼이 유지된다 — 재클릭이 곧 재시도
+                void startAudio().catch(() => {})
+              }
+            >
               <Icon name="audio-lines" size={16} /> 소리 켜기
             </button>
           )}

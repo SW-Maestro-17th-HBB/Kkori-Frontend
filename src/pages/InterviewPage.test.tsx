@@ -31,6 +31,34 @@ describe("InterviewPage — LiveKit 룸 접속", () => {
     expect(connectedRoom()!.connect).toHaveBeenCalledWith("wss://test.example", "jwt-token");
   });
 
+  it("세션 조회 중에는 '접속 준비 중…' 상태를 보여준다", async () => {
+    stubSessionEnv();
+    renderWithProviders(<InterviewPage />, { route: "/live" });
+    // 조회가 끝나기 전의 초기 렌더 — '연결 끊김'으로 새어 나가면 안 된다
+    expect(screen.getByText("접속 준비 중…")).toBeInTheDocument();
+    expect(await screen.findByText("연결됨")).toBeInTheDocument();
+  });
+
+  it("접속이 거부되면 '접속 실패' 상태를 보여준다", async () => {
+    stubSessionEnv();
+    FakeRoom.connectBehavior = "fail";
+    renderWithProviders(<InterviewPage />, { route: "/live" });
+    expect(await screen.findByText("접속 실패")).toBeInTheDocument();
+  });
+
+  it("자동재생이 막히면 '소리 켜기' 버튼이 나타나고 클릭 시 재개를 요청한다", async () => {
+    stubSessionEnv();
+    renderWithProviders(<InterviewPage />, { route: "/live" });
+    await screen.findByText("연결됨");
+
+    act(() => {
+      connectedRoom()!.setCanPlaybackAudio(false);
+    });
+    const resume = await screen.findByRole("button", { name: /소리 켜기/ });
+    await userEvent.click(resume);
+    expect(connectedRoom()!.startAudio).toHaveBeenCalled();
+  });
+
   it("접속 정보가 없으면 '접속 정보 없음' 상태를 보여준다", async () => {
     // 명시적 빈 값 stub — Vitest 도 .env.local 을 로드하므로 unstub 만으로는
     // 개발 머신의 실제 LiveKit 설정이 새어 들어와 접속에 성공해 버린다

@@ -76,6 +76,23 @@ describe("useLiveKitRoom", () => {
     expect(result.current.connectError).toBeNull();
   });
 
+  it("자동재생 차단 상태를 노출하고 startAudio 로 재개를 요청한다", async () => {
+    const { result } = renderHook(() => useLiveKitRoom(SESSION), { wrapper: StrictMode });
+    await waitFor(() => {
+      expect(result.current.connectionState).toBe(ConnectionState.Connected);
+    });
+    expect(result.current.canPlayAudio).toBe(true);
+
+    const room = connectedRoom()!;
+    act(() => {
+      room.setCanPlaybackAudio(false);
+    });
+    expect(result.current.canPlayAudio).toBe(false);
+
+    await act(() => result.current.startAudio());
+    expect(room.startAudio).toHaveBeenCalled();
+  });
+
   it("toggleMicrophone 이 마이크 발행 상태를 뒤집는다", async () => {
     const { result } = renderHook(() => useLiveKitRoom(SESSION), { wrapper: StrictMode });
     await waitFor(() => {
