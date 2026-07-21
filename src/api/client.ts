@@ -7,6 +7,7 @@ import { ApiError, FE_ERROR_CODES, request } from "./request";
 import type { components } from "./schema";
 import { getAuthSnapshot } from "./tokenStore";
 import type {
+  LiveKitSession,
   NotificationItem,
   Profile,
   ReportDetail,
@@ -71,3 +72,18 @@ export const fetchReportStats = (): Promise<ReportStats> => delay(fixtures.repor
 
 export const fetchReportDetail = (id: number | string): Promise<ReportDetail> =>
   delay({ ...fixtures.reportDetail, id: Number(id) || 1 });
+
+/* ---------- LiveKit (목 — env 임시 토큰) ---------- */
+
+/** LiveKit 접속 세션 — 백엔드 토큰 발급 API(스키마 미정)가 생기면 request() 호출로 교체.
+    그 전까지는 .env.local 의 개발용 URL·토큰을 반환한다 */
+export const fetchLiveKitSession = (): Promise<LiveKitSession> => {
+  const url = import.meta.env.VITE_LIVEKIT_URL;
+  const token = import.meta.env.VITE_LIVEKIT_TOKEN;
+  if (!url || !token) {
+    return Promise.reject(
+      new Error("LiveKit 접속 정보가 없습니다 — .env.local 에 VITE_LIVEKIT_URL/TOKEN 설정 필요"),
+    );
+  }
+  return delay({ url, token });
+};
