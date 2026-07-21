@@ -31,11 +31,25 @@ export class FakeLocalTrack {
   internalTrackAlive = true;
   private listeners = new Map<string, Set<Listener>>();
   private attached: HTMLMediaElement[] = [];
+  /** 내부 MediaStreamTrack 흉내 — 전환 성공으로 교체될 때만 새 객체가 된다.
+      화면이 내부 트랙 **동일성**으로 프레임 재확인을 판정하므로 식별자가 안정적이어야 한다 */
+  private internalTrack = this.createInternalTrack();
 
   constructor(
     public kind: "audio" | "video",
     public deviceId: string,
   ) {}
+
+  private createInternalTrack() {
+    const internal = {
+      getSettings: () => ({ deviceId: this.deviceId }),
+    } as { readyState: MediaStreamTrackState; getSettings: () => { deviceId: string } };
+    // 화살표 getter 로 클래스 this 를 캡처 — readyState 는 생존 여부를 실시간 반영
+    Object.defineProperty(internal, "readyState", {
+      get: () => (this.internalTrackAlive ? "live" : "ended") as MediaStreamTrackState,
+    });
+    return internal;
+  }
 
   on(event: string, cb: Listener) {
     if (!this.listeners.has(event)) this.listeners.set(event, new Set());
@@ -84,18 +98,17 @@ export class FakeLocalTrack {
     this.internalTrackAlive = false;
     const result = FakeMedia.nextSwitchResult(this.kind, requested);
     if (result === "throw") throw domError("NotFoundError", "Requested device not found");
-    // 새 내부 트랙 획득 — "false" 는 트랙은 살아 있으나 요청 장치가 적용되지 않은 경우
+    // 새 내부 트랙 획득 — 교체됐으므로 식별자도 새로 만든다.
+    // "false" 는 트랙은 살아 있으나 요청 장치가 적용되지 않은 경우
     this.internalTrackAlive = true;
+    this.internalTrack = this.createInternalTrack();
     if (result === "false") return false;
     this.deviceId = requested;
     return true;
   });
 
   get mediaStreamTrack() {
-    return {
-      readyState: (this.internalTrackAlive ? "live" : "ended") as MediaStreamTrackState,
-      getSettings: () => ({ deviceId: this.deviceId }),
-    };
+    return this.internalTrack;
   }
 }
 
@@ -150,22 +163,33 @@ export class FakeMedia {
     return FakeMedia.switchQueue.shift() ?? "ok";
   }
 
-  static createLocalTracks = vi.fn(async (options?: { audio?: boolean; video?: boolean }) => {
-    const behavior = FakeMedia.acquireResults.shift() ?? FakeMedia.trackBehavior;
-    if (behavior === "denied") throw domError("NotAllowedError", "Permission denied");
-    if (behavior === "in-use") throw domError("NotReadableError", "Device in use");
-    if (behavior === "no-mic" && options?.audio)
-      throw domError("NotFoundError", "Requested device not found");
-    if (behavior === "no-camera" && options?.video)
-      throw domError("NotFoundError", "Requested device not found");
-    const tracks: FakeLocalTrack[] = [];
-    if (options?.audio)
-      tracks.push(new FakeLocalTrack("audio", FakeMedia.devices.audioinput?.[0]?.deviceId ?? ""));
-    if (options?.video)
-      tracks.push(new FakeLocalTrack("video", FakeMedia.devices.videoinput?.[0]?.deviceId ?? ""));
-    FakeMedia.tracks.push(...tracks);
-    return tracks;
-  });
+  static createLocalTracks = vi.fn(
+    async (options?: { audio?: boolean; video?: boolean | { deviceId?: { exact?: string } } }) => {
+      const behavior = FakeMedia.acquireResults.shift() ?? FakeMedia.trackBehavior;
+      if (behavior === "denied") throw domError("NotAllowedError", "Permission denied");
+      if (behavior === "in-use") throw domError("NotReadableError", "Device in use");
+      if (behavior === "no-mic" && options?.audio)
+        throw domError("NotFoundError", "Requested device not found");
+      if (behavior === "no-camera" && options?.video)
+        throw domError("NotFoundError", "Requested device not found");
+      const tracks: FakeLocalTrack[] = [];
+      if (options?.audio)
+        tracks.push(new FakeLocalTrack("audio", FakeMedia.devices.audioinput?.[0]?.deviceId ?? ""));
+      if (options?.video) {
+        // 재획득 요청은 exact deviceId 를 지정한다 — 요청 장치를 그대로 반영
+        const requested =
+          typeof options.video === "object" ? options.video.deviceId?.exact : undefined;
+        tracks.push(
+          new FakeLocalTrack(
+            "video",
+            requested ?? FakeMedia.devices.videoinput?.[0]?.deviceId ?? "",
+          ),
+        );
+      }
+      FakeMedia.tracks.push(...tracks);
+      return tracks;
+    },
+  );
 
   // 인자(트랙)는 무시하지만 vi.fn 이 호출 기록은 남긴다
   static createAudioAnalyser = vi.fn(() => ({

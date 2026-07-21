@@ -179,6 +179,9 @@ class DeviceSetupController {
       await this.refreshDevices();
     } catch (err) {
       if (gen !== this.generation) return;
+      // 부분 획득 자원 정리 — 트랙 확보 후 분석기 생성 등에서 실패하면 필드에 남은
+      // 트랙이 재시도 시 새 트랙으로 덮여 영구 누수된다
+      this.teardown();
       this.update({ phase: "error", error: mapDeviceError(err), micVolume: 0 });
     } finally {
       this.opRunning = false;
@@ -233,13 +236,40 @@ class DeviceSetupController {
   };
 
   selectCamera = async (deviceId: string) => {
-    if (this.opRunning || this.snap.phase !== "ready" || !this.video) return;
-    if (deviceId === this.snap.cameraId) return;
+    if (this.opRunning || this.snap.phase !== "ready") return;
+    if (this.video && deviceId === this.snap.cameraId) return;
     const gen = this.generation;
     const prevId = this.snap.cameraId;
     this.opRunning = true;
     this.update({ cameraBusy: true, notice: null });
     try {
+      // 카메라 사용 불가 상태 — 전환이 아니라 새 트랙 재획득으로 미리보기를 복구한다
+      // (점검 중 연결한 카메라를 선택할 수 있어야 함 — PRD 기능 3 카메라 재획득)
+      if (!this.video) {
+        try {
+          const tracks = await createLocalTracks({ video: { deviceId: { exact: deviceId } } });
+          const video =
+            (tracks.find((t) => t.kind === Track.Kind.Video) as LocalVideoTrack | undefined) ??
+            null;
+          if (gen !== this.generation || !video) {
+            tracks.forEach((t) => t.stop());
+            if (gen !== this.generation) return;
+            throw new Error("no video track");
+          }
+          this.video = video;
+          video.on(TrackEvent.Ended, this.handleTrackEnded);
+          this.update({
+            videoTrack: video,
+            cameraId: trackDeviceId(video),
+            cameraBusy: false,
+          });
+        } catch {
+          if (gen !== this.generation) return;
+          // 획득 실패 — 카메라는 선택 사항이므로 경고 상태를 유지한다
+          this.update({ cameraBusy: false, notice: "camera-switch-failed" });
+        }
+        return;
+      }
       try {
         const ok = await this.video.setDeviceId({ exact: deviceId });
         if (gen !== this.generation) return;

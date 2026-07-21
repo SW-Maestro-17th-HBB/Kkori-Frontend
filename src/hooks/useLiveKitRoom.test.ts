@@ -124,10 +124,13 @@ describe("useLiveKitRoom — 장치 핸드오프", () => {
     return rendered;
   };
 
-  it("저장된 마이크가 있으면 Room 캡처 기본값으로 전달한다", async () => {
+  it("저장된 마이크가 있으면 Room 캡처 기본값에 exact 제약으로 전달한다", async () => {
     sessionStorage.setItem(STORAGE_KEY, JSON.stringify({ micId: "mic-usb" }));
     await renderConnected();
-    expect(connectedRoom()!.options).toEqual({ audioCaptureDefaults: { deviceId: "mic-usb" } });
+    // bare string(ideal)이면 장치가 없어도 조용히 기본 장치로 대체돼 fallback 이 죽는다
+    expect(connectedRoom()!.options).toEqual({
+      audioCaptureDefaults: { deviceId: { exact: "mic-usb" } },
+    });
   });
 
   it("저장값이 없으면 옵션 없이 Room 을 만든다", async () => {

@@ -150,9 +150,36 @@ describe("SetupPage — 장비 점검", () => {
     await startCheck();
     expect(screen.getByText("카메라 사용 불가")).toBeInTheDocument();
     expect(screen.getByText("카메라 없이 음성으로 진행해요")).toBeInTheDocument();
-    expect(screen.getByLabelText("카메라 선택")).toBeDisabled();
+    // 재획득 진입점이므로 드롭다운은 활성 유지 (PRD 기능 3 카메라 재획득)
+    expect(screen.getByLabelText("카메라 선택")).toBeEnabled();
     await speakIntoMic();
     expect(screen.getByRole("button", { name: "면접 시작" })).toBeEnabled();
+  });
+
+  it("카메라 사용 불가 상태에서 장치를 선택하면 미리보기를 복구한다", async () => {
+    FakeMedia.acquireResults = ["in-use", "ok"];
+    renderSetupPage();
+    await startCheck();
+    expect(screen.queryByLabelText("내 카메라 미리보기")).toBeNull();
+
+    await pickDevice("카메라 선택", "외장 웹캠");
+    expect(await screen.findByLabelText("내 카메라 미리보기")).toBeInTheDocument();
+    expect(screen.getByText("카메라 확인 중")).toBeInTheDocument(); // 새 트랙도 프레임 확인 대상
+    arriveVideoFrame();
+    expect(await screen.findByText("카메라 정상")).toBeInTheDocument();
+  });
+
+  it("카메라 전환 후에는 프레임 도착을 다시 확인한다", async () => {
+    renderSetupPage();
+    await startCheck();
+    arriveVideoFrame();
+    expect(await screen.findByText("카메라 정상")).toBeInTheDocument();
+
+    // 전환 — 트랙 객체는 유지되고 내부 트랙만 교체되므로 "확인 중"으로 되돌아가야 한다
+    await pickDevice("카메라 선택", "외장 웹캠");
+    expect(await screen.findByText("카메라 확인 중")).toBeInTheDocument();
+    arriveVideoFrame();
+    expect(await screen.findByText("카메라 정상")).toBeInTheDocument();
   });
 
   it("마이크 드롭다운으로 장치를 전환한다", async () => {

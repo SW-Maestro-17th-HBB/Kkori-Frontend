@@ -228,6 +228,59 @@ describe("useDeviceSetup", () => {
     expect(audioTrack().stopped).toBe(true);
   });
 
+  it("카메라가 없는 상태에서 카메라를 선택하면 트랙을 재획득한다", async () => {
+    FakeMedia.acquireResults = ["in-use", "ok"]; // 카메라 없이 점검 완료
+    const { result } = renderSetup();
+    await act(async () => {
+      await result.current.start();
+    });
+    expect(result.current.videoTrack).toBeNull();
+
+    await act(async () => {
+      await result.current.selectCamera("cam-usb");
+    });
+    expect(result.current.videoTrack).not.toBeNull();
+    expect(result.current.cameraId).toBe("cam-usb");
+    expect(FakeMedia.createLocalTracks).toHaveBeenLastCalledWith({
+      video: { deviceId: { exact: "cam-usb" } },
+    });
+  });
+
+  it("카메라 재획득이 실패하면 경고 상태를 유지한다", async () => {
+    FakeMedia.acquireResults = ["in-use", "ok"];
+    const { result } = renderSetup();
+    await act(async () => {
+      await result.current.start();
+    });
+    FakeMedia.trackBehavior = "no-camera"; // 재획득도 실패
+    await act(async () => {
+      await result.current.selectCamera("cam-usb");
+    });
+    expect(result.current.phase).toBe("ready");
+    expect(result.current.videoTrack).toBeNull();
+    expect(result.current.notice).toBe("camera-switch-failed");
+  });
+
+  it("분석기 생성이 실패하면 획득한 트랙을 정리하고 오류 상태가 된다", async () => {
+    FakeMedia.createAudioAnalyser.mockImplementationOnce(() => {
+      throw new Error("audio context unavailable");
+    });
+    const { result } = renderSetup();
+    await act(async () => {
+      await result.current.start();
+    });
+    expect(result.current.phase).toBe("error");
+    FakeMedia.tracks.forEach((track) => {
+      expect(track.stopped).toBe(true); // 부분 획득 자원 누수 없음
+    });
+
+    // 재시도는 새 트랙으로 정상 진행
+    await act(async () => {
+      await result.current.start();
+    });
+    expect(result.current.phase).toBe("ready");
+  });
+
   it("카메라 전환·복구가 모두 실패해도 음성 진행은 유지된다", async () => {
     const { result } = renderSetup();
     await act(async () => {

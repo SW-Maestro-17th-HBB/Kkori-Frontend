@@ -33,7 +33,9 @@ export function useLiveKitRoom(session: LiveKitSession | undefined): LiveKitRoom
   const [{ room, appliedMicId }] = useState(() => {
     const { micId } = loadDevicePreferences();
     return {
-      room: new Room(micId ? { audioCaptureDefaults: { deviceId: micId } } : undefined),
+      // exact 제약 필수 — bare string(ideal)은 장치가 제거돼도 브라우저가 조용히
+      // 기본 장치로 대체해 아래 fallback(저장값 정리·명시 재시도)이 실행되지 않는다
+      room: new Room(micId ? { audioCaptureDefaults: { deviceId: { exact: micId } } } : undefined),
       appliedMicId: micId ?? null,
     };
   });

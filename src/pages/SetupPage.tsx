@@ -377,8 +377,10 @@ function SelfView({
   onLive,
 }: {
   setup: DeviceSetupState;
-  /** 비디오에 실제 프레임이 도착하면 해당 트랙을 보고한다 — "카메라 정상" 판정 근거 */
-  onLive: (track: NonNullable<DeviceSetupState["videoTrack"]>) => void;
+  /** 실제 프레임이 도착하면 그 시점의 **내부 MediaStreamTrack** 을 보고한다 —
+      장치 전환은 LocalTrack 객체를 유지한 채 내부 트랙만 바꾸므로, 트랙 객체가
+      아니라 내부 트랙 동일성으로 "카메라 정상"을 판정해야 전환 시 리셋된다 */
+  onLive: (media: MediaStreamTrack) => void;
 }) {
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const { videoTrack, phase } = setup;
@@ -388,7 +390,7 @@ function SelfView({
     const el = videoRef.current;
     if (!videoTrack || !el) return;
     videoTrack.attach(el);
-    const handleLive = () => onLive(videoTrack);
+    const handleLive = () => onLive(videoTrack.mediaStreamTrack);
     el.addEventListener("playing", handleLive);
     el.addEventListener("loadeddata", handleLive);
     if (el.readyState >= 2) handleLive(); // 부착 시점에 이미 프레임이 있는 경우
@@ -477,15 +479,16 @@ function SelfView({
 
 function DeviceCheck({ setup }: { setup: DeviceSetupState }) {
   const { phase, error, notice } = setup;
-  // 프레임 도착을 보고한 트랙 — 현재 트랙과 일치할 때만 "카메라 정상" (트랙 교체 시 자동 리셋)
-  const [liveTrack, setLiveTrack] = useState<DeviceSetupState["videoTrack"]>(null);
-  const cameraLive = liveTrack !== null && liveTrack === setup.videoTrack;
+  // 프레임 도착을 보고한 내부 트랙 — 현재 내부 트랙과 일치할 때만 "카메라 정상"
+  // (장치 전환·재획득으로 내부 트랙이 바뀌면 자동으로 "확인 중"으로 리셋)
+  const [liveMedia, setLiveMedia] = useState<MediaStreamTrack | null>(null);
+  const cameraLive = liveMedia !== null && liveMedia === setup.videoTrack?.mediaStreamTrack;
   const waitingForVoice = phase === "ready" && !setup.micBusy && !setup.micInputDetected;
 
   return (
     <Fragment>
       <div style={{ display: "flex", gap: 14, alignItems: "stretch" }}>
-        <SelfView setup={setup} onLive={setLiveTrack} />
+        <SelfView setup={setup} onLive={setLiveMedia} />
         <div
           style={{
             flex: 1,
@@ -527,7 +530,8 @@ function DeviceCheck({ setup }: { setup: DeviceSetupState }) {
             placeholder="기본 카메라"
             devices={setup.cameras}
             value={setup.cameraId}
-            disabled={setup.cameraBusy || (phase === "ready" && setup.videoTrack === null)}
+            // 카메라 사용 불가여도 활성 유지 — 새 장치 선택 시 트랙을 재획득한다 (PRD 기능 3)
+            disabled={setup.cameraBusy}
             phase={phase}
             onTrigger={() => void setup.start()}
             onSelect={(deviceId) => void setup.selectCamera(deviceId)}
