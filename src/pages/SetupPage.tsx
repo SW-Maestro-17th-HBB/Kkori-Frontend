@@ -1,10 +1,17 @@
 /* ============================ 면접 설정 (/setup) ============================ */
-import { Fragment, useState, type ReactNode } from "react";
+import { Fragment, useEffect, useRef, useState, type ReactNode } from "react";
 import { useResumes } from "../api/hooks";
 import { Button, Card } from "../components/ds";
 import { Icon } from "../components/Icon";
 import { Display, DocThumb } from "../components/primitives";
 import { TopNav } from "../components/TopNav";
+import { saveDevicePreferences } from "../hooks/devicePreferences";
+import {
+  useDeviceSetup,
+  type DeviceCheckError,
+  type DeviceNotice,
+  type DeviceSetupState,
+} from "../hooks/useDeviceSetup";
 import { useNav } from "../hooks/useNav";
 
 function StepCard({
@@ -85,8 +92,527 @@ function SelectRow({ value, small }: { value: string; small?: boolean }) {
   );
 }
 
+/* ---------- ④ 카메라·마이크 점검 (PRD: docs/requirements/session/device-setup.md) ---------- */
+
+const DEVICE_ERROR_GUIDE: Record<DeviceCheckError, string> = {
+  "permission-denied":
+    "카메라·마이크 권한이 차단되어 있어요. 주소창 옆 권한 설정에서 허용한 뒤 다시 시도해 주세요.",
+  "mic-not-found": "사용할 수 있는 마이크를 찾지 못했어요. 마이크를 연결한 뒤 다시 시도해 주세요.",
+  "device-in-use":
+    "다른 앱에서 장치를 사용 중이거나 장치에 접근할 수 없어요. 확인 후 다시 시도해 주세요.",
+  "unsupported":
+    "이 환경에서는 장치에 접근할 수 없어요. 주소가 https인지, 지원 브라우저인지 확인해 주세요.",
+  "mic-lost": "마이크 연결이 끊겼어요. 마이크를 확인하고 다시 점검해 주세요.",
+  "unknown": "장비를 연결하지 못했어요. 잠시 후 다시 시도해 주세요.",
+};
+
+const DEVICE_NOTICE_TEXT: Record<DeviceNotice, string> = {
+  "mic-switch-failed": "마이크를 전환하지 못했어요. 사용 가능한 마이크로 계속 진행해요.",
+  "camera-switch-failed": "카메라를 전환하지 못했어요. 카메라 없이도 음성으로 진행할 수 있어요.",
+  "mic-auto-switched": "마이크 연결이 끊겨 기본 마이크로 자동 전환했어요.",
+};
+
+type CheckTone = "pending" | "ok" | "fail";
+
+/** 정상 확인 3종 — 카메라 / 마이크 / 마이크 권한(필수 권한만 의미).
+    카메라는 실제 프레임 도착, 마이크는 실입력 감지 후에만 "정상" (PRD 기능 2) */
+function checkChips(
+  setup: DeviceSetupState,
+  cameraLive: boolean,
+): { label: string; tone: CheckTone }[] {
+  const { phase, error, videoTrack, micInputDetected } = setup;
+  const ready = phase === "ready";
+  return [
+    ready
+      ? videoTrack
+        ? cameraLive
+          ? { label: "카메라 정상", tone: "ok" }
+          : { label: "카메라 확인 중", tone: "pending" }
+        : { label: "카메라 사용 불가", tone: "fail" }
+      : { label: "카메라 확인 전", tone: "pending" },
+    ready
+      ? micInputDetected
+        ? { label: "마이크 정상", tone: "ok" }
+        : { label: "마이크 입력 대기", tone: "pending" }
+      : error === "mic-not-found" || error === "mic-lost"
+        ? { label: "마이크 없음", tone: "fail" }
+        : { label: "마이크 확인 전", tone: "pending" },
+    ready
+      ? { label: "마이크 권한 허용됨", tone: "ok" }
+      : error === "permission-denied"
+        ? { label: "마이크 권한 차단됨", tone: "fail" }
+        : { label: "권한 확인 전", tone: "pending" },
+  ];
+}
+
+function CheckChip({ label, tone }: { label: string; tone: CheckTone }) {
+  const bg =
+    tone === "ok" ? "var(--green-600)" : tone === "fail" ? "var(--red-600)" : "var(--neutral-300)";
+  return (
+    <span
+      style={{
+        display: "inline-flex",
+        alignItems: "center",
+        gap: 7,
+        fontFamily: "var(--font-sans)",
+        fontSize: 13,
+        fontWeight: 500,
+        color: "var(--fg-default)",
+      }}
+    >
+      <span
+        style={{
+          width: 16,
+          height: 16,
+          borderRadius: "50%",
+          background: bg,
+          color: "#fff",
+          display: "inline-flex",
+          alignItems: "center",
+          justifyContent: "center",
+        }}
+      >
+        <Icon name={tone === "fail" ? "x" : "check"} size={10} strokeWidth={3} />
+      </span>
+      {label}
+    </span>
+  );
+}
+
+const LEVEL_BAR_HEIGHTS = [8, 14, 18, 22, 12, 16, 9];
+
+function MicLevelMeter({ volume }: { volume: number }) {
+  const level = Math.min(1, volume * 2.5);
+  const lit = Math.round(level * LEVEL_BAR_HEIGHTS.length);
+  return (
+    <div
+      role="meter"
+      aria-label="마이크 입력 레벨"
+      aria-valuemin={0}
+      aria-valuemax={100}
+      aria-valuenow={Math.round(level * 100)}
+      style={{ display: "flex", gap: 3, alignItems: "flex-end", height: 22 }}
+    >
+      {LEVEL_BAR_HEIGHTS.map((h, i) => (
+        <i
+          key={i}
+          style={{
+            width: 5,
+            height: h,
+            borderRadius: 2,
+            background: i < lit ? "var(--blue-800)" : "var(--neutral-200)",
+          }}
+        />
+      ))}
+    </div>
+  );
+}
+
+/** 커스텀 장치 드롭다운 — 네이티브 select 는 열린 채로 목록을 못 갈아끼워서,
+    "클릭 → 점검 시작 → 같은 메뉴 안에서 연결 중 → 장치 목록" 흐름이 안 된다.
+    점검 전에도 활성 상태로 두고 클릭을 점검 트리거로 쓴다 (PRD 기능 1·3) */
+function DevicePicker({
+  label,
+  placeholder,
+  devices,
+  value,
+  disabled,
+  phase,
+  onTrigger,
+  onSelect,
+}: {
+  label: string;
+  placeholder: string;
+  devices: MediaDeviceInfo[];
+  value: string | null;
+  disabled: boolean;
+  phase: DeviceSetupState["phase"];
+  /** idle·error 상태에서 클릭 시 점검 시작(재시도) */
+  onTrigger: () => void;
+  onSelect: (deviceId: string) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const selected = devices.find((d) => d.deviceId === value);
+  const menuVisible = open && (phase === "starting" || phase === "ready");
+
+  const handleClick = () => {
+    if (phase === "idle" || phase === "error") {
+      onTrigger(); // 점검 시작 — 메뉴를 열어 연결 진행을 보여준다
+      setOpen(true);
+      return;
+    }
+    setOpen((o) => !o);
+  };
+
+  return (
+    <div style={{ position: "relative" }}>
+      <button
+        type="button"
+        className="linkbtn"
+        aria-label={label}
+        aria-haspopup="listbox"
+        aria-expanded={menuVisible}
+        disabled={disabled}
+        onClick={handleClick}
+        style={{
+          width: "100%",
+          height: 40,
+          border: "1px solid var(--border-default)",
+          borderRadius: "var(--radius-btn-md)",
+          background: "var(--bg-surface)",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          gap: 8,
+          padding: "0 12px 0 14px",
+          fontFamily: "var(--font-sans)",
+          fontSize: 14,
+          fontWeight: 500,
+          color: "var(--fg-strong)",
+          opacity: disabled ? 0.5 : 1,
+          cursor: disabled ? "not-allowed" : "pointer",
+        }}
+      >
+        <span
+          style={{
+            overflow: "hidden",
+            textOverflow: "ellipsis",
+            whiteSpace: "nowrap",
+          }}
+        >
+          {selected ? selected.label || placeholder : placeholder}
+        </span>
+        <Icon name="chevron-down" size={18} style={{ color: "var(--fg-tertiary)" }} />
+      </button>
+      {menuVisible && (
+        <div
+          role="listbox"
+          aria-label={label}
+          style={{
+            position: "absolute",
+            top: "calc(100% + 6px)",
+            left: 0,
+            right: 0,
+            zIndex: 20,
+            background: "var(--bg-elevated)",
+            border: "1px solid var(--border-subtle)",
+            borderRadius: "var(--radius-12)",
+            boxShadow: "var(--shadow-pop)",
+            overflow: "hidden",
+            padding: 6,
+          }}
+        >
+          {phase === "starting" ? (
+            <div
+              style={{
+                padding: "10px 12px",
+                fontFamily: "var(--font-sans)",
+                fontSize: 13,
+                fontWeight: 500,
+                color: "var(--fg-tertiary)",
+              }}
+            >
+              장비 연결 중…
+            </div>
+          ) : devices.length === 0 ? (
+            <div
+              style={{
+                padding: "10px 12px",
+                fontFamily: "var(--font-sans)",
+                fontSize: 13,
+                fontWeight: 500,
+                color: "var(--fg-tertiary)",
+              }}
+            >
+              장치 목록을 불러올 수 없어요
+            </div>
+          ) : (
+            devices.map((d, i) => (
+              <button
+                key={d.deviceId}
+                type="button"
+                role="option"
+                aria-selected={d.deviceId === value}
+                className="linkbtn menu-item"
+                onClick={() => {
+                  setOpen(false);
+                  if (d.deviceId !== value) onSelect(d.deviceId);
+                }}
+                style={{
+                  width: "100%",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 8,
+                  padding: "9px 12px",
+                  borderRadius: "var(--radius-8)",
+                  fontFamily: "var(--font-sans)",
+                  fontSize: 13.5,
+                  fontWeight: 600,
+                  color: "var(--fg-default)",
+                  textAlign: "left",
+                }}
+              >
+                <span style={{ flex: 1, overflow: "hidden", textOverflow: "ellipsis" }}>
+                  {d.label || `${placeholder} ${i + 1}`}
+                </span>
+                {d.deviceId === value && (
+                  <Icon
+                    name="check"
+                    size={14}
+                    strokeWidth={3}
+                    style={{ color: "var(--blue-800)" }}
+                  />
+                )}
+              </button>
+            ))
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function SelfView({
+  setup,
+  onLive,
+}: {
+  setup: DeviceSetupState;
+  /** 실제 프레임이 도착하면 그 시점의 **내부 MediaStreamTrack** 을 보고한다 —
+      장치 전환은 LocalTrack 객체를 유지한 채 내부 트랙만 바꾸므로, 트랙 객체가
+      아니라 내부 트랙 동일성으로 "카메라 정상"을 판정해야 전환 시 리셋된다 */
+  onLive: (media: MediaStreamTrack) => void;
+}) {
+  const videoRef = useRef<HTMLVideoElement | null>(null);
+  const { videoTrack, phase } = setup;
+
+  // 트랙 부착은 effect 로만 관리 — 트랙이 바뀌거나 사라지면 detach 로 정리한다
+  useEffect(() => {
+    const el = videoRef.current;
+    if (!videoTrack || !el) return;
+    videoTrack.attach(el);
+    const handleLive = () => onLive(videoTrack.mediaStreamTrack);
+    el.addEventListener("playing", handleLive);
+    el.addEventListener("loadeddata", handleLive);
+    if (el.readyState >= 2) handleLive(); // 부착 시점에 이미 프레임이 있는 경우
+    return () => {
+      el.removeEventListener("playing", handleLive);
+      el.removeEventListener("loadeddata", handleLive);
+      videoTrack.detach(el);
+    };
+  }, [videoTrack, onLive]);
+
+  return (
+    <div
+      style={{
+        flex: 1.3,
+        background: "var(--neutral-960)",
+        borderRadius: "var(--radius-12)",
+        aspectRatio: "16/10",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        color: "rgba(255,255,255,.45)",
+        position: "relative",
+        overflow: "hidden",
+      }}
+    >
+      <span
+        style={{
+          position: "absolute",
+          top: 10,
+          left: 10,
+          zIndex: 1,
+          fontFamily: "var(--font-sans)",
+          fontSize: 10,
+          fontWeight: 600,
+          letterSpacing: "0.06em",
+          color: "rgba(255,255,255,.85)",
+          background: "rgba(255,255,255,.14)",
+          padding: "3px 7px",
+          borderRadius: 4,
+        }}
+      >
+        self-view
+      </span>
+      {videoTrack ? (
+        // 자기 모습 미리보기 — 에코 방지를 위해 항상 음소거, 거울 반전
+        <video
+          ref={videoRef}
+          muted
+          autoPlay
+          playsInline
+          aria-label="내 카메라 미리보기"
+          style={{
+            position: "absolute",
+            inset: 0,
+            width: "100%",
+            height: "100%",
+            objectFit: "cover",
+            transform: "scaleX(-1)",
+          }}
+        />
+      ) : phase === "ready" ? (
+        <span
+          style={{
+            display: "flex",
+            flexDirection: "column",
+            alignItems: "center",
+            gap: 8,
+            fontFamily: "var(--font-sans)",
+            fontSize: 12.5,
+            fontWeight: 500,
+          }}
+        >
+          <Icon name="mic" size={28} strokeWidth={1.75} />
+          카메라 없이 음성으로 진행해요
+        </span>
+      ) : phase === "starting" ? (
+        <span style={{ fontFamily: "var(--font-sans)", fontSize: 13, fontWeight: 500 }}>
+          장비 연결 중…
+        </span>
+      ) : (
+        <Icon name="user-round" size={36} strokeWidth={1.75} />
+      )}
+    </div>
+  );
+}
+
+function DeviceCheck({ setup }: { setup: DeviceSetupState }) {
+  const { phase, error, notice } = setup;
+  // 프레임 도착을 보고한 내부 트랙 — 현재 내부 트랙과 일치할 때만 "카메라 정상"
+  // (장치 전환·재획득으로 내부 트랙이 바뀌면 자동으로 "확인 중"으로 리셋)
+  const [liveMedia, setLiveMedia] = useState<MediaStreamTrack | null>(null);
+  const cameraLive = liveMedia !== null && liveMedia === setup.videoTrack?.mediaStreamTrack;
+  const waitingForVoice = phase === "ready" && !setup.micBusy && !setup.micInputDetected;
+
+  return (
+    <Fragment>
+      <div style={{ display: "flex", gap: 14, alignItems: "stretch" }}>
+        <SelfView setup={setup} onLive={setLiveMedia} />
+        <div
+          style={{
+            flex: 1,
+            display: "flex",
+            flexDirection: "column",
+            justifyContent: "center",
+            gap: 14,
+          }}
+        >
+          <div>
+            <div
+              style={{
+                fontFamily: "var(--font-sans)",
+                fontSize: 13,
+                fontWeight: 500,
+                color: "var(--fg-secondary)",
+                marginBottom: 8,
+              }}
+            >
+              마이크 입력 레벨
+            </div>
+            <MicLevelMeter volume={setup.micVolume} />
+            {waitingForVoice && (
+              <p
+                style={{
+                  fontFamily: "var(--font-sans)",
+                  fontSize: 12,
+                  fontWeight: 500,
+                  color: "var(--fg-tertiary)",
+                  margin: "8px 0 0",
+                }}
+              >
+                마이크에 대고 말해보세요
+              </p>
+            )}
+          </div>
+          <DevicePicker
+            label="카메라 선택"
+            placeholder="기본 카메라"
+            devices={setup.cameras}
+            value={setup.cameraId}
+            // 카메라 사용 불가여도 활성 유지 — 새 장치 선택 시 트랙을 재획득한다 (PRD 기능 3)
+            disabled={setup.cameraBusy}
+            phase={phase}
+            onTrigger={() => void setup.start()}
+            onSelect={(deviceId) => void setup.selectCamera(deviceId)}
+          />
+          <DevicePicker
+            label="마이크 선택"
+            placeholder="기본 마이크"
+            devices={setup.mics}
+            value={setup.micId}
+            disabled={setup.micBusy}
+            phase={phase}
+            onTrigger={() => void setup.start()}
+            onSelect={(deviceId) => void setup.selectMic(deviceId)}
+          />
+        </div>
+      </div>
+      <div style={{ display: "flex", gap: 18, marginTop: 16, flexWrap: "wrap" }}>
+        {checkChips(setup, cameraLive).map(({ label, tone }) => (
+          <CheckChip key={label} label={label} tone={tone} />
+        ))}
+      </div>
+      {notice && (
+        <p
+          role="status"
+          style={{
+            fontFamily: "var(--font-sans)",
+            fontSize: 12.5,
+            fontWeight: 500,
+            color: "var(--fg-secondary)",
+            marginTop: 12,
+            marginBottom: 0,
+          }}
+        >
+          {DEVICE_NOTICE_TEXT[notice]}
+        </p>
+      )}
+      {phase === "error" && error !== null && (
+        <div
+          role="alert"
+          style={{
+            display: "flex",
+            flexDirection: "column",
+            gap: 10,
+            alignItems: "flex-start",
+            border: "1px solid var(--border-default)",
+            borderRadius: "var(--radius-12)",
+            padding: "12px 14px",
+            marginTop: 14,
+            fontFamily: "var(--font-sans)",
+            fontSize: 13,
+            fontWeight: 500,
+            lineHeight: 1.5,
+            color: "var(--fg-default)",
+          }}
+        >
+          {DEVICE_ERROR_GUIDE[error]}
+          <Button variant="assistive" size="sm" onClick={() => void setup.start()}>
+            다시 시도
+          </Button>
+        </div>
+      )}
+      {(phase === "idle" || phase === "starting") && (
+        <div style={{ marginTop: 14 }}>
+          <Button
+            variant="assistive"
+            fullWidth
+            disabled={phase === "starting"}
+            leadingIcon={<Icon name="mic" size={16} />}
+            onClick={() => void setup.start()}
+          >
+            {phase === "starting" ? "장비 연결 중…" : "장비 점검 시작"}
+          </Button>
+        </div>
+      )}
+    </Fragment>
+  );
+}
+
 export function SetupPage() {
   const nav = useNav();
+  const setup = useDeviceSetup();
   const [dur, setDur] = useState<"quick" | "real">("quick");
   const { data: resumes = [] } = useResumes();
   const resumeOpts = resumes.filter((r) => r.status === "done");
@@ -297,117 +823,41 @@ export function SetupPage() {
           </StepCard>
 
           <StepCard no={4} title="카메라 · 마이크 점검">
-            <div style={{ display: "flex", gap: 14, alignItems: "stretch" }}>
-              <div
-                style={{
-                  flex: 1.3,
-                  background: "var(--neutral-960)",
-                  borderRadius: "var(--radius-12)",
-                  aspectRatio: "16/10",
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  color: "rgba(255,255,255,.45)",
-                  position: "relative",
-                }}
-              >
-                <span
-                  style={{
-                    position: "absolute",
-                    top: 10,
-                    left: 10,
-                    fontFamily: "var(--font-sans)",
-                    fontSize: 10,
-                    fontWeight: 600,
-                    letterSpacing: "0.06em",
-                    color: "rgba(255,255,255,.85)",
-                    background: "rgba(255,255,255,.14)",
-                    padding: "3px 7px",
-                    borderRadius: 4,
-                  }}
-                >
-                  self-view
-                </span>
-                <Icon name="user-round" size={36} strokeWidth={1.75} />
-              </div>
-              <div
-                style={{
-                  flex: 1,
-                  display: "flex",
-                  flexDirection: "column",
-                  justifyContent: "center",
-                  gap: 14,
-                }}
-              >
-                <div>
-                  <div
-                    style={{
-                      fontFamily: "var(--font-sans)",
-                      fontSize: 13,
-                      fontWeight: 500,
-                      color: "var(--fg-secondary)",
-                      marginBottom: 8,
-                    }}
-                  >
-                    마이크 입력 레벨
-                  </div>
-                  <div style={{ display: "flex", gap: 3, alignItems: "flex-end", height: 22 }}>
-                    {[8, 14, 18, 22, 12, 16, 9].map((h, i) => (
-                      <i
-                        key={i}
-                        style={{
-                          width: 5,
-                          height: h,
-                          borderRadius: 2,
-                          background: i < 5 ? "var(--blue-800)" : "var(--neutral-200)",
-                        }}
-                      />
-                    ))}
-                  </div>
-                </div>
-                <SelectRow value="기본 카메라" small />
-                <SelectRow value="기본 마이크" small />
-              </div>
-            </div>
-            <div style={{ display: "flex", gap: 18, marginTop: 16, flexWrap: "wrap" }}>
-              {["카메라 정상", "마이크 정상", "권한 허용됨"].map((c) => (
-                <span
-                  key={c}
-                  style={{
-                    display: "inline-flex",
-                    alignItems: "center",
-                    gap: 7,
-                    fontFamily: "var(--font-sans)",
-                    fontSize: 13,
-                    fontWeight: 500,
-                    color: "var(--fg-default)",
-                  }}
-                >
-                  <span
-                    style={{
-                      width: 16,
-                      height: 16,
-                      borderRadius: "50%",
-                      background: "var(--green-600)",
-                      color: "#fff",
-                      display: "inline-flex",
-                      alignItems: "center",
-                      justifyContent: "center",
-                    }}
-                  >
-                    <Icon name="check" size={10} strokeWidth={3} />
-                  </span>
-                  {c}
-                </span>
-              ))}
-            </div>
+            <DeviceCheck setup={setup} />
           </StepCard>
         </div>
 
         <div style={{ marginTop: 20 }}>
-          <Button variant="solid" size="lg" fullWidth onClick={() => nav("interview")}>
+          <Button
+            variant="solid"
+            size="lg"
+            fullWidth
+            disabled={!setup.canStart}
+            onClick={() => {
+              // 점검에서 고른 마이크를 /live 로 전달 — Room 캡처 기본값에 적용된다
+              saveDevicePreferences({ micId: setup.micId ?? undefined });
+              nav("interview");
+            }}
+          >
             면접 시작
           </Button>
+          {!setup.canStart && (
+            <p
+              style={{
+                fontFamily: "var(--font-sans)",
+                fontSize: 12.5,
+                fontWeight: 500,
+                color: "var(--fg-tertiary)",
+                textAlign: "center",
+                marginTop: 10,
+                marginBottom: 0,
+              }}
+            >
+              {setup.phase === "ready" && setup.micId !== null && !setup.micBusy
+                ? "마이크에 대고 말해 입력을 확인해 주세요."
+                : "장비 점검을 완료하면 면접을 시작할 수 있어요."}
+            </p>
+          )}
         </div>
       </div>
     </div>
