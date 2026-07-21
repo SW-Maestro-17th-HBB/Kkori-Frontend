@@ -41,6 +41,7 @@
   --bg-subtle: var(--neutral-50);
   --bg-muted: var(--neutral-100);
   --bg-inverse: var(--neutral-900);
+  --bg-inverse-subtle: rgba(255, 255, 255, 0.08); /* 다크 서피스 위 살짝 뜬 오버레이(칩 등) */
   --bg-brand-subtle: var(--blue-50);
   --bg-success-subtle: #e8f7ee;
   --bg-danger-subtle: #fdeeee;
@@ -51,12 +52,14 @@
   --fg-secondary: var(--neutral-600);
   --fg-tertiary: var(--neutral-500);
   --fg-link: var(--blue-800);
+  --fg-inverse: #e6e8ea; /* 다크 서피스 위 기본 텍스트 */
 
   /* ---------- 보더 ---------- */
   --border-subtle: #eceef1;
   --border-default: #dfe3e8;
   --border-strong: #c4ccd4;
   --border-inverse: rgba(255, 255, 255, 0.14);
+  --border-inverse-strong: rgba(255, 255, 255, 0.18);
 
   /* ---------- Radius ---------- */
   --radius-4: 4px;

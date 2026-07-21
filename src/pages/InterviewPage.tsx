@@ -2,10 +2,56 @@
 import { useState } from "react";
 import { Icon } from "../components/Icon";
 import { useNav } from "../hooks/useNav";
+import { useLiveKitSession } from "../api/hooks";
+import { ConnectionState, useLiveKitRoom, useRemoteAudio } from "../hooks/useLiveKitRoom";
+
+const CONNECTION_LABEL: Record<ConnectionState, string> = {
+  [ConnectionState.Disconnected]: "연결 끊김",
+  [ConnectionState.Connecting]: "연결 중…",
+  [ConnectionState.Connected]: "연결됨",
+  [ConnectionState.Reconnecting]: "재연결 중…",
+  [ConnectionState.SignalReconnecting]: "재연결 중…",
+};
+
+const CONNECTION_DOT: Record<ConnectionState, string> = {
+  [ConnectionState.Disconnected]: "var(--red-600)",
+  [ConnectionState.Connecting]: "var(--blue-400)",
+  [ConnectionState.Connected]: "var(--green-600)",
+  [ConnectionState.Reconnecting]: "var(--blue-400)",
+  [ConnectionState.SignalReconnecting]: "var(--blue-400)",
+};
 
 export function InterviewPage() {
   const nav = useNav();
   const [showQ, setShowQ] = useState(true);
+  const [micFailed, setMicFailed] = useState(false);
+  const session = useLiveKitSession();
+  const {
+    room,
+    connectionState,
+    connectError,
+    micEnabled,
+    toggleMicrophone,
+    canPlayAudio,
+    startAudio,
+  } = useLiveKitRoom(session.data);
+  const remoteAudioRef = useRemoteAudio(room);
+
+  // 우선순위: 세션 조회 중 → 조회 실패 → 접속 거부 → SDK 연결 상태
+  // (조회 중을 구분하지 않으면 초기 렌더가 '연결 끊김'으로 보인다)
+  const statusLabel = session.isPending
+    ? "접속 준비 중…"
+    : session.isError
+      ? "접속 정보 없음"
+      : connectError
+        ? "접속 실패"
+        : CONNECTION_LABEL[connectionState];
+  const statusDot = session.isPending
+    ? "var(--blue-400)"
+    : session.isError || connectError
+      ? "var(--red-600)"
+      : CONNECTION_DOT[connectionState];
+
   return (
     <div
       style={{
@@ -54,10 +100,47 @@ export function InterviewPage() {
           />{" "}
           04:12 남음
         </span>
-        <button className="dark-btn" onClick={() => nav("reportDetail")}>
-          면접 종료
-        </button>
+        <span
+          role="status"
+          style={{
+            display: "inline-flex",
+            alignItems: "center",
+            gap: 8,
+            height: 32,
+            padding: "0 14px",
+            borderRadius: "var(--radius-full)",
+            background: "var(--bg-inverse-subtle)",
+            border: "1px solid var(--border-inverse-strong)",
+            color: "var(--fg-inverse)",
+            fontFamily: "var(--font-sans)",
+            fontSize: 13,
+            fontWeight: 600,
+          }}
+        >
+          <span style={{ width: 8, height: 8, borderRadius: "50%", background: statusDot }} />{" "}
+          {statusLabel}
+        </span>
+        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+          {/* 자동재생 정책으로 원격 오디오가 막힌 경우 — 사용자 제스처로 재개 */}
+          {connectionState === ConnectionState.Connected && !canPlayAudio && (
+            <button
+              className="dark-btn"
+              onClick={() =>
+                // 실패해도 canPlayAudio 가 false 로 남아 버튼이 유지된다 — 재클릭이 곧 재시도
+                void startAudio().catch(() => {})
+              }
+            >
+              <Icon name="audio-lines" size={16} /> 소리 켜기
+            </button>
+          )}
+          <button className="dark-btn" onClick={() => nav("reportDetail")}>
+            면접 종료
+          </button>
+        </div>
       </div>
+
+      {/* 원격 오디오 부착 지점 — 화면에는 보이지 않고 <audio> 요소만 담는다 */}
+      <div ref={remoteAudioRef} style={{ display: "none" }} data-testid="remote-audio" />
 
       {/* self-view PiP */}
       <div
@@ -187,21 +270,53 @@ export function InterviewPage() {
           right: 0,
           padding: "18px 20px 26px",
           display: "flex",
+          flexDirection: "column",
           alignItems: "center",
-          justifyContent: "center",
-          gap: 12,
+          gap: 10,
           zIndex: 6,
         }}
       >
-        <button className="dark-btn dark-btn--round" aria-label="마이크">
-          <Icon name="mic" size={18} />
-        </button>
-        <button className="dark-btn" onClick={() => setShowQ((s) => !s)}>
-          <Icon name={showQ ? "eye-off" : "eye"} size={16} /> {showQ ? "질문 숨기기" : "질문 보기"}
-        </button>
-        <button className="dark-btn dark-btn--round" aria-label="카메라 끄기">
-          <Icon name="video-off" size={18} />
-        </button>
+        {/* 권한 거부 등 발행 실패의 최소 피드백 — 차단 오버레이는 후속 과제(PR #25 논의) */}
+        {micFailed && (
+          <span
+            role="alert"
+            style={{
+              color: "var(--fg-inverse)",
+              fontFamily: "var(--font-sans)",
+              fontSize: 12,
+              display: "inline-flex",
+              alignItems: "center",
+              gap: 6,
+            }}
+          >
+            <Icon name="mic-off" size={13} /> 마이크를 켤 수 없어요 — 브라우저 마이크 권한을 확인해
+            주세요
+          </span>
+        )}
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 12 }}>
+          <button
+            className="dark-btn dark-btn--round"
+            aria-label="마이크"
+            aria-pressed={micEnabled}
+            disabled={connectionState !== ConnectionState.Connected}
+            onClick={() =>
+              // 실패 시 발행이 안 된 상태 그대로(mic-off 아이콘 유지) + 안내 문구 노출
+              void toggleMicrophone().then(
+                () => setMicFailed(false),
+                () => setMicFailed(true),
+              )
+            }
+          >
+            <Icon name={micEnabled ? "mic" : "mic-off"} size={18} />
+          </button>
+          <button className="dark-btn" onClick={() => setShowQ((s) => !s)}>
+            <Icon name={showQ ? "eye-off" : "eye"} size={16} />{" "}
+            {showQ ? "질문 숨기기" : "질문 보기"}
+          </button>
+          <button className="dark-btn dark-btn--round" aria-label="카메라 끄기">
+            <Icon name="video-off" size={18} />
+          </button>
+        </div>
       </div>
     </div>
   );

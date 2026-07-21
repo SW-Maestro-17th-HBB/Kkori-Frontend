@@ -89,6 +89,13 @@ export interface Subscription {
   maxRealInterviews: number;
 }
 
+/** LiveKit 접속 세션 — 서버 주소 + 참가자 토큰(룸·identity·권한 내장).
+    백엔드 발급 API 연동 시에도 이 계약 유지 */
+export interface LiveKitSession {
+  url: string;
+  token: string;
+}
+
 export interface NotificationItem {
   id: number;
   icon: string;

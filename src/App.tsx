@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { Component, lazy, Suspense, useEffect, useRef, useState, type ReactNode } from "react";
 import { Navigate, Outlet, Route, Routes, useLocation } from "react-router";
 import { QueryClientProvider, useQueryClient } from "@tanstack/react-query";
 import { makeQueryClient } from "./api/queryClient";
@@ -11,10 +11,63 @@ import { ConsentPage } from "./pages/ConsentPage";
 import { DashboardPage } from "./pages/DashboardPage";
 import { ResumePage } from "./pages/ResumePage";
 import { SetupPage } from "./pages/SetupPage";
-import { InterviewPage } from "./pages/InterviewPage";
 import { ReportListPage } from "./pages/ReportListPage";
 import { ReportDetailPage } from "./pages/ReportDetailPage";
 import { MyPage } from "./pages/MyPage";
+
+/* /live 만 지연 로드 — livekit-client(수백 kB)가 면접 화면 밖 번들에 실리지 않게 분리 */
+const InterviewPage = lazy(() =>
+  import("./pages/InterviewPage").then((m) => ({ default: m.InterviewPage })),
+);
+
+/** /live 청크 로딩 화면 — SDK 청크를 받는 동안 면접 화면과 같은 다크 배경 유지 */
+function InterviewLoadingScreen() {
+  return (
+    <div role="status" style={{ minHeight: "100vh", background: "var(--neutral-970)" }}>
+      {/* 시각적으로 숨긴 스크린리더 안내 */}
+      <span style={{ position: "absolute", width: 1, height: 1, overflow: "hidden" }}>
+        면접 화면을 불러오는 중…
+      </span>
+    </div>
+  );
+}
+
+/** /live 청크 로드 실패 경계 — 배포로 청크 해시가 바뀌었거나 네트워크 오류면
+    lazy import 가 거부되어 백지가 되므로, 새로고침 안내로 대체한다 */
+class InterviewChunkErrorBoundary extends Component<
+  { children: ReactNode },
+  { hasError: boolean }
+> {
+  state = { hasError: false };
+  static getDerivedStateFromError() {
+    return { hasError: true };
+  }
+  render() {
+    if (!this.state.hasError) return this.props.children;
+    return (
+      <div
+        role="alert"
+        style={{
+          minHeight: "100vh",
+          background: "var(--neutral-970)",
+          display: "flex",
+          flexDirection: "column",
+          alignItems: "center",
+          justifyContent: "center",
+          gap: 14,
+          color: "var(--fg-inverse)",
+          fontFamily: "var(--font-sans)",
+          fontSize: 14,
+        }}
+      >
+        면접 화면을 불러오지 못했어요 — 네트워크 확인 후 다시 시도해 주세요
+        <button className="dark-btn" onClick={() => window.location.reload()}>
+          새로고침
+        </button>
+      </div>
+    );
+  }
+}
 
 function ScrollToTop() {
   const { pathname } = useLocation();
@@ -131,7 +184,16 @@ export default function App() {
           <Route path={ROUTES.dash} element={<DashboardPage />} />
           <Route path={ROUTES.resume} element={<ResumePage />} />
           <Route path={ROUTES.setup} element={<SetupPage />} />
-          <Route path={ROUTES.interview} element={<InterviewPage />} />
+          <Route
+            path={ROUTES.interview}
+            element={
+              <InterviewChunkErrorBoundary>
+                <Suspense fallback={<InterviewLoadingScreen />}>
+                  <InterviewPage />
+                </Suspense>
+              </InterviewChunkErrorBoundary>
+            }
+          />
           <Route path={ROUTES.reportList} element={<ReportListPage />} />
           <Route path={REPORT_DETAIL_PATTERN} element={<ReportDetailPage />} />
           <Route path={ROUTES.mypage} element={<MyPage />} />

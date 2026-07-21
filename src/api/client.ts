@@ -7,6 +7,7 @@ import { ApiError, FE_ERROR_CODES, request } from "./request";
 import type { components } from "./schema";
 import { getAuthSnapshot } from "./tokenStore";
 import type {
+  LiveKitSession,
   NotificationItem,
   Profile,
   ReportDetail,
@@ -71,3 +72,23 @@ export const fetchReportStats = (): Promise<ReportStats> => delay(fixtures.repor
 
 export const fetchReportDetail = (id: number | string): Promise<ReportDetail> =>
   delay({ ...fixtures.reportDetail, id: Number(id) || 1 });
+
+/* ---------- LiveKit (목 — env 임시 토큰) ---------- */
+
+/** LiveKit 접속 세션 — 백엔드 토큰 발급 API(스키마 미정)가 생기면 request() 호출로 교체.
+    그 전까지는 .env.local 의 개발용 URL·토큰을 반환한다 */
+export const fetchLiveKitSession = (): Promise<LiveKitSession> => {
+  // dev 전용 경로 — VITE_* 값은 번들에 그대로 박히므로, 배포 환경에 토큰이
+  // 설정되면 모든 방문자가 같은 룸 권한을 공유하게 된다. 프로덕션 번들에서 차단.
+  if (!import.meta.env.DEV) {
+    return Promise.reject(new Error("LiveKit 접속은 아직 개발 환경에서만 지원됩니다."));
+  }
+  const url = import.meta.env.VITE_LIVEKIT_URL;
+  const token = import.meta.env.VITE_LIVEKIT_TOKEN;
+  if (!url || !token) {
+    return Promise.reject(
+      new Error("LiveKit 접속 정보가 없습니다 — .env.local 에 VITE_LIVEKIT_URL/TOKEN 설정 필요"),
+    );
+  }
+  return delay({ url, token });
+};
