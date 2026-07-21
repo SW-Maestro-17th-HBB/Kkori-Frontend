@@ -18,11 +18,14 @@ export class FakeRoom {
   static connectBehavior: "ok" | "fail" = "ok";
   /** "fail" 이면 setMicrophoneEnabled 가 거부된다 (권한 거부 흉내) */
   static micBehavior: "ok" | "fail" = "ok";
+  /** "fail" 이면 startAudio 가 거부된다 (자동재생 재개 실패 흉내) */
+  static audioBehavior: "ok" | "fail" = "ok";
 
   static reset() {
     FakeRoom.instances = [];
     FakeRoom.connectBehavior = "ok";
     FakeRoom.micBehavior = "ok";
+    FakeRoom.audioBehavior = "ok";
   }
 
   private listeners = new Map<string, Set<Listener>>();
@@ -34,7 +37,10 @@ export class FakeRoom {
   };
   connect: (url: string, token: string) => Promise<void>;
   disconnect: () => Promise<void>;
-  startAudio = vi.fn(async () => {});
+  startAudio = vi.fn(async () => {
+    if (FakeRoom.audioBehavior === "fail") throw new Error("audio blocked");
+    this.setCanPlaybackAudio(true); // 실제 SDK 처럼 성공 시 재생 가능 상태로 전환
+  });
 
   constructor() {
     FakeRoom.instances.push(this);

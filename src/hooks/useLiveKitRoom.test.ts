@@ -11,9 +11,9 @@ vi.mock("livekit-client", async () => (await import("../test/livekitMock")).crea
 
 const SESSION = { url: "wss://test.example", token: "jwt-token" };
 
-/** StrictMode 이중 마운트로 버려지는 인스턴스가 생긴다 — 실제 접속된 룸을 찾는다 */
+/** StrictMode 이중 마운트로 버려지는 인스턴스가 생긴다 — 접속된 룸 중 가장 최근 것을 쓴다 */
 const connectedRoom = () =>
-  FakeRoom.instances.find((room) => vi.mocked(room.connect).mock.calls.length > 0);
+  FakeRoom.instances.filter((room) => vi.mocked(room.connect).mock.calls.length > 0).at(-1);
 
 describe("useLiveKitRoom", () => {
   beforeEach(() => {

@@ -9,9 +9,9 @@ import { InterviewPage } from "./InterviewPage";
 
 vi.mock("livekit-client", async () => (await import("../test/livekitMock")).createLiveKitMock());
 
-/** StrictMode 이중 마운트로 버려지는 인스턴스가 생긴다 — 실제 접속된 룸을 찾는다 */
+/** StrictMode 이중 마운트로 버려지는 인스턴스가 생긴다 — 접속된 룸 중 가장 최근 것을 쓴다 */
 const connectedRoom = () =>
-  FakeRoom.instances.find((room) => vi.mocked(room.connect).mock.calls.length > 0);
+  FakeRoom.instances.filter((room) => vi.mocked(room.connect).mock.calls.length > 0).at(-1);
 
 const stubSessionEnv = () => {
   vi.stubEnv("VITE_LIVEKIT_URL", "wss://test.example");
@@ -46,7 +46,7 @@ describe("InterviewPage — LiveKit 룸 접속", () => {
     expect(await screen.findByText("접속 실패")).toBeInTheDocument();
   });
 
-  it("자동재생이 막히면 '소리 켜기' 버튼이 나타나고 클릭 시 재개를 요청한다", async () => {
+  it("자동재생이 막히면 '소리 켜기'가 나타나고, 실패 시 유지되다 재클릭 성공 시 사라진다", async () => {
     stubSessionEnv();
     renderWithProviders(<InterviewPage />, { route: "/live" });
     await screen.findByText("연결됨");
@@ -55,8 +55,20 @@ describe("InterviewPage — LiveKit 룸 접속", () => {
       connectedRoom()!.setCanPlaybackAudio(false);
     });
     const resume = await screen.findByRole("button", { name: /소리 켜기/ });
+
+    // 첫 시도 실패 — 재생 불가 상태가 유지되므로 버튼이 남아 재시도 수단이 된다
+    FakeRoom.audioBehavior = "fail";
     await userEvent.click(resume);
-    expect(connectedRoom()!.startAudio).toHaveBeenCalled();
+    expect(connectedRoom()!.startAudio).toHaveBeenCalledTimes(1);
+    expect(screen.getByRole("button", { name: /소리 켜기/ })).toBeInTheDocument();
+
+    // 재클릭 성공 — 재생 가능으로 전환되어 버튼이 사라진다
+    FakeRoom.audioBehavior = "ok";
+    await userEvent.click(resume);
+    expect(connectedRoom()!.startAudio).toHaveBeenCalledTimes(2);
+    await waitFor(() => {
+      expect(screen.queryByRole("button", { name: /소리 켜기/ })).toBeNull();
+    });
   });
 
   it("접속 정보가 없으면 '접속 정보 없음' 상태를 보여준다", async () => {
