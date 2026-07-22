@@ -3,6 +3,20 @@
    [실제] 인증(auth)·이력서(resume)  [목] 리포트·사용자·알림
    ============================================================ */
 import * as fixtures from "./fixtures";
+import {
+  deleteResume as deleteResumeApi,
+  getList,
+  getParsed,
+  reanalyze,
+  upload,
+} from "./generated/resume/resume";
+import type {
+  ResumeParsedResponse as ResumeParsedResponseModel,
+  ResumeReanalyzeResponse as ResumeReanalyzeResponseModel,
+  ResumeSummaryResponse,
+  ResumeSummaryResponseAnalysisStatus,
+  ResumeUploadResponse as ResumeUploadResponseModel,
+} from "./generated/kkoriAPI.schemas";
 import { ApiError, FE_ERROR_CODES, request } from "./request";
 import type { components } from "./schema";
 import { getAuthSnapshot } from "./tokenStore";
@@ -66,14 +80,16 @@ export const fetchSubscription = (): Promise<Subscription> => delay(fixtures.sub
 
 export const fetchNotifications = (): Promise<NotificationItem[]> => delay(fixtures.notifications);
 
-/* ---------- 이력서 (실제 API) ---------- */
+/* ---------- 이력서 (실제 API — orval 생성 fetcher 사용) ----------
+   경로·파라미터·타입은 src/api/generated/ 의 생성 코드가 원천이다.
+   스펙 변경 시 `pnpm orval` 로 재생성 (BE 서버 실행 중이어야 함).
+   여기서는 생성 fetcher 호출 + 엔벨로프 언래핑 + UI 모델 매핑만 담당한다. */
 
-export type ResumeSummary = components["schemas"]["ResumeSummaryResponse"];
-export type ResumePageResponse = components["schemas"]["PageResponseResumeSummaryResponse"];
-export type ResumeUploadResponse = components["schemas"]["ResumeUploadResponse"];
-export type ResumeParsedResponse = components["schemas"]["ResumeParsedResponse"];
-export type ResumeReanalyzeResponse = components["schemas"]["ResumeReanalyzeResponse"];
-export type AnalysisStatus = NonNullable<ResumeSummary["analysisStatus"]>;
+export type ResumeSummary = ResumeSummaryResponse;
+export type ResumeUploadResponse = ResumeUploadResponseModel;
+export type ResumeParsedResponse = ResumeParsedResponseModel;
+export type ResumeReanalyzeResponse = ResumeReanalyzeResponseModel;
+export type AnalysisStatus = ResumeSummaryResponseAnalysisStatus;
 
 /** 백엔드 8단계 상태 → UI 3분류. EMBEDDED만 완료 — PARSED는 색인 전이라 아직 면접에 못 쓴다. */
 export function toUiStatus(status: AnalysisStatus): ResumeStatus {
@@ -153,26 +169,27 @@ export function toResumePreview(parsed: ResumeParsedResponse): ResumePreview {
 /** UI에 페이지네이션이 없어 상한(size=100)까지 한 번에 조회한다 — MVP 가정(1인당 이력서 소수).
     초과분은 잘리므로 페이지네이션 UI 도입 시 이 가정을 함께 걷어낼 것. */
 export const fetchResumes = async (): Promise<Resume[]> => {
-  const page = await request<ResumePageResponse>("GET", "/api/v1/resumes?size=100");
+  const page = (await getList({ size: 100 })).data;
   const now = new Date();
-  return (page.content ?? []).map((s) => toUiResume(s, now));
+  return (page?.content ?? []).map((s) => toUiResume(s, now));
 };
 
-export const uploadResume = (file: File, title?: string): Promise<ResumeUploadResponse> => {
-  const form = new FormData();
-  form.append("file", file);
-  if (title) form.append("title", title);
-  return request<ResumeUploadResponse>("POST", "/api/v1/resumes", { body: form });
+export const uploadResume = async (
+  file: File,
+  title?: string,
+): Promise<ResumeUploadResponse | undefined> =>
+  (await upload({ file }, title !== undefined ? { title } : undefined)).data;
+
+export const deleteResume = async (resumeId: number): Promise<void> => {
+  await deleteResumeApi(resumeId);
 };
 
-export const deleteResume = (resumeId: number): Promise<null> =>
-  request<null>("DELETE", `/api/v1/resumes/${resumeId}`);
-
-export const reanalyzeResume = (resumeId: number): Promise<ResumeReanalyzeResponse> =>
-  request<ResumeReanalyzeResponse>("POST", `/api/v1/resumes/${resumeId}/reanalyze`);
+export const reanalyzeResume = async (
+  resumeId: number,
+): Promise<ResumeReanalyzeResponse | undefined> => (await reanalyze(resumeId)).data;
 
 export const fetchResumeParsed = async (resumeId: number): Promise<ResumePreview> =>
-  toResumePreview(await request<ResumeParsedResponse>("GET", `/api/v1/resumes/${resumeId}/parsed`));
+  toResumePreview((await getParsed(resumeId)).data ?? {});
 
 export const fetchReports = (): Promise<ReportSummary[]> => delay(fixtures.reports);
 
