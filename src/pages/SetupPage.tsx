@@ -926,6 +926,8 @@ export function SetupPage() {
               </button>
               {pickOpen && (
                 <div
+                  role="listbox"
+                  aria-label="이력서 선택"
                   style={{
                     position: "absolute",
                     top: "calc(100% + 6px)",
@@ -952,6 +954,8 @@ export function SetupPage() {
                     resumeOpts.map((r) => (
                       <button
                         key={r.id}
+                        role="option"
+                        aria-selected={r.id === selectedResumeId}
                         className="linkbtn menu-item"
                         onClick={() => {
                           setResumeOverride(r.id);

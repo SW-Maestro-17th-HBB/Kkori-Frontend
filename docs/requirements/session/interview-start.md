@@ -22,12 +22,13 @@
 /setup: ① 이력서(분석 완료만·30분 필수) ② 직무 position(기본 백엔드) ③ 시간(5/30분)
     └─ ④ 장비 점검 통과(HBB1-19) ──▶ "면접 시작" 활성
 "면접 시작" 클릭 ──▶ POST /api/v1/sessions { resumeId?, interviewType, position }
-    │                 (합의 계약 — 백엔드 구현·스키마 반영 대기)
-    ├─ 성공: { id?, livekitToken, livekitUrl, livekitRoom } → sessionStorage 저장
-    │        → setup 에서 LiveKit 접속 확립("면접 연결 중" 모달·취소 가능)
-    │           ├─ 접속 성공: /live 이동 (연결된 룸을 재접속 없이 인수)
-    │           └─ 접속 실패: 이동 없음 + 인라인 안내 (재클릭 = 재발급·재접속)
-    └─ 발급 실패: 버튼 아래 인라인 안내 + 재클릭 재시도 (요청 중 버튼 비활성)
+    │                 (합의 계약 — 백엔드 구현·스키마 반영 대기.
+    │                  클릭부터 "면접 준비 중" 모달이 전 과정을 덮음 — 취소 가능)
+    ├─ 발급 성공: { id?, livekitToken, livekitUrl, livekitRoom }
+    │        → setup 에서 LiveKit 접속 확립
+    │           ├─ 접속 성공: sessionStorage 저장 → /live 이동 (연결 룸을 재접속 없이 인수)
+    │           └─ 접속 실패: 저장·이동 없음 + 인라인 안내 (재클릭 = 재발급·재접속)
+    └─ 발급 실패: 버튼 아래 인라인 안내 + 재클릭 재시도
 /live 직행(저장값 없음·손상) ──▶ /setup 리다이렉트
 ```
 
@@ -153,13 +154,13 @@
 
 - **요청** — `POST /api/v1/sessions`. **백엔드 합의 완료 계약**(BE PRD HBB1-142 — 서버가 검증 후 `PENDING` 세션 레코드로 저장)이며 백엔드 구현·스키마 반영 대기다. FE는 처음부터 이 형태로 전송한다(현행 배포 서버는 본문 미소비 — 소비 시작 시 FE 무변경):
 
-```json
-{
-  "resumeId": 1,
-  "interviewType": "THIRTY_MIN",
-  "position": "BACKEND"
-}
-```
+  ```json
+  {
+    "resumeId": 1,
+    "interviewType": "THIRTY_MIN",
+    "position": "BACKEND"
+  }
+  ```
 
   - `resumeId`: 실전 모의(30분)는 필수(FE 게이팅이 보장), 빠른 연습(5분)은 선택한 이력서를 포함하고 **완료 이력서가 없는 유저만 필드 생략**(그 외 미선택 시작은 게이팅이 차단).
   - `interviewType`: ③ 선택값 — `"FIVE_MIN"`(빠른 연습) / `"THIRTY_MIN"`(실전 모의). CS는 향후 별도 값으로 추가.

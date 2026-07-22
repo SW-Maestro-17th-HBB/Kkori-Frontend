@@ -48,6 +48,28 @@ describe("useLiveKitRoom", () => {
     expect(vi.mocked(established.connect)).toHaveBeenCalledTimes(1);
   });
 
+  it("인수한 룸도 실제 언마운트에서는 해제된다 (지연 해제가 실행됨)", async () => {
+    const { Room } = await import("livekit-client");
+    const established = new Room() as unknown as InstanceType<typeof FakeRoom>;
+    await established.connect(SESSION.url, SESSION.token);
+    stashConnectedRoom(established as unknown as Room, {
+      url: SESSION.url,
+      token: SESSION.token,
+      authSessionId: "sess-A",
+    });
+
+    const { result, unmount } = renderHook(() => useLiveKitRoom(SESSION), {
+      wrapper: StrictMode,
+    });
+    await waitFor(() => {
+      expect(result.current.connectionState).toBe(ConnectionState.Connected);
+    });
+    unmount(); // 재마운트 없는 진짜 언마운트 — 마이크로태스크로 미룬 해제가 실행돼야 한다
+    await waitFor(() => {
+      expect(established.state).toBe("disconnected");
+    });
+  });
+
   it("소유 정보가 다른 보관 룸은 인수하지 않고 폐기한다", async () => {
     const { Room } = await import("livekit-client");
     const established = new Room() as unknown as InstanceType<typeof FakeRoom>;
