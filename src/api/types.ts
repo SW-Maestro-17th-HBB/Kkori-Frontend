@@ -36,7 +36,6 @@ export interface Resume {
   progress?: number; // 분석 중일 때 진행률
   tag?: string; // 추천 태그 (분석 완료 시)
   preview?: ResumePreview; // 분석 결과 미리보기 (분석 완료 시)
-  recommendedPosition?: Position; // 분석 결과 추천 직무 (없으면 화면이 기본 직무 안내)
 }
 
 export interface ReportSummary {

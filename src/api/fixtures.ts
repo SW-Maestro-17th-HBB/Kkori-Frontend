@@ -68,7 +68,6 @@ export const resumes: Resume[] = [
     uploadedAt: "2026.06.01",
     status: "done",
     tag: "추천 · 백엔드 · 실전 30분",
-    recommendedPosition: "BACKEND",
     preview: {
       name: "홍길동",
       career: "3년 · 백엔드 (Java / Spring)",

@@ -72,15 +72,6 @@ const stubSessionFetch = () => {
 const sessionBodyOf = (mock: ReturnType<typeof vi.fn>, call = 0) =>
   JSON.parse((mock.mock.calls[call][1] as RequestInit).body as string) as Record<string, unknown>;
 
-/** 테스트 전용 이력서 — 추천 추종 등 픽스처로 못 만드는 조합용 */
-const makeResume = (over: Partial<Resume> & { id: number; name: string }): Resume => ({
-  ext: "PDF",
-  meta: "1.0MB · 방금 전",
-  uploadedAt: "2026.07.01",
-  status: "done",
-  ...over,
-});
-
 const audioTrack = () => FakeMedia.tracks.find((t) => t.kind === "audio")!;
 const videoTrack = () => FakeMedia.tracks.find((t) => t.kind === "video")!;
 
@@ -126,6 +117,11 @@ afterEach(() => {
 });
 
 describe("SetupPage — 장비 점검", () => {
+  // 장비 게이팅만 검증하는 그룹 — 완료 이력서가 없는 유저로 두어 이력서 요건을 배제한다
+  beforeEach(() => {
+    fetchResumesMock.mockResolvedValue([]);
+  });
+
   it("점검 전에는 면접 시작이 비활성화되고 드롭다운은 자리 표시로 활성이다", () => {
     renderSetupPage();
     expect(screen.getByRole("button", { name: "면접 시작" })).toBeDisabled();
@@ -363,12 +359,12 @@ describe("SetupPage — 장비 점검", () => {
 });
 
 describe("SetupPage — 자료 선택 (①②③)", () => {
-  it("① 드롭다운에는 분석 완료 이력서와 '선택 안 함' 옵션만 노출된다", async () => {
+  it("① 드롭다운에는 분석 완료 이력서만 노출된다 (선택 해제 옵션 없음)", async () => {
     renderSetupPage();
     await userEvent.click(screen.getByLabelText("이력서 선택"));
     expect(await screen.findByText("백엔드_개발자_이력서.pdf")).toBeInTheDocument();
     expect(screen.getByText("경력기술서_2026.pdf")).toBeInTheDocument();
-    expect(screen.getByText(/이력서 선택 안 함/)).toBeInTheDocument();
+    expect(screen.queryByText(/이력서 선택 안 함/)).toBeNull(); // 해제 없음 — 미선택 시작은 완료본 없는 유저만
     expect(screen.queryByText("신입_포트폴리오.pdf")).toBeNull(); // 분석 중
     expect(screen.queryByText("이력서_v1.docx")).toBeNull(); // 분석 실패
   });
@@ -405,9 +401,7 @@ describe("SetupPage — 자료 선택 (①②③)", () => {
       resolveList(fixtures.resumes);
     });
     await waitFor(() => {
-      expect(screen.getByLabelText("이력서 선택")).toHaveTextContent(
-        "백엔드_개발자_이력서.pdf · 분석 완료",
-      );
+      expect(screen.getByLabelText("이력서 선택")).toHaveTextContent("백엔드_개발자_이력서.pdf");
     });
   });
 
@@ -424,70 +418,31 @@ describe("SetupPage — 자료 선택 (①②③)", () => {
 
   it("쿼리 프리셀렉트보다 사용자의 직접 선택이 우선한다", async () => {
     renderSetupPage({ pathname: "/setup", search: "?resume=2" });
-    await screen.findByText(/경력기술서_2026\.pdf · 분석 완료/);
+    await screen.findByText(/경력기술서_2026\.pdf/);
     await userEvent.click(screen.getByLabelText("이력서 선택"));
     await userEvent.click(await screen.findByText("백엔드_개발자_이력서.pdf"));
-    expect(screen.getByLabelText("이력서 선택")).toHaveTextContent(
-      "백엔드_개발자_이력서.pdf · 분석 완료",
-    );
+    expect(screen.getByLabelText("이력서 선택")).toHaveTextContent("백엔드_개발자_이력서.pdf");
   });
 
-  it("'이력서 선택 안 함'으로 프리셀렉트를 해제할 수 있다", async () => {
-    renderSetupPage({ pathname: "/setup", search: "?resume=1" });
-    await screen.findByText(/백엔드_개발자_이력서\.pdf · 분석 완료/);
-    await userEvent.click(screen.getByLabelText("이력서 선택"));
-    await userEvent.click(await screen.findByText(/이력서 선택 안 함/));
-    expect(screen.getByLabelText("이력서 선택")).toHaveTextContent("이력서를 선택하세요");
-    // 이력서 없이는 실전 모의가 다시 잠긴다
+  it("이력서를 선택해야 실전 모의가 열린다", async () => {
+    renderSetupPage();
+    await waitFor(() => {
+      expect(fetchResumesMock).toHaveBeenCalled();
+    });
     expect(screen.getByRole("button", { name: /실전 모의/ })).toBeDisabled();
-  });
-
-  it("② 문구가 이력서 상태에 따라 3분기로 표시된다", async () => {
-    renderSetupPage();
-    // 미선택 — 선택 유도
-    expect(screen.getByText("이력서를 선택하면 직무를 추천해 드려요.")).toBeInTheDocument();
-    // 추천 있음 (id 1 — BACKEND)
     await userEvent.click(screen.getByLabelText("이력서 선택"));
     await userEvent.click(await screen.findByText("백엔드_개발자_이력서.pdf"));
-    expect(screen.getByText(/추천했어요/)).toBeInTheDocument();
-    expect(screen.getByLabelText("직무 선택")).toHaveTextContent("백엔드");
-    // 추천 없음 (id 2) — 기본 직무 안내, 허위 추천 문구 없음
-    await userEvent.click(screen.getByLabelText("이력서 선택"));
-    await userEvent.click(await screen.findByText("경력기술서_2026.pdf"));
-    expect(
-      screen.getByText("기본 직무는 백엔드예요. 직무를 바꾸면 질문 방향이 달라져요."),
-    ).toBeInTheDocument();
-    expect(screen.queryByText(/추천했어요/)).toBeNull();
+    expect(screen.getByRole("button", { name: /실전 모의/ })).toBeEnabled();
   });
 
-  it("② 이력서 변경만으로 추천 직무가 따라 바뀐다", async () => {
-    fetchResumesMock.mockResolvedValue([
-      makeResume({ id: 11, name: "백엔드_추천.pdf", recommendedPosition: "BACKEND" }),
-      makeResume({ id: 12, name: "프론트_추천.pdf", recommendedPosition: "FRONTEND" }),
-      makeResume({ id: 13, name: "추천_없음.pdf" }),
-    ]);
+  it("② 직무 기본값은 백엔드이고 직접 선택으로 바뀐다 (이력서와 무관)", async () => {
     renderSetupPage();
-    await userEvent.click(screen.getByLabelText("이력서 선택"));
-    await userEvent.click(await screen.findByText("백엔드_추천.pdf"));
     expect(screen.getByLabelText("직무 선택")).toHaveTextContent("백엔드");
-
-    await userEvent.click(screen.getByLabelText("이력서 선택"));
-    await userEvent.click(await screen.findByText("프론트_추천.pdf"));
-    expect(screen.getByLabelText("직무 선택")).toHaveTextContent("프론트엔드");
-
-    await userEvent.click(screen.getByLabelText("이력서 선택"));
-    await userEvent.click(await screen.findByText("추천_없음.pdf"));
-    expect(screen.getByLabelText("직무 선택")).toHaveTextContent("백엔드");
-  });
-
-  it("② 직접 선택한 직무는 이력서를 바꿔도 유지된다", async () => {
-    renderSetupPage();
-    await userEvent.click(screen.getByLabelText("이력서 선택"));
-    await userEvent.click(await screen.findByText("백엔드_개발자_이력서.pdf"));
     await userEvent.click(screen.getByLabelText("직무 선택"));
     await userEvent.click(await screen.findByRole("option", { name: "프론트엔드" }));
     expect(screen.getByLabelText("직무 선택")).toHaveTextContent("프론트엔드");
 
+    // 이력서를 바꿔도 직무 선택은 독립 상태로 유지된다
     await userEvent.click(screen.getByLabelText("이력서 선택"));
     await userEvent.click(await screen.findByText("경력기술서_2026.pdf"));
     expect(screen.getByLabelText("직무 선택")).toHaveTextContent("프론트엔드");
@@ -504,9 +459,12 @@ describe("SetupPage — 세션 생성", () => {
 
   beforeEach(() => {
     seedLogin();
+    // 이력서 없는 시작은 완료 이력서가 없는 유저만 — 기본을 빈 목록으로 두고,
+    // 이력서가 필요한 케이스만 픽스처 목록을 명시 주입한다
+    fetchResumesMock.mockResolvedValue([]);
   });
 
-  it("이력서 미선택 + 빠른 연습이면 resumeId 없이 FIVE_MIN 을 전송한다", async () => {
+  it("완료 이력서가 없는 유저는 resumeId 없이 FIVE_MIN 으로 시작한다", async () => {
     const fetchMock = stubSessionFetch();
     await reachReady();
     await userEvent.click(screen.getByRole("button", { name: "면접 시작" }));
@@ -519,9 +477,10 @@ describe("SetupPage — 세션 생성", () => {
   });
 
   it("이력서 선택 + 실전 모의면 resumeId 와 THIRTY_MIN 을 전송한다", async () => {
+    fetchResumesMock.mockResolvedValue(fixtures.resumes);
     const fetchMock = stubSessionFetch();
     await reachReady({ pathname: "/setup", search: "?resume=1" });
-    await screen.findByText(/백엔드_개발자_이력서\.pdf · 분석 완료/);
+    await screen.findByText(/백엔드_개발자_이력서\.pdf/);
     await userEvent.click(screen.getByRole("button", { name: /실전 모의/ }));
     await userEvent.click(screen.getByRole("button", { name: "면접 시작" }));
     await waitFor(() => {
@@ -535,9 +494,10 @@ describe("SetupPage — 세션 생성", () => {
   });
 
   it("이력서 선택 + 빠른 연습이면 resumeId 와 FIVE_MIN 을 전송한다", async () => {
+    fetchResumesMock.mockResolvedValue(fixtures.resumes);
     const fetchMock = stubSessionFetch();
     await reachReady({ pathname: "/setup", search: "?resume=1" });
-    await screen.findByText(/백엔드_개발자_이력서\.pdf · 분석 완료/);
+    await screen.findByText(/백엔드_개발자_이력서\.pdf/);
     await userEvent.click(screen.getByRole("button", { name: "면접 시작" }));
     await waitFor(() => {
       expect(screen.getByTestId("location")).toHaveTextContent("/live");
@@ -561,19 +521,18 @@ describe("SetupPage — 세션 생성", () => {
     expect(sessionBodyOf(fetchMock).position).toBe("FRONTEND");
   });
 
-  it("프리셀렉트를 '선택 안 함'으로 해제하면 resumeId 없이 전송된다", async () => {
-    const fetchMock = stubSessionFetch();
-    await reachReady({ pathname: "/setup", search: "?resume=1" });
-    await screen.findByText(/백엔드_개발자_이력서\.pdf · 분석 완료/);
-    await userEvent.click(screen.getByLabelText("이력서 선택"));
-    await userEvent.click(await screen.findByText(/이력서 선택 안 함/));
-    await userEvent.click(screen.getByRole("button", { name: "면접 시작" }));
+  it("완료 이력서가 있으면 선택 전까지 시작이 잠긴다", async () => {
+    fetchResumesMock.mockResolvedValue(fixtures.resumes);
+    stubSessionFetch();
+    await reachReady();
     await waitFor(() => {
-      expect(screen.getByTestId("location")).toHaveTextContent("/live");
+      expect(screen.getByText("이력서를 선택하면 면접을 시작할 수 있어요.")).toBeInTheDocument();
     });
-    const body = sessionBodyOf(fetchMock);
-    expect("resumeId" in body).toBe(false);
-    expect(body.interviewType).toBe("FIVE_MIN");
+    expect(screen.getByRole("button", { name: "면접 시작" })).toBeDisabled();
+
+    await userEvent.click(screen.getByLabelText("이력서 선택"));
+    await userEvent.click(await screen.findByText("백엔드_개발자_이력서.pdf"));
+    expect(screen.getByRole("button", { name: "면접 시작" })).toBeEnabled();
   });
 
   it("요청 중에는 버튼이 잠기고 재클릭해도 요청은 1회다", async () => {
@@ -684,16 +643,5 @@ describe("SetupPage — 세션 생성", () => {
     expect(await screen.findByRole("alert")).toHaveTextContent("면접 준비에 실패했어요");
     expect(screen.getByTestId("location")).toHaveTextContent("/setup");
     expect(sessionStorage.getItem("hbb.interview.devicePrefs")).toBeNull(); // 저장 실패 시 선호도 안 덮음
-  });
-
-  it("분석 완료 이력서가 없어도 빠른 연습으로 시작할 수 있다", async () => {
-    fetchResumesMock.mockResolvedValue([]);
-    const fetchMock = stubSessionFetch();
-    await reachReady();
-    await userEvent.click(screen.getByRole("button", { name: "면접 시작" }));
-    await waitFor(() => {
-      expect(screen.getByTestId("location")).toHaveTextContent("/live");
-    });
-    expect(sessionBodyOf(fetchMock)).toEqual({ interviewType: "FIVE_MIN", position: "BACKEND" });
   });
 });

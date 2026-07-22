@@ -714,9 +714,11 @@ export function SetupPage() {
     const raw = searchParams.get("resume");
     return raw !== null && /^\d+$/.test(raw) ? Number(raw) : null;
   });
-  // 3-상태: undefined = 미조작(쿼리 적용) / null = 명시적 "선택 안 함" / number = 명시 선택
-  const [resumeOverride, setResumeOverride] = useState<number | null | undefined>(undefined);
-  const [userPosition, setUserPosition] = useState<Position | null>(null);
+  // undefined = 미조작(쿼리 프리셀렉트 적용) / number = 명시 선택 — 선택 해제는 없다
+  // (이력서 없는 시작은 완료 이력서가 없는 유저에게만 허용되는 정책)
+  const [resumeOverride, setResumeOverride] = useState<number | undefined>(undefined);
+  // 직무는 이 화면에서 직접 선택한다 — 이력서 분석 추천 연동 없음(기본값 백엔드)
+  const [position, setPosition] = useState<Position>("BACKEND");
   const [pickOpen, setPickOpen] = useState(false);
   const [startFailure, setStartFailure] = useState<{ detail: string | null } | null>(null);
   const resumesQuery = useResumes();
@@ -730,9 +732,10 @@ export function SetupPage() {
     selectedResumeId !== null ? (resumeOpts.find((r) => r.id === selectedResumeId) ?? null) : null;
   // 이력서 없이는 실전 모의 선택 불가 — 상태 대신 렌더 시점에 파생
   const effectiveDur = !selectedResume && dur === "real" ? "quick" : dur;
-  // 직무: 직접 선택 > 선택된 이력서의 추천 > 기본(백엔드)
-  const effectivePosition: Position =
-    userPosition ?? selectedResume?.recommendedPosition ?? "BACKEND";
+  // 이력서 없는 시작은 "완료 이력서가 없다"고 확인된 유저에게만 허용 —
+  // 목록 조회 미완·실패 상태에서는 허용하지 않는다 (미선택 우회 차단)
+  const resumeRequirementMet =
+    selectedResume !== null || (resumesQuery.isSuccess && resumeOpts.length === 0);
 
   const handleStart = async () => {
     if (createSession.isPending) return;
@@ -746,7 +749,7 @@ export function SetupPage() {
     const body: CreateSessionRequest = {
       ...(selectedResume ? { resumeId: selectedResume.id } : {}),
       interviewType: effectiveDur === "real" ? "THIRTY_MIN" : "FIVE_MIN",
-      position: effectivePosition,
+      position,
     };
     let data: CreateSessionResponse;
     try {
@@ -840,7 +843,7 @@ export function SetupPage() {
                   {selectedResume ? (
                     <Fragment>
                       <DocThumb ext={selectedResume.ext} size={22} />
-                      {selectedResume.name} · 분석 완료
+                      {selectedResume.name}
                     </Fragment>
                   ) : (
                     "이력서를 선택하세요"
@@ -873,11 +876,12 @@ export function SetupPage() {
                   ) : resumeOpts.length === 0 ? (
                     <MenuNotice>분석 완료된 이력서가 없어요 — 이력서를 업로드해 주세요.</MenuNotice>
                   ) : (
-                    <Fragment>
+                    resumeOpts.map((r) => (
                       <button
+                        key={r.id}
                         className="linkbtn menu-item"
                         onClick={() => {
-                          setResumeOverride(null);
+                          setResumeOverride(r.id);
                           setPickOpen(false);
                         }}
                         style={{
@@ -889,47 +893,13 @@ export function SetupPage() {
                           borderRadius: "var(--radius-8)",
                           fontFamily: "var(--font-sans)",
                           fontSize: 14,
-                          fontWeight: 500,
-                          color: "var(--fg-secondary)",
+                          fontWeight: 600,
+                          color: "var(--fg-default)",
                         }}
                       >
-                        이력서 선택 안 함 — 빠른 연습(5분)만 가능
+                        <DocThumb ext={r.ext} size={22} /> {r.name}
                       </button>
-                      {resumeOpts.map((r) => (
-                        <button
-                          key={r.id}
-                          className="linkbtn menu-item"
-                          onClick={() => {
-                            setResumeOverride(r.id);
-                            setPickOpen(false);
-                          }}
-                          style={{
-                            width: "100%",
-                            display: "flex",
-                            alignItems: "center",
-                            gap: 10,
-                            padding: "10px 12px",
-                            borderRadius: "var(--radius-8)",
-                            fontFamily: "var(--font-sans)",
-                            fontSize: 14,
-                            fontWeight: 600,
-                            color: "var(--fg-default)",
-                          }}
-                        >
-                          <DocThumb ext={r.ext} size={22} /> {r.name}{" "}
-                          <span
-                            style={{
-                              marginLeft: "auto",
-                              fontSize: 12,
-                              fontWeight: 500,
-                              color: "var(--fg-tertiary)",
-                            }}
-                          >
-                            분석 완료
-                          </span>
-                        </button>
-                      ))}
-                    </Fragment>
+                    ))
                   )}
                 </div>
               )}
@@ -937,31 +907,7 @@ export function SetupPage() {
           </StepCard>
 
           <StepCard no={2} title="면접 유형">
-            <p
-              style={{
-                fontFamily: "var(--font-sans)",
-                fontSize: 13,
-                fontWeight: 500,
-                lineHeight: 1.5,
-                color: "var(--fg-secondary)",
-                marginBottom: 10,
-              }}
-            >
-              {selectedResume === null ? (
-                "이력서를 선택하면 직무를 추천해 드려요."
-              ) : selectedResume.recommendedPosition ? (
-                <Fragment>
-                  이력서를 분석해{" "}
-                  <b style={{ color: "var(--blue-800)", fontWeight: 700 }}>
-                    {POSITION_LABEL[selectedResume.recommendedPosition]}
-                  </b>
-                  로 추천했어요. 직무를 바꾸면 질문 방향이 달라져요.
-                </Fragment>
-              ) : (
-                "기본 직무는 백엔드예요. 직무를 바꾸면 질문 방향이 달라져요."
-              )}
-            </p>
-            <PositionPicker value={effectivePosition} onSelect={setUserPosition} />
+            <PositionPicker value={position} onSelect={setPosition} />
           </StepCard>
 
           <StepCard no={3} title="면접 시간">
@@ -1042,7 +988,7 @@ export function SetupPage() {
             variant="solid"
             size="lg"
             fullWidth
-            disabled={!setup.canStart || createSession.isPending}
+            disabled={!setup.canStart || !resumeRequirementMet || createSession.isPending}
             onClick={() => void handleStart()}
           >
             {createSession.isPending ? "면접 준비 중…" : "면접 시작"}
@@ -1064,7 +1010,7 @@ export function SetupPage() {
               {startFailure.detail ? ` (${startFailure.detail})` : ""}
             </p>
           )}
-          {!setup.canStart && (
+          {(!setup.canStart || !resumeRequirementMet) && (
             <p
               style={{
                 fontFamily: "var(--font-sans)",
@@ -1076,9 +1022,11 @@ export function SetupPage() {
                 marginBottom: 0,
               }}
             >
-              {setup.phase === "ready" && setup.micId !== null && !setup.micBusy
-                ? "마이크에 대고 말해 입력을 확인해 주세요."
-                : "장비 점검을 완료하면 면접을 시작할 수 있어요."}
+              {!setup.canStart
+                ? setup.phase === "ready" && setup.micId !== null && !setup.micBusy
+                  ? "마이크에 대고 말해 입력을 확인해 주세요."
+                  : "장비 점검을 완료하면 면접을 시작할 수 있어요."
+                : "이력서를 선택하면 면접을 시작할 수 있어요."}
             </p>
           )}
         </div>
