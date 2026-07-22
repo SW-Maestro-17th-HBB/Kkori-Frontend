@@ -1,16 +1,25 @@
-/* SetupPage 테스트 — ④ 카메라·마이크 점검과 면접 시작 게이팅 검증 (HBB1-145).
-   정책 원천: docs/requirements/session/device-setup.md
+/* SetupPage 테스트 — ①②③ 자료 선택·세션 생성 (HBB1-18) + ④ 장비 점검 (HBB1-145).
+   정책 원천: docs/requirements/session/interview-start.md · device-setup.md
    마이크 정상 = 실입력 감지, 카메라 정상 = 실프레임 도착, 드롭다운도 점검 트리거. */
 import { Fragment } from "react";
 import { act, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { useLocation } from "react-router";
+import * as fixtures from "../api/fixtures";
+import type { Resume } from "../api/types";
 import { renderWithProviders } from "../test/render";
 import { FakeMedia, FakeRoom } from "../test/livekitMock";
 import { SetupPage } from "./SetupPage";
 
 vi.mock("livekit-client", async () => (await import("../test/livekitMock")).createLiveKitMock());
+
+// 이력서 목록만 케이스별로 제어한다 — 나머지 client 모듈은 원본 유지
+const { fetchResumesMock } = vi.hoisted(() => ({ fetchResumesMock: vi.fn() }));
+vi.mock("../api/client", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../api/client")>()),
+  fetchResumes: fetchResumesMock,
+}));
 
 /** useNav 이동 결과 확인용 — 현재 경로를 노출한다 */
 function LocationProbe() {
@@ -18,14 +27,59 @@ function LocationProbe() {
   return <div data-testid="location">{location.pathname}</div>;
 }
 
-const renderSetupPage = () =>
+const renderSetupPage = (route: string | { pathname: string; search?: string } = "/setup") =>
   renderWithProviders(
     <Fragment>
       <SetupPage />
       <LocationProbe />
     </Fragment>,
-    { route: "/setup" },
+    { route },
   );
+
+/** 인증 시드 — App.test 의 seedLogin 과 동일한 동기 직접 기록 (setTokens 는 비동기라 배제) */
+const seedLogin = (sessionId = "sess-A") => {
+  localStorage.setItem(
+    "kkori.auth",
+    JSON.stringify({ accessToken: "at-1", refreshToken: "rt-1", sessionId }),
+  );
+};
+
+const envelope = (data: unknown, status = 201) =>
+  new Response(JSON.stringify({ success: true, data }), {
+    status,
+    headers: { "Content-Type": "application/json" },
+  });
+
+const errorEnvelope = (code: string, message: string, status: number) =>
+  new Response(JSON.stringify({ success: false, data: null, error: { code, message } }), {
+    status,
+    headers: { "Content-Type": "application/json" },
+  });
+
+const SESSION_DATA = {
+  livekitToken: "lk-token",
+  livekitUrl: "wss://lk.example",
+  livekitRoom: "room-1",
+};
+
+/** 세션 생성 성공 응답으로 fetch 를 스텁한다 */
+const stubSessionFetch = () => {
+  const mock = vi.fn().mockImplementation(async () => envelope(SESSION_DATA));
+  vi.stubGlobal("fetch", mock);
+  return mock;
+};
+
+const sessionBodyOf = (mock: ReturnType<typeof vi.fn>, call = 0) =>
+  JSON.parse((mock.mock.calls[call][1] as RequestInit).body as string) as Record<string, unknown>;
+
+/** 테스트 전용 이력서 — 추천 추종 등 픽스처로 못 만드는 조합용 */
+const makeResume = (over: Partial<Resume> & { id: number; name: string }): Resume => ({
+  ext: "PDF",
+  meta: "1.0MB · 방금 전",
+  uploadedAt: "2026.07.01",
+  status: "done",
+  ...over,
+});
 
 const audioTrack = () => FakeMedia.tracks.find((t) => t.kind === "audio")!;
 const videoTrack = () => FakeMedia.tracks.find((t) => t.kind === "video")!;
@@ -57,13 +111,21 @@ const pickDevice = async (pickerLabel: string, optionName: string) => {
   await userEvent.click(await screen.findByRole("option", { name: optionName }));
 };
 
-describe("SetupPage — 장비 점검", () => {
-  beforeEach(() => {
-    FakeRoom.reset();
-    FakeMedia.reset();
-    sessionStorage.clear();
-  });
+beforeEach(() => {
+  FakeRoom.reset();
+  FakeMedia.reset();
+  sessionStorage.clear();
+  localStorage.clear();
+  fetchResumesMock.mockReset();
+  fetchResumesMock.mockResolvedValue(fixtures.resumes);
+});
 
+afterEach(() => {
+  vi.unstubAllGlobals();
+  vi.restoreAllMocks();
+});
+
+describe("SetupPage — 장비 점검", () => {
   it("점검 전에는 면접 시작이 비활성화되고 드롭다운은 자리 표시로 활성이다", () => {
     renderSetupPage();
     expect(screen.getByRole("button", { name: "면접 시작" })).toBeDisabled();
@@ -270,14 +332,368 @@ describe("SetupPage — 장비 점검", () => {
     expect(screen.getByRole("button", { name: "면접 시작" })).toBeEnabled();
   });
 
-  it("면접 시작 시 선택한 마이크를 저장하고 /live 로 이동한다", async () => {
+  it("면접 시작 시 세션을 발급받아 저장하고, 선택한 마이크와 함께 /live 로 이동한다", async () => {
+    seedLogin();
+    const fetchMock = stubSessionFetch();
     renderSetupPage();
     await startCheck();
     await speakIntoMic();
     await userEvent.click(screen.getByRole("button", { name: "면접 시작" }));
+
+    await waitFor(() => {
+      expect(screen.getByTestId("location")).toHaveTextContent("/live");
+    });
+    // 세션 발급 요청 — 인증 첨부 + 합의 계약 본문
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(url).toContain("/api/v1/sessions");
+    expect(init.method).toBe("POST");
+    expect((init.headers as Record<string, string>).Authorization).toBe("Bearer at-1");
+    // 발급 결과가 /live 핸드오프 저장소에 기록된다
+    expect(JSON.parse(sessionStorage.getItem("hbb.interview.session")!)).toEqual({
+      url: "wss://lk.example",
+      token: "lk-token",
+      room: "room-1",
+      authSessionId: "sess-A",
+    });
     expect(JSON.parse(sessionStorage.getItem("hbb.interview.devicePrefs")!)).toEqual({
       micId: "mic-default",
     });
-    expect(screen.getByTestId("location")).toHaveTextContent("/live");
+  });
+});
+
+describe("SetupPage — 자료 선택 (①②③)", () => {
+  it("① 드롭다운에는 분석 완료 이력서와 '선택 안 함' 옵션만 노출된다", async () => {
+    renderSetupPage();
+    await userEvent.click(screen.getByLabelText("이력서 선택"));
+    expect(await screen.findByText("백엔드_개발자_이력서.pdf")).toBeInTheDocument();
+    expect(screen.getByText("경력기술서_2026.pdf")).toBeInTheDocument();
+    expect(screen.getByText(/이력서 선택 안 함/)).toBeInTheDocument();
+    expect(screen.queryByText("신입_포트폴리오.pdf")).toBeNull(); // 분석 중
+    expect(screen.queryByText("이력서_v1.docx")).toBeNull(); // 분석 실패
+  });
+
+  it("① 분석 완료 이력서가 없으면 업로드 안내를 표시한다", async () => {
+    fetchResumesMock.mockResolvedValue([]);
+    renderSetupPage();
+    await userEvent.click(screen.getByLabelText("이력서 선택"));
+    expect(
+      await screen.findByText("분석 완료된 이력서가 없어요 — 이력서를 업로드해 주세요."),
+    ).toBeInTheDocument();
+  });
+
+  it("① 목록 조회 실패 시 실패 안내를 표시한다", async () => {
+    fetchResumesMock.mockRejectedValue(new Error("network"));
+    renderSetupPage();
+    await userEvent.click(screen.getByLabelText("이력서 선택"));
+    expect(
+      await screen.findByText("이력서 목록을 불러오지 못했어요 — 잠시 후 다시 시도해 주세요."),
+    ).toBeInTheDocument();
+  });
+
+  it("쿼리 프리셀렉트: 유효한 ?resume=<id> 는 목록 도착 후 ①에 적용된다", async () => {
+    let resolveList!: (value: Resume[]) => void;
+    fetchResumesMock.mockReturnValueOnce(
+      new Promise<Resume[]>((resolve) => {
+        resolveList = resolve;
+      }),
+    );
+    renderSetupPage({ pathname: "/setup", search: "?resume=1" });
+    // 목록 도착 전 — 무효 판정 없이 미선택 유지
+    expect(screen.getByLabelText("이력서 선택")).toHaveTextContent("이력서를 선택하세요");
+    await act(async () => {
+      resolveList(fixtures.resumes);
+    });
+    await waitFor(() => {
+      expect(screen.getByLabelText("이력서 선택")).toHaveTextContent(
+        "백엔드_개발자_이력서.pdf · 분석 완료",
+      );
+    });
+  });
+
+  it.each([["abc"], ["999"], ["3"]])(
+    "쿼리 프리셀렉트: 무효한 ?resume=%s 는 무시된다",
+    async (raw) => {
+      renderSetupPage({ pathname: "/setup", search: `?resume=${raw}` });
+      await waitFor(() => {
+        expect(fetchResumesMock).toHaveBeenCalled();
+      });
+      expect(screen.getByLabelText("이력서 선택")).toHaveTextContent("이력서를 선택하세요");
+    },
+  );
+
+  it("쿼리 프리셀렉트보다 사용자의 직접 선택이 우선한다", async () => {
+    renderSetupPage({ pathname: "/setup", search: "?resume=2" });
+    await screen.findByText(/경력기술서_2026\.pdf · 분석 완료/);
+    await userEvent.click(screen.getByLabelText("이력서 선택"));
+    await userEvent.click(await screen.findByText("백엔드_개발자_이력서.pdf"));
+    expect(screen.getByLabelText("이력서 선택")).toHaveTextContent(
+      "백엔드_개발자_이력서.pdf · 분석 완료",
+    );
+  });
+
+  it("'이력서 선택 안 함'으로 프리셀렉트를 해제할 수 있다", async () => {
+    renderSetupPage({ pathname: "/setup", search: "?resume=1" });
+    await screen.findByText(/백엔드_개발자_이력서\.pdf · 분석 완료/);
+    await userEvent.click(screen.getByLabelText("이력서 선택"));
+    await userEvent.click(await screen.findByText(/이력서 선택 안 함/));
+    expect(screen.getByLabelText("이력서 선택")).toHaveTextContent("이력서를 선택하세요");
+    // 이력서 없이는 실전 모의가 다시 잠긴다
+    expect(screen.getByRole("button", { name: /실전 모의/ })).toBeDisabled();
+  });
+
+  it("② 문구가 이력서 상태에 따라 3분기로 표시된다", async () => {
+    renderSetupPage();
+    // 미선택 — 선택 유도
+    expect(screen.getByText("이력서를 선택하면 직무를 추천해 드려요.")).toBeInTheDocument();
+    // 추천 있음 (id 1 — BACKEND)
+    await userEvent.click(screen.getByLabelText("이력서 선택"));
+    await userEvent.click(await screen.findByText("백엔드_개발자_이력서.pdf"));
+    expect(screen.getByText(/추천했어요/)).toBeInTheDocument();
+    expect(screen.getByLabelText("직무 선택")).toHaveTextContent("백엔드");
+    // 추천 없음 (id 2) — 기본 직무 안내, 허위 추천 문구 없음
+    await userEvent.click(screen.getByLabelText("이력서 선택"));
+    await userEvent.click(await screen.findByText("경력기술서_2026.pdf"));
+    expect(
+      screen.getByText("기본 직무는 백엔드예요. 직무를 바꾸면 질문 방향이 달라져요."),
+    ).toBeInTheDocument();
+    expect(screen.queryByText(/추천했어요/)).toBeNull();
+  });
+
+  it("② 이력서 변경만으로 추천 직무가 따라 바뀐다", async () => {
+    fetchResumesMock.mockResolvedValue([
+      makeResume({ id: 11, name: "백엔드_추천.pdf", recommendedPosition: "BACKEND" }),
+      makeResume({ id: 12, name: "프론트_추천.pdf", recommendedPosition: "FRONTEND" }),
+      makeResume({ id: 13, name: "추천_없음.pdf" }),
+    ]);
+    renderSetupPage();
+    await userEvent.click(screen.getByLabelText("이력서 선택"));
+    await userEvent.click(await screen.findByText("백엔드_추천.pdf"));
+    expect(screen.getByLabelText("직무 선택")).toHaveTextContent("백엔드");
+
+    await userEvent.click(screen.getByLabelText("이력서 선택"));
+    await userEvent.click(await screen.findByText("프론트_추천.pdf"));
+    expect(screen.getByLabelText("직무 선택")).toHaveTextContent("프론트엔드");
+
+    await userEvent.click(screen.getByLabelText("이력서 선택"));
+    await userEvent.click(await screen.findByText("추천_없음.pdf"));
+    expect(screen.getByLabelText("직무 선택")).toHaveTextContent("백엔드");
+  });
+
+  it("② 직접 선택한 직무는 이력서를 바꿔도 유지된다", async () => {
+    renderSetupPage();
+    await userEvent.click(screen.getByLabelText("이력서 선택"));
+    await userEvent.click(await screen.findByText("백엔드_개발자_이력서.pdf"));
+    await userEvent.click(screen.getByLabelText("직무 선택"));
+    await userEvent.click(await screen.findByRole("option", { name: "프론트엔드" }));
+    expect(screen.getByLabelText("직무 선택")).toHaveTextContent("프론트엔드");
+
+    await userEvent.click(screen.getByLabelText("이력서 선택"));
+    await userEvent.click(await screen.findByText("경력기술서_2026.pdf"));
+    expect(screen.getByLabelText("직무 선택")).toHaveTextContent("프론트엔드");
+  });
+});
+
+describe("SetupPage — 세션 생성", () => {
+  /** 장비 점검을 통과해 시작 가능 상태까지 진행 */
+  const reachReady = async (route?: string | { pathname: string; search?: string }) => {
+    renderSetupPage(route);
+    await startCheck();
+    await speakIntoMic();
+  };
+
+  beforeEach(() => {
+    seedLogin();
+  });
+
+  it("이력서 미선택 + 빠른 연습이면 resumeId 없이 FIVE_MIN 을 전송한다", async () => {
+    const fetchMock = stubSessionFetch();
+    await reachReady();
+    await userEvent.click(screen.getByRole("button", { name: "면접 시작" }));
+    await waitFor(() => {
+      expect(screen.getByTestId("location")).toHaveTextContent("/live");
+    });
+    const body = sessionBodyOf(fetchMock);
+    expect(body).toEqual({ interviewType: "FIVE_MIN", position: "BACKEND" });
+    expect("resumeId" in body).toBe(false);
+  });
+
+  it("이력서 선택 + 실전 모의면 resumeId 와 THIRTY_MIN 을 전송한다", async () => {
+    const fetchMock = stubSessionFetch();
+    await reachReady({ pathname: "/setup", search: "?resume=1" });
+    await screen.findByText(/백엔드_개발자_이력서\.pdf · 분석 완료/);
+    await userEvent.click(screen.getByRole("button", { name: /실전 모의/ }));
+    await userEvent.click(screen.getByRole("button", { name: "면접 시작" }));
+    await waitFor(() => {
+      expect(screen.getByTestId("location")).toHaveTextContent("/live");
+    });
+    expect(sessionBodyOf(fetchMock)).toEqual({
+      resumeId: 1,
+      interviewType: "THIRTY_MIN",
+      position: "BACKEND",
+    });
+  });
+
+  it("이력서 선택 + 빠른 연습이면 resumeId 와 FIVE_MIN 을 전송한다", async () => {
+    const fetchMock = stubSessionFetch();
+    await reachReady({ pathname: "/setup", search: "?resume=1" });
+    await screen.findByText(/백엔드_개발자_이력서\.pdf · 분석 완료/);
+    await userEvent.click(screen.getByRole("button", { name: "면접 시작" }));
+    await waitFor(() => {
+      expect(screen.getByTestId("location")).toHaveTextContent("/live");
+    });
+    expect(sessionBodyOf(fetchMock)).toEqual({
+      resumeId: 1,
+      interviewType: "FIVE_MIN",
+      position: "BACKEND",
+    });
+  });
+
+  it("② 에서 직접 고른 직무가 position 으로 전송된다", async () => {
+    const fetchMock = stubSessionFetch();
+    await reachReady();
+    await userEvent.click(screen.getByLabelText("직무 선택"));
+    await userEvent.click(await screen.findByRole("option", { name: "프론트엔드" }));
+    await userEvent.click(screen.getByRole("button", { name: "면접 시작" }));
+    await waitFor(() => {
+      expect(screen.getByTestId("location")).toHaveTextContent("/live");
+    });
+    expect(sessionBodyOf(fetchMock).position).toBe("FRONTEND");
+  });
+
+  it("프리셀렉트를 '선택 안 함'으로 해제하면 resumeId 없이 전송된다", async () => {
+    const fetchMock = stubSessionFetch();
+    await reachReady({ pathname: "/setup", search: "?resume=1" });
+    await screen.findByText(/백엔드_개발자_이력서\.pdf · 분석 완료/);
+    await userEvent.click(screen.getByLabelText("이력서 선택"));
+    await userEvent.click(await screen.findByText(/이력서 선택 안 함/));
+    await userEvent.click(screen.getByRole("button", { name: "면접 시작" }));
+    await waitFor(() => {
+      expect(screen.getByTestId("location")).toHaveTextContent("/live");
+    });
+    const body = sessionBodyOf(fetchMock);
+    expect("resumeId" in body).toBe(false);
+    expect(body.interviewType).toBe("FIVE_MIN");
+  });
+
+  it("요청 중에는 버튼이 잠기고 재클릭해도 요청은 1회다", async () => {
+    let resolveFetch!: (response: Response) => void;
+    const fetchMock = vi.fn().mockReturnValue(
+      new Promise<Response>((resolve) => {
+        resolveFetch = resolve;
+      }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+    await reachReady();
+    await userEvent.click(screen.getByRole("button", { name: "면접 시작" }));
+    const pendingButton = await screen.findByRole("button", { name: "면접 준비 중…" });
+    expect(pendingButton).toBeDisabled();
+    await userEvent.click(pendingButton);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    await act(async () => {
+      resolveFetch(envelope(SESSION_DATA));
+    });
+    await waitFor(() => {
+      expect(screen.getByTestId("location")).toHaveTextContent("/live");
+    });
+  });
+
+  it("발급 실패 시 인라인 안내를 표시하고 이동하지 않으며, 재클릭이 재시도다", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockImplementationOnce(async () =>
+        errorEnvelope("SESSION_ROOM_CREATE_FAILED", "LiveKit 룸 생성에 실패했습니다", 500),
+      )
+      .mockImplementation(async () => envelope(SESSION_DATA));
+    vi.stubGlobal("fetch", fetchMock);
+    await reachReady();
+    await userEvent.click(screen.getByRole("button", { name: "면접 시작" }));
+    expect(await screen.findByRole("alert")).toHaveTextContent("면접 준비에 실패했어요");
+    expect(screen.getByTestId("location")).toHaveTextContent("/setup");
+    expect(sessionStorage.getItem("hbb.interview.session")).toBeNull();
+
+    await userEvent.click(screen.getByRole("button", { name: "면접 시작" }));
+    await waitFor(() => {
+      expect(screen.getByTestId("location")).toHaveTextContent("/live");
+    });
+  });
+
+  it("필수 응답 필드가 비어 있으면 성공으로 취급하지 않는다", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockImplementation(async () => envelope({ ...SESSION_DATA, livekitRoom: "" })),
+    );
+    await reachReady();
+    await userEvent.click(screen.getByRole("button", { name: "면접 시작" }));
+    expect(await screen.findByRole("alert")).toHaveTextContent("면접 준비에 실패했어요");
+    expect(screen.getByTestId("location")).toHaveTextContent("/setup");
+    expect(sessionStorage.getItem("hbb.interview.session")).toBeNull();
+  });
+
+  it("응답에 세션 id 가 있으면 함께 저장한다 (부재는 실패 아님)", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockImplementation(async () => envelope({ ...SESSION_DATA, id: 34 })),
+    );
+    await reachReady();
+    await userEvent.click(screen.getByRole("button", { name: "면접 시작" }));
+    await waitFor(() => {
+      expect(screen.getByTestId("location")).toHaveTextContent("/live");
+    });
+    expect(JSON.parse(sessionStorage.getItem("hbb.interview.session")!)).toMatchObject({ id: 34 });
+  });
+
+  it("요청 중 계정이 교체되면 이전 계정의 응답을 폐기한다", async () => {
+    let resolveFetch!: (response: Response) => void;
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockReturnValue(
+        new Promise<Response>((resolve) => {
+          resolveFetch = resolve;
+        }),
+      ),
+    );
+    await reachReady();
+    await userEvent.click(screen.getByRole("button", { name: "면접 시작" }));
+    await screen.findByRole("button", { name: "면접 준비 중…" });
+    seedLogin("sess-B"); // 응답 대기 중 다른 탭에서 계정 교체
+    await act(async () => {
+      resolveFetch(envelope(SESSION_DATA));
+    });
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: "면접 시작" })).toBeInTheDocument();
+    });
+    expect(screen.getByTestId("location")).toHaveTextContent("/setup");
+    expect(sessionStorage.getItem("hbb.interview.session")).toBeNull();
+  });
+
+  it("핸드오프 저장이 실패하면 이동하지 않고 안내를 표시한다", async () => {
+    stubSessionFetch();
+    await reachReady();
+    const originalSetItem = Storage.prototype.setItem;
+    vi.spyOn(Storage.prototype, "setItem").mockImplementation(function (
+      this: Storage,
+      key: string,
+      value: string,
+    ) {
+      // 핸드오프 키만 실패 — 장치 선호 저장은 통과시켜야 오검증이 없다
+      if (key === "hbb.interview.session") throw new DOMException("quota", "QuotaExceededError");
+      originalSetItem.call(this, key, value);
+    });
+    await userEvent.click(screen.getByRole("button", { name: "면접 시작" }));
+    expect(await screen.findByRole("alert")).toHaveTextContent("면접 준비에 실패했어요");
+    expect(screen.getByTestId("location")).toHaveTextContent("/setup");
+    expect(sessionStorage.getItem("hbb.interview.devicePrefs")).toBeNull(); // 저장 실패 시 선호도 안 덮음
+  });
+
+  it("분석 완료 이력서가 없어도 빠른 연습으로 시작할 수 있다", async () => {
+    fetchResumesMock.mockResolvedValue([]);
+    const fetchMock = stubSessionFetch();
+    await reachReady();
+    await userEvent.click(screen.getByRole("button", { name: "면접 시작" }));
+    await waitFor(() => {
+      expect(screen.getByTestId("location")).toHaveTextContent("/live");
+    });
+    expect(sessionBodyOf(fetchMock)).toEqual({ interviewType: "FIVE_MIN", position: "BACKEND" });
   });
 });
