@@ -5,6 +5,20 @@ import type { NavKey } from "../routes";
 
 export type ResumeStatus = "done" | "ing" | "fail";
 
+/** 면접 직무 — 세션 생성 계약의 position 값 (화면 라벨은 별도 매핑) */
+export type Position = "BACKEND" | "FRONTEND";
+
+/** 면접 유형 — ③ 시간 선택이 곧 유형 (5분/30분, CS는 향후 값 추가) */
+export type InterviewType = "FIVE_MIN" | "THIRTY_MIN";
+
+/** 세션 생성 요청 — 백엔드 합의 계약(구현·스키마 반영 대기).
+    resumeId는 실전 모의(THIRTY_MIN) 필수·빠른 연습(FIVE_MIN) 선택 — 미선택 시 필드 생략 */
+export interface CreateSessionRequest {
+  resumeId?: number;
+  interviewType: InterviewType;
+  position: Position;
+}
+
 export interface ResumePreview {
   name: string;
   career: string;

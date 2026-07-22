@@ -195,7 +195,7 @@ export function ResumePage() {
                                 size="sm"
                                 onClick={(e) => {
                                   e.stopPropagation();
-                                  nav("setup");
+                                  nav("setup", { query: { resume: String(r.id) } });
                                 }}
                               >
                                 이 이력서로 면접 시작 →

@@ -1,17 +1,24 @@
 /* ============================ 면접 설정 (/setup) ============================ */
 import { Fragment, useEffect, useRef, useState, type ReactNode } from "react";
-import { useResumes } from "../api/hooks";
-import { Button, Card } from "../components/ds";
+import { Room } from "livekit-client";
+import { useSearchParams } from "react-router";
+import type { CreateSessionResponse } from "../api/client";
+import { useCreateInterviewSession, useResumes } from "../api/hooks";
+import { getAuthSessionId } from "../api/tokenStore";
+import type { CreateSessionRequest, Position } from "../api/types";
+import { Button, Card, Modal } from "../components/ds";
 import { Icon } from "../components/Icon";
 import { Display, DocThumb } from "../components/primitives";
 import { TopNav } from "../components/TopNav";
 import { saveDevicePreferences } from "../hooks/devicePreferences";
+import { saveInterviewSession } from "../hooks/interviewSession";
 import {
   useDeviceSetup,
   type DeviceCheckError,
   type DeviceNotice,
   type DeviceSetupState,
 } from "../hooks/useDeviceSetup";
+import { stashConnectedRoom } from "../hooks/useLiveKitRoom";
 import { useNav } from "../hooks/useNav";
 
 function StepCard({
@@ -67,27 +74,116 @@ function StepCard({
   );
 }
 
-function SelectRow({ value, small }: { value: string; small?: boolean }) {
+/* ---------- ② 면접 유형 (직무 선택) ---------- */
+
+const POSITION_LABEL: Record<Position, string> = {
+  BACKEND: "백엔드",
+  FRONTEND: "프론트엔드",
+};
+const POSITIONS = Object.keys(POSITION_LABEL) as Position[];
+
+/** ① 드롭다운 메뉴 안의 상태 안내(빈 목록·로딩·조회 실패) */
+function MenuNotice({ children }: { children: ReactNode }) {
   return (
     <div
       style={{
-        height: small ? 40 : 48,
-        border: "1px solid var(--border-default)",
-        borderRadius: small ? "var(--radius-btn-md)" : "var(--radius-12)",
-        background: "var(--bg-surface)",
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "space-between",
-        padding: "0 14px",
+        padding: 12,
         fontFamily: "var(--font-sans)",
-        fontSize: small ? 14 : 15,
+        fontSize: 13.5,
         fontWeight: 500,
-        color: "var(--fg-strong)",
-        cursor: "pointer",
+        lineHeight: 1.5,
+        color: "var(--fg-tertiary)",
       }}
     >
-      <span>{value}</span>
-      <Icon name="chevron-down" size={18} style={{ color: "var(--fg-tertiary)" }} />
+      {children}
+    </div>
+  );
+}
+
+function PositionPicker({
+  value,
+  onSelect,
+}: {
+  value: Position;
+  onSelect: (position: Position) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  return (
+    <div style={{ position: "relative" }}>
+      <button
+        className="linkbtn"
+        aria-haspopup="listbox"
+        aria-expanded={open}
+        aria-label="직무 선택"
+        onClick={() => setOpen((o) => !o)}
+        style={{
+          width: "100%",
+          height: 48,
+          border: "1px solid var(--border-default)",
+          borderRadius: "var(--radius-12)",
+          background: "var(--bg-surface)",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          padding: "0 14px",
+          fontFamily: "var(--font-sans)",
+          fontSize: 15,
+          fontWeight: 600,
+          color: "var(--fg-strong)",
+        }}
+      >
+        {POSITION_LABEL[value]}
+        <Icon name="chevron-down" size={18} style={{ color: "var(--fg-tertiary)" }} />
+      </button>
+      {open && (
+        <div
+          role="listbox"
+          aria-label="직무 목록"
+          style={{
+            position: "absolute",
+            top: "calc(100% + 6px)",
+            left: 0,
+            right: 0,
+            zIndex: 20,
+            background: "var(--bg-elevated)",
+            border: "1px solid var(--border-subtle)",
+            borderRadius: "var(--radius-12)",
+            boxShadow: "var(--shadow-pop)",
+            overflow: "hidden",
+            padding: 6,
+          }}
+        >
+          {POSITIONS.map((position) => (
+            <button
+              key={position}
+              role="option"
+              aria-selected={position === value}
+              className="linkbtn menu-item"
+              onClick={() => {
+                onSelect(position);
+                setOpen(false);
+              }}
+              style={{
+                width: "100%",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                padding: "10px 12px",
+                borderRadius: "var(--radius-8)",
+                fontFamily: "var(--font-sans)",
+                fontSize: 14,
+                fontWeight: 600,
+                color: "var(--fg-default)",
+              }}
+            >
+              {POSITION_LABEL[position]}
+              {position === value && (
+                <Icon name="check" size={14} style={{ color: "var(--blue-800)" }} />
+              )}
+            </button>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
@@ -614,12 +710,153 @@ export function SetupPage() {
   const nav = useNav();
   const setup = useDeviceSetup();
   const [dur, setDur] = useState<"quick" | "real">("quick");
-  const { data: resumes = [] } = useResumes();
-  const resumeOpts = resumes.filter((r) => r.status === "done");
-  const [resume, setResume] = useState<string | null>(null);
+  const [searchParams] = useSearchParams();
+  // 쿼리 프리셀렉트(?resume=<id>)는 진입 시 1회만 캡처 — 이후 URL과 동기화하지 않는다
+  const [queryResumeId] = useState<number | null>(() => {
+    const raw = searchParams.get("resume");
+    return raw !== null && /^\d+$/.test(raw) ? Number(raw) : null;
+  });
+  // undefined = 미조작(쿼리 프리셀렉트 적용) / number = 명시 선택 — 선택 해제는 없다
+  // (이력서 없는 시작은 완료 이력서가 없는 유저에게만 허용되는 정책)
+  const [resumeOverride, setResumeOverride] = useState<number | undefined>(undefined);
+  // 직무는 이 화면에서 직접 선택한다 — 이력서 분석 추천 연동 없음(기본값 백엔드)
+  const [position, setPosition] = useState<Position>("BACKEND");
   const [pickOpen, setPickOpen] = useState(false);
+  const [startFailure, setStartFailure] = useState<{ detail: string | null } | null>(null);
+  // 시작 흐름(발급→접속) 진행 중 — 모달이 전 과정을 덮어 ①~④ 입력 변경을 차단한다
+  // (클릭 시점 선택값으로 세션이 만들어지므로, 대기 중 변경은 화면·실제 불일치가 된다)
+  const [preparing, setPreparing] = useState(false);
+  // 시작 시도 세대 — 취소·화면 이탈이 값을 올려 진행 중이던 흐름을 무효화한다
+  // (늦게 도착한 응답이 저장·이동을 실행하는 것을 막는다)
+  const startAttemptRef = useRef(0);
+  const connectingRoomRef = useRef<Room | null>(null);
+  const resumesQuery = useResumes();
+  const resumeOpts = (resumesQuery.data ?? []).filter((r) => r.status === "done");
+  const createSession = useCreateInterviewSession();
+
+  // 프리셀렉트는 무효 판정을 저장하지 않는 순수 파생 — 목록 도착 전에는 "미선택"일
+  // 뿐이고(조기 무효 판정 없음), 사용자가 먼저 조작했으면 쿼리는 평가되지 않는다
+  const selectedResumeId = resumeOverride !== undefined ? resumeOverride : queryResumeId;
+  const selectedResume =
+    selectedResumeId !== null ? (resumeOpts.find((r) => r.id === selectedResumeId) ?? null) : null;
   // 이력서 없이는 실전 모의 선택 불가 — 상태 대신 렌더 시점에 파생
-  const effectiveDur = !resume && dur === "real" ? "quick" : dur;
+  const effectiveDur = !selectedResume && dur === "real" ? "quick" : dur;
+  // 이력서 없는 시작은 "완료 이력서가 없다"고 확인된 유저에게만 허용 —
+  // 목록 조회 미완·실패 상태에서는 허용하지 않는다 (미선택 우회 차단)
+  const resumeRequirementMet =
+    selectedResume !== null || (resumesQuery.isSuccess && resumeOpts.length === 0);
+
+  // 화면 이탈 시 진행 중 시작 흐름을 무효화하고 연결을 정리한다 — 늦게 도착한
+  // 응답이 언마운트된 화면의 저장·이동을 실행하지 못하게 한다 (언마운트 안전망)
+  useEffect(
+    () => () => {
+      startAttemptRef.current += 1;
+      const room = connectingRoomRef.current;
+      connectingRoomRef.current = null;
+      void room?.disconnect();
+    },
+    [],
+  );
+
+  const cancelStart = () => {
+    startAttemptRef.current += 1; // 진행 중인 handleStart 가 취소를 감지하는 신호
+    const room = connectingRoomRef.current;
+    connectingRoomRef.current = null;
+    setPreparing(false);
+    void room?.disconnect(); // 접속 단계였다면 진행 중인 connect 를 중단시킨다
+  };
+
+  const handleStart = async () => {
+    if (preparing) return;
+    setStartFailure(null);
+    // 요청 시작 직전 인증 세션 캡처 — 응답 후 재대조해 대기 중 계정 교체를 방어한다
+    const capturedAuthSessionId = getAuthSessionId();
+    if (capturedAuthSessionId === null) {
+      setStartFailure({ detail: null });
+      return;
+    }
+    const attempt = ++startAttemptRef.current;
+    const stale = () => startAttemptRef.current !== attempt; // 취소·이탈로 무효화됨
+    const fail = (detail: string | null = null) => {
+      setPreparing(false);
+      setStartFailure({ detail });
+    };
+    setPreparing(true);
+    const body: CreateSessionRequest = {
+      ...(selectedResume ? { resumeId: selectedResume.id } : {}),
+      interviewType: effectiveDur === "real" ? "THIRTY_MIN" : "FIVE_MIN",
+      position,
+    };
+    let data: CreateSessionResponse;
+    try {
+      data = await createSession.mutateAsync(body);
+    } catch (err) {
+      if (stale()) return;
+      fail(err instanceof Error ? err.message : null);
+      return;
+    }
+    // 취소·이탈 후 도착한 응답 — 발급된 토큰은 버린다(서버의 PENDING 자동 교체가 회수)
+    if (stale()) return;
+    // 스키마상 응답 필드가 모두 optional — 저장 전에 실제 값 존재를 확인한다 (id 부재는 허용)
+    const { livekitToken, livekitUrl, livekitRoom, id } = data ?? {};
+    const filled = (value: unknown): value is string =>
+      typeof value === "string" && value.length > 0;
+    if (!filled(livekitUrl) || !filled(livekitToken) || !filled(livekitRoom)) {
+      fail();
+      return;
+    }
+    // LiveKit 접속을 이 화면에서 확립한다 — 실패를 /live 진입 후가 아니라
+    // 장비 점검 상태가 살아있는 setup 문맥에서 처리하기 위함(재클릭 = 재발급·재접속).
+    // 성공한 룸은 보관해 /live 가 재접속 없이 인수한다.
+    const room = new Room(
+      setup.micId ? { audioCaptureDefaults: { deviceId: { exact: setup.micId } } } : undefined,
+    );
+    connectingRoomRef.current = room;
+    try {
+      await room.connect(livekitUrl, livekitToken);
+    } catch {
+      // SDK 에러 메시지는 영어 기술 문구라 노출하지 않는다 — 고정 안내만
+      void room.disconnect();
+      if (stale()) return; // 취소·이탈로 인한 중단 — 안내 없음
+      connectingRoomRef.current = null;
+      fail();
+      return;
+    }
+    if (stale()) {
+      void room.disconnect(); // 성공 직전 취소·이탈 — 연결을 남기지 않는다
+      return;
+    }
+    connectingRoomRef.current = null;
+    // 대기 중 계정 교체 방어 — 저장 직전(최종 지점)에 재대조한다
+    if (getAuthSessionId() !== capturedAuthSessionId) {
+      void room.disconnect();
+      setPreparing(false);
+      return; // 이전 계정의 토큰·연결을 폐기하고 아무것도 남기지 않는다
+    }
+    // 접속까지 성공한 뒤에만 저장한다 — 취소·접속 실패 경로에 저장값이 남지 않아
+    // 실패한 세션으로 /live 직행 재접속하는 경로가 생기지 않는다
+    const saved = saveInterviewSession({
+      url: livekitUrl,
+      token: livekitToken,
+      room: livekitRoom,
+      authSessionId: capturedAuthSessionId,
+      ...(typeof id === "number" ? { id } : {}),
+    });
+    if (!saved) {
+      void room.disconnect();
+      fail();
+      return;
+    }
+    setPreparing(false);
+    stashConnectedRoom(room, {
+      url: livekitUrl,
+      token: livekitToken,
+      authSessionId: capturedAuthSessionId,
+    });
+    // 점검에서 고른 마이크를 /live 로 전달 — 실패한 시도가 선호를 덮지 않게 성공 후에만
+    saveDevicePreferences({ micId: setup.micId ?? undefined });
+    nav("interview");
+  };
 
   return (
     <div style={{ background: "var(--bg-canvas)", minHeight: "100vh" }}>
@@ -647,11 +884,16 @@ export function SetupPage() {
             <div style={{ position: "relative" }}>
               <button
                 className="linkbtn"
+                aria-haspopup="listbox"
+                aria-expanded={pickOpen}
+                aria-label="이력서 선택"
                 onClick={() => setPickOpen((o) => !o)}
                 style={{
                   width: "100%",
                   height: 48,
-                  border: resume ? "1px solid var(--blue-800)" : "1px solid var(--border-default)",
+                  border: selectedResume
+                    ? "1px solid var(--blue-800)"
+                    : "1px solid var(--border-default)",
                   borderRadius: "var(--radius-12)",
                   background: "var(--bg-surface)",
                   display: "flex",
@@ -667,14 +909,14 @@ export function SetupPage() {
                     gap: 10,
                     fontFamily: "var(--font-sans)",
                     fontSize: 15,
-                    fontWeight: resume ? 600 : 500,
-                    color: resume ? "var(--fg-strong)" : "var(--fg-tertiary)",
+                    fontWeight: selectedResume ? 600 : 500,
+                    color: selectedResume ? "var(--fg-strong)" : "var(--fg-tertiary)",
                   }}
                 >
-                  {resume ? (
+                  {selectedResume ? (
                     <Fragment>
-                      <DocThumb ext="PDF" size={22} />
-                      {resume} · 분석 완료
+                      <DocThumb ext={selectedResume.ext} size={22} />
+                      {selectedResume.name}
                     </Fragment>
                   ) : (
                     "이력서를 선택하세요"
@@ -684,6 +926,8 @@ export function SetupPage() {
               </button>
               {pickOpen && (
                 <div
+                  role="listbox"
+                  aria-label="이력서 선택"
                   style={{
                     position: "absolute",
                     top: "calc(100% + 6px)",
@@ -698,60 +942,49 @@ export function SetupPage() {
                     padding: 6,
                   }}
                 >
-                  {resumeOpts.map((r) => (
-                    <button
-                      key={r.id}
-                      className="linkbtn menu-item"
-                      onClick={() => {
-                        setResume(r.name);
-                        setPickOpen(false);
-                      }}
-                      style={{
-                        width: "100%",
-                        display: "flex",
-                        alignItems: "center",
-                        gap: 10,
-                        padding: "10px 12px",
-                        borderRadius: "var(--radius-8)",
-                        fontFamily: "var(--font-sans)",
-                        fontSize: 14,
-                        fontWeight: 600,
-                        color: "var(--fg-default)",
-                      }}
-                    >
-                      <DocThumb ext={r.ext} size={22} /> {r.name}{" "}
-                      <span
+                  {resumesQuery.isError ? (
+                    <MenuNotice>
+                      이력서 목록을 불러오지 못했어요 — 잠시 후 다시 시도해 주세요.
+                    </MenuNotice>
+                  ) : resumesQuery.isPending ? (
+                    <MenuNotice>이력서 목록을 불러오는 중…</MenuNotice>
+                  ) : resumeOpts.length === 0 ? (
+                    <MenuNotice>분석 완료된 이력서가 없어요 — 이력서를 업로드해 주세요.</MenuNotice>
+                  ) : (
+                    resumeOpts.map((r) => (
+                      <button
+                        key={r.id}
+                        role="option"
+                        aria-selected={r.id === selectedResumeId}
+                        className="linkbtn menu-item"
+                        onClick={() => {
+                          setResumeOverride(r.id);
+                          setPickOpen(false);
+                        }}
                         style={{
-                          marginLeft: "auto",
-                          fontSize: 12,
-                          fontWeight: 500,
-                          color: "var(--fg-tertiary)",
+                          width: "100%",
+                          display: "flex",
+                          alignItems: "center",
+                          gap: 10,
+                          padding: "10px 12px",
+                          borderRadius: "var(--radius-8)",
+                          fontFamily: "var(--font-sans)",
+                          fontSize: 14,
+                          fontWeight: 600,
+                          color: "var(--fg-default)",
                         }}
                       >
-                        분석 완료
-                      </span>
-                    </button>
-                  ))}
+                        <DocThumb ext={r.ext} size={22} /> {r.name}
+                      </button>
+                    ))
+                  )}
                 </div>
               )}
             </div>
           </StepCard>
 
           <StepCard no={2} title="면접 유형">
-            <p
-              style={{
-                fontFamily: "var(--font-sans)",
-                fontSize: 13,
-                fontWeight: 500,
-                lineHeight: 1.5,
-                color: "var(--fg-secondary)",
-                marginBottom: 10,
-              }}
-            >
-              이력서를 분석해 <b style={{ color: "var(--blue-800)", fontWeight: 700 }}>백엔드</b>로
-              추천했어요. 직무를 바꾸면 질문 방향이 달라져요.
-            </p>
-            <SelectRow value="백엔드" />
+            <PositionPicker value={position} onSelect={setPosition} />
           </StepCard>
 
           <StepCard no={3} title="면접 시간">
@@ -762,7 +995,7 @@ export function SetupPage() {
                   ["real", "실전 모의", "약 30분 · 꼬리질문 포함", true],
                 ] as ["quick" | "real", string, string, boolean][]
               ).map(([id, t, s, needsResume]) => {
-                const off = needsResume && !resume;
+                const off = needsResume && !selectedResume;
                 return (
                   <button
                     key={id}
@@ -805,7 +1038,7 @@ export function SetupPage() {
                 );
               })}
             </div>
-            {!resume && (
+            {!selectedResume && (
               <p
                 style={{
                   fontFamily: "var(--font-sans)",
@@ -832,16 +1065,29 @@ export function SetupPage() {
             variant="solid"
             size="lg"
             fullWidth
-            disabled={!setup.canStart}
-            onClick={() => {
-              // 점검에서 고른 마이크를 /live 로 전달 — Room 캡처 기본값에 적용된다
-              saveDevicePreferences({ micId: setup.micId ?? undefined });
-              nav("interview");
-            }}
+            disabled={!setup.canStart || !resumeRequirementMet || preparing}
+            onClick={() => void handleStart()}
           >
-            면접 시작
+            {preparing ? "면접 준비 중…" : "면접 시작"}
           </Button>
-          {!setup.canStart && (
+          {startFailure && (
+            <p
+              role="alert"
+              style={{
+                fontFamily: "var(--font-sans)",
+                fontSize: 12.5,
+                fontWeight: 500,
+                color: "var(--red-600)",
+                textAlign: "center",
+                marginTop: 10,
+                marginBottom: 0,
+              }}
+            >
+              면접 준비에 실패했어요 — 다시 시도해 주세요.
+              {startFailure.detail ? ` (${startFailure.detail})` : ""}
+            </p>
+          )}
+          {(!setup.canStart || !resumeRequirementMet) && (
             <p
               style={{
                 fontFamily: "var(--font-sans)",
@@ -853,13 +1099,41 @@ export function SetupPage() {
                 marginBottom: 0,
               }}
             >
-              {setup.phase === "ready" && setup.micId !== null && !setup.micBusy
-                ? "마이크에 대고 말해 입력을 확인해 주세요."
-                : "장비 점검을 완료하면 면접을 시작할 수 있어요."}
+              {!setup.canStart
+                ? setup.phase === "ready" && setup.micId !== null && !setup.micBusy
+                  ? "마이크에 대고 말해 입력을 확인해 주세요."
+                  : "장비 점검을 완료하면 면접을 시작할 수 있어요."
+                : "이력서를 선택하면 면접을 시작할 수 있어요."}
             </p>
           )}
         </div>
       </div>
+
+      {/* 시작 흐름(발급→접속) 전 과정을 덮는 모달 — 대기 중 선택 변경(화면·실제 불일치)을
+          차단하고, 성공해야만 /live 로 이동하므로 접속 실패가 면접 화면에서 뜨지 않는다 */}
+      <Modal
+        open={preparing}
+        onClose={cancelStart}
+        title="면접 준비 중"
+        actions={[
+          <Button key="cancel" variant="assistive" onClick={cancelStart}>
+            취소
+          </Button>,
+        ]}
+      >
+        <p
+          style={{
+            margin: 0,
+            fontFamily: "var(--font-sans)",
+            fontSize: 14,
+            fontWeight: 500,
+            lineHeight: 1.6,
+            color: "var(--fg-secondary)",
+          }}
+        >
+          면접실에 연결하고 있어요 — 잠시만 기다려 주세요.
+        </p>
+      </Modal>
     </div>
   );
 }

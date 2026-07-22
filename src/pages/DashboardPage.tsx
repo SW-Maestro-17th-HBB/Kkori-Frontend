@@ -97,7 +97,9 @@ export function DashboardPage() {
                 <Button
                   variant="solid"
                   leadingIcon={<Icon name="play" size={16} />}
-                  onClick={() => nav("setup")}
+                  onClick={() =>
+                    nav("setup", active ? { query: { resume: String(active.id) } } : undefined)
+                  }
                 >
                   면접 시작
                 </Button>
@@ -248,7 +250,10 @@ export function DashboardPage() {
                       다시 시도
                     </Button>
                   ) : (
-                    <Button variant="solid" onClick={() => nav("setup")}>
+                    <Button
+                      variant="solid"
+                      onClick={() => nav("setup", { query: { resume: String(r.id) } })}
+                    >
                       이 이력서로 면접
                     </Button>
                   )}

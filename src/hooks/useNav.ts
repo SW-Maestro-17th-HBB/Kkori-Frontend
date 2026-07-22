@@ -4,12 +4,18 @@ import { consumePostLoginRedirect } from "../api/tokenStore";
 import { ROUTES, type NavKey } from "../routes";
 
 /* 프로토타입의 onNav(key) 시그니처를 실제 라우팅으로 대체.
-   replace: 히스토리에 남기지 않을 이동(인증 콜백 등)에 사용 */
+   replace: 히스토리에 남기지 않을 이동(인증 콜백 등)에 사용
+   query: 라우트 키 경로에 붙일 쿼리 스트링(예: setup 프리셀렉트) — 임의 경로
+   이동은 여전히 차단하고 쿼리만 허용한다 */
 export function useNav() {
   const navigate = useNavigate();
   return useCallback(
-    (key: NavKey, options?: { replace?: boolean }) => {
-      navigate(ROUTES[key], options);
+    (key: NavKey, options?: { replace?: boolean; query?: Record<string, string> }) => {
+      const { query, ...rest } = options ?? {};
+      navigate(
+        query ? { pathname: ROUTES[key], search: `?${new URLSearchParams(query)}` } : ROUTES[key],
+        rest,
+      );
     },
     [navigate],
   );

@@ -2,8 +2,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { act, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { QueryClient } from "@tanstack/react-query";
+import type { Room } from "livekit-client";
 import { renderWithProviders } from "./test/render";
 import * as apiClient from "./api/client";
+import { discardConnectedRoom, stashConnectedRoom } from "./hooks/useLiveKitRoom";
 import { consumePostLoginRedirect } from "./api/tokenStore";
 import { kakaoAuthorizeRedirect } from "./utils/kakaoLogin";
 import { ROUTE_ACCESS, ROUTES, type NavKey } from "./routes";
@@ -59,6 +61,7 @@ beforeEach(() => {
 
 afterEach(() => {
   authStatusOverride.value = null;
+  discardConnectedRoom(); // 테스트가 보관해 둔 면접 연결 격리
   vi.unstubAllEnvs();
   vi.restoreAllMocks();
   localStorage.clear();
@@ -190,6 +193,46 @@ describe("탭 간 세션 반응 (storage 이벤트)", () => {
 
     await screen.findByText(DASH_TEXT);
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument(); // A 가 열어둔 모달 미승계
+  });
+
+  it("로그아웃·계정 교체 전이에서 면접 세션 저장값을 제거한다", async () => {
+    seedLogin("sess-A");
+    sessionStorage.setItem(
+      "hbb.interview.session",
+      JSON.stringify({
+        url: "wss://test.example",
+        token: "jwt-token",
+        room: "room-1",
+        authSessionId: "sess-A",
+      }),
+    );
+    renderWithProviders(<App />, { route: ROUTES.dash });
+    await screen.findByText(DASH_TEXT);
+
+    // 이전 계정의 유효한 LiveKit 토큰이 다음 사용자에게 남으면 안 된다
+    crossTabAuthChange(() => seedLogin("sess-B"));
+    await screen.findByText(DASH_TEXT);
+    await waitFor(() => {
+      expect(sessionStorage.getItem("hbb.interview.session")).toBeNull();
+    });
+  });
+
+  it("계정 교체 전이에서 보관된 면접 연결(핸드오프)도 폐기한다", async () => {
+    seedLogin("sess-A");
+    const stashedRoom = { disconnect: vi.fn() } as unknown as Room;
+    stashConnectedRoom(stashedRoom, {
+      url: "wss://test.example",
+      token: "jwt-token",
+      authSessionId: "sess-A",
+    });
+    renderWithProviders(<App />, { route: ROUTES.dash });
+    await screen.findByText(DASH_TEXT);
+
+    crossTabAuthChange(() => seedLogin("sess-B"));
+    await screen.findByText(DASH_TEXT);
+    await waitFor(() => {
+      expect(stashedRoom.disconnect).toHaveBeenCalled();
+    });
   });
 
   it("다른 탭 계정 교체(A→B): 루트 클라이언트도 비운다 (게스트 쿼리 위생)", async () => {

@@ -1,8 +1,12 @@
-/* InterviewPage 테스트 — LiveKit 룸 접속(HBB1-262) 동작 검증.
-   livekit-client 는 FakeRoom 목, 접속 세션은 vi.stubEnv 로 주입한다. */
+/* InterviewPage 테스트 — 진입 게이트(HBB1-18)와 LiveKit 룸 접속(HBB1-262) 검증.
+   livekit-client 는 FakeRoom 목, 접속 세션은 setup 핸드오프 저장값으로 주입한다. */
 import { act, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { Route, Routes } from "react-router";
+import type { Room } from "livekit-client";
+import { saveInterviewSession, type InterviewSessionRecord } from "../hooks/interviewSession";
+import { discardConnectedRoom, stashConnectedRoom } from "../hooks/useLiveKitRoom";
 import { renderWithProviders } from "../test/render";
 import { FakeRoom, makeFakeAudioTrack } from "../test/livekitMock";
 import { InterviewPage } from "./InterviewPage";
@@ -13,42 +17,124 @@ vi.mock("livekit-client", async () => (await import("../test/livekitMock")).crea
 const connectedRoom = () =>
   FakeRoom.instances.filter((room) => vi.mocked(room.connect).mock.calls.length > 0).at(-1);
 
-const stubSessionEnv = () => {
-  vi.stubEnv("VITE_LIVEKIT_URL", "wss://test.example");
-  vi.stubEnv("VITE_LIVEKIT_TOKEN", "jwt-token");
+const SESSION_KEY = "hbb.interview.session";
+
+/** 인증 시드 — App.test 의 seedLogin 과 동일한 동기 직접 기록 */
+const seedLogin = (sessionId = "sess-A") => {
+  localStorage.setItem(
+    "kkori.auth",
+    JSON.stringify({ accessToken: "at-1", refreshToken: "rt-1", sessionId }),
+  );
 };
+
+/** setup 핸드오프 상태 재현 — 인증 + 저장값을 동기로 시드한다 */
+const seedSession = (over: Partial<InterviewSessionRecord> = {}) => {
+  seedLogin();
+  saveInterviewSession({
+    url: "wss://test.example",
+    token: "jwt-token",
+    room: "room-1",
+    authSessionId: "sess-A",
+    ...over,
+  });
+};
+
+/** /setup 리다이렉트를 관찰할 수 있게 라우트 테이블로 렌더한다 */
+const renderLive = () =>
+  renderWithProviders(
+    <Routes>
+      <Route path="/live" element={<InterviewPage />} />
+      <Route path="/setup" element={<div data-testid="setup-screen" />} />
+    </Routes>,
+    { route: "/live" },
+  );
+
+describe("InterviewPage — 진입 게이트", () => {
+  beforeEach(() => {
+    discardConnectedRoom();
+    FakeRoom.reset();
+    sessionStorage.clear();
+    localStorage.clear();
+  });
+
+  it("저장값 없이 직행하면 /setup 으로 돌려보내고 접속하지 않는다", async () => {
+    seedLogin(); // 인증은 있으나 세션 발급 없이 직행
+    renderLive();
+    expect(await screen.findByTestId("setup-screen")).toBeInTheDocument();
+    expect(connectedRoom()).toBeUndefined();
+  });
+
+  it("저장값이 손상돼 있으면 제거하고 /setup 으로 돌려보낸다", async () => {
+    seedLogin();
+    sessionStorage.setItem(SESSION_KEY, "{oops");
+    renderLive();
+    expect(await screen.findByTestId("setup-screen")).toBeInTheDocument();
+    await waitFor(() => {
+      expect(sessionStorage.getItem(SESSION_KEY)).toBeNull();
+    });
+  });
+
+  it("필수 필드가 빠진 저장값도 게이트를 통과하지 못한다", async () => {
+    seedLogin();
+    sessionStorage.setItem(SESSION_KEY, JSON.stringify({ url: "wss://test.example" }));
+    renderLive();
+    expect(await screen.findByTestId("setup-screen")).toBeInTheDocument();
+    expect(connectedRoom()).toBeUndefined();
+  });
+
+  it("발급 당시 계정과 현재 계정이 다르면 저장값을 제거하고 /setup 으로 돌려보낸다", async () => {
+    seedSession({ authSessionId: "sess-other" }); // 현재 인증은 sess-A
+    renderLive();
+    expect(await screen.findByTestId("setup-screen")).toBeInTheDocument();
+    expect(connectedRoom()).toBeUndefined();
+    await waitFor(() => {
+      expect(sessionStorage.getItem(SESSION_KEY)).toBeNull();
+    });
+  });
+
+  it("게이트 실패 시 보관된 연결(핸드오프)도 폐기한다", async () => {
+    seedLogin();
+    // 이전 시도의 연결이 보관돼 있으나 저장값이 없어 게이트를 통과하지 못하는 상황
+    const { Room: MockRoom } = await import("livekit-client");
+    const established = new MockRoom() as unknown as InstanceType<typeof FakeRoom>;
+    await established.connect("wss://test.example", "jwt-token");
+    stashConnectedRoom(established as unknown as Room, {
+      url: "wss://test.example",
+      token: "jwt-token",
+      authSessionId: "sess-A",
+    });
+
+    renderLive();
+    expect(await screen.findByTestId("setup-screen")).toBeInTheDocument();
+    await waitFor(() => {
+      expect(vi.mocked(established.disconnect)).toHaveBeenCalled();
+    });
+  });
+});
 
 describe("InterviewPage — LiveKit 룸 접속", () => {
   beforeEach(() => {
+    discardConnectedRoom();
     FakeRoom.reset();
-    vi.unstubAllEnvs();
+    sessionStorage.clear();
+    localStorage.clear();
+    seedSession();
   });
 
-  it("env 세션으로 룸에 접속하고 상태 칩이 '연결됨'으로 바뀐다", async () => {
-    stubSessionEnv();
-    renderWithProviders(<InterviewPage />, { route: "/live" });
+  it("저장된 세션으로 룸에 접속하고 상태 칩이 '연결됨'으로 바뀐다", async () => {
+    renderLive();
     expect(await screen.findByText("연결됨")).toBeInTheDocument();
     expect(connectedRoom()!.connect).toHaveBeenCalledWith("wss://test.example", "jwt-token");
   });
 
-  it("세션 조회 중에는 '접속 준비 중…' 상태를 보여준다", async () => {
-    stubSessionEnv();
-    renderWithProviders(<InterviewPage />, { route: "/live" });
-    // 조회가 끝나기 전의 초기 렌더 — '연결 끊김'으로 새어 나가면 안 된다
-    expect(screen.getByText("접속 준비 중…")).toBeInTheDocument();
-    expect(await screen.findByText("연결됨")).toBeInTheDocument();
-  });
-
   it("접속이 거부되면 '접속 실패' 상태를 보여준다", async () => {
-    stubSessionEnv();
     FakeRoom.connectBehavior = "fail";
-    renderWithProviders(<InterviewPage />, { route: "/live" });
+    renderLive();
     expect(await screen.findByText("접속 실패")).toBeInTheDocument();
   });
 
   it("자동재생이 막히면 '소리 켜기'가 나타나고, 실패 시 유지되다 재클릭 성공 시 사라진다", async () => {
-    stubSessionEnv();
-    renderWithProviders(<InterviewPage />, { route: "/live" });
+    renderLive();
     await screen.findByText("연결됨");
 
     act(() => {
@@ -71,23 +157,10 @@ describe("InterviewPage — LiveKit 룸 접속", () => {
     });
   });
 
-  it("접속 정보가 없으면 '접속 정보 없음' 상태를 보여준다", async () => {
-    // 명시적 빈 값 stub — Vitest 도 .env.local 을 로드하므로 unstub 만으로는
-    // 개발 머신의 실제 LiveKit 설정이 새어 들어와 접속에 성공해 버린다
-    vi.stubEnv("VITE_LIVEKIT_URL", "");
-    vi.stubEnv("VITE_LIVEKIT_TOKEN", "");
-    renderWithProviders(<InterviewPage />, { route: "/live" });
-    expect(await screen.findByText("접속 정보 없음")).toBeInTheDocument();
-    expect(connectedRoom()).toBeUndefined();
-  });
-
-  it("마이크 버튼이 연결 후 활성화되고 클릭으로 발행을 토글한다", async () => {
-    stubSessionEnv();
-    renderWithProviders(<InterviewPage />, { route: "/live" });
-    const mic = screen.getByRole("button", { name: "마이크" });
-    expect(mic).toBeDisabled(); // 연결 전에는 발행 불가
-
+  it("마이크 버튼은 연결 중에만 활성화되고 클릭으로 발행을 토글한다", async () => {
+    renderLive();
     await screen.findByText("연결됨");
+    const mic = screen.getByRole("button", { name: "마이크" });
     expect(mic).toBeEnabled();
     expect(mic).toHaveAttribute("aria-pressed", "false");
 
@@ -95,12 +168,17 @@ describe("InterviewPage — LiveKit 룸 접속", () => {
     await waitFor(() => {
       expect(mic).toHaveAttribute("aria-pressed", "true");
     });
+
+    // 연결이 끊기면 발행 불가 — 비활성으로 잠긴다
+    act(() => {
+      connectedRoom()!.setState("disconnected");
+    });
+    expect(mic).toBeDisabled();
   });
 
   it("마이크 발행이 실패하면 안내 문구를 보여주고, 이후 성공하면 지운다", async () => {
-    stubSessionEnv();
     FakeRoom.micBehavior = "fail";
-    renderWithProviders(<InterviewPage />, { route: "/live" });
+    renderLive();
     await screen.findByText("연결됨");
 
     const mic = screen.getByRole("button", { name: "마이크" });
@@ -117,8 +195,7 @@ describe("InterviewPage — LiveKit 룸 접속", () => {
   });
 
   it("구독된 원격 오디오 트랙이 숨김 컨테이너에 부착된다", async () => {
-    stubSessionEnv();
-    renderWithProviders(<InterviewPage />, { route: "/live" });
+    renderLive();
     await screen.findByText("연결됨");
 
     const container = screen.getByTestId("remote-audio");
