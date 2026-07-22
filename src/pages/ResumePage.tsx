@@ -12,6 +12,7 @@ import {
   useUploadResume,
 } from "../api/hooks";
 import { isApiError } from "../api/request";
+import { useResumeStatusStream } from "../api/resumeStatusStream";
 import { Badge, Button, Card, Input, Progress } from "../components/ds";
 import { Icon } from "../components/Icon";
 import { Display, DocThumb, SectionLabel, StatusBadge } from "../components/primitives";
@@ -48,6 +49,7 @@ export function ResumePage() {
     setToast({ title, description, tone });
 
   const { data: resumes = [], isPending, isError, error } = useResumes();
+  useResumeStatusStream(); // 분석 진행 상태 실시간 반영 — 이벤트 수신 시 목록 재조회
   const upload = useUploadResume();
   const remove = useDeleteResume();
   const reanalyze = useReanalyzeResume();

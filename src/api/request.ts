@@ -76,8 +76,9 @@ export function isApiError(e: unknown): e is ApiError {
   return e instanceof ApiError;
 }
 
-/** 비어 있으면 same-origin — 로컬 개발은 vite.config.ts 의 프록시(/api, /sse → 8080)를 탄다 */
-const BASE_URL: string = import.meta.env.VITE_API_BASE_URL ?? "";
+/** 비어 있으면 same-origin — 로컬 개발은 vite.config.ts 의 프록시(/api, /sse → 8080)를 탄다.
+    SSE(resumeStatusStream)도 같은 원천을 쓴다 */
+export const API_BASE_URL: string = import.meta.env.VITE_API_BASE_URL ?? "";
 
 type Method = "GET" | "POST" | "PATCH" | "PUT" | "DELETE";
 
@@ -112,7 +113,7 @@ async function rawRequest<T>(
 
   let res: Response;
   try {
-    res = await fetch(`${BASE_URL}${path}`, {
+    res = await fetch(`${API_BASE_URL}${path}`, {
       method,
       headers,
       body: body === undefined ? undefined : isForm ? (body as FormData) : JSON.stringify(body),
