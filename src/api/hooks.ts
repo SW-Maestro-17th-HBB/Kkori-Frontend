@@ -1,17 +1,21 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
+  deleteResume,
   fetchLiveKitSession,
   fetchNotifications,
   fetchProfile,
   fetchReportDetail,
   fetchReports,
   fetchReportStats,
+  fetchResumeParsed,
   fetchResumes,
   fetchSubscription,
   getConsentCatalog,
   postKakaoLogin,
   postLogout,
   postSignup,
+  reanalyzeResume,
+  uploadResume,
 } from "./client";
 import { clearSignupSession, clearTokens, getAuthSnapshot } from "./tokenStore";
 import { useNav } from "../hooks/useNav";
@@ -103,7 +107,45 @@ export const useSubscription = () =>
 export const useNotifications = () =>
   useQuery({ queryKey: ["notifications"], queryFn: fetchNotifications });
 
+/* ---------- 이력서 ---------- */
+
 export const useResumes = () => useQuery({ queryKey: ["resumes"], queryFn: fetchResumes });
+
+/** 분석 결과 미리보기 — 행을 펼친 시점에만 조회(목록 payload 경량화, PRD §2).
+    409(분석 중 R010·실패 R011)는 상태가 바뀌기 전엔 반복해도 같은 결과라 재시도하지 않는다 */
+export const useResumeParsed = (resumeId: number | null) =>
+  useQuery({
+    queryKey: ["resumes", "parsed", resumeId],
+    queryFn: () => fetchResumeParsed(resumeId as number),
+    enabled: resumeId !== null,
+    retry: false,
+  });
+
+/** 업로드 — 성공(신규·중복 모두) 시 목록 재조회. 진행 상태 반영은 SSE 스토리(HBB1-271) 소관 */
+export const useUploadResume = () => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ file, title }: { file: File; title?: string }) => uploadResume(file, title),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["resumes"] }),
+  });
+};
+
+export const useDeleteResume = () => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (resumeId: number) => deleteResume(resumeId),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["resumes"] }),
+  });
+};
+
+/** 재분석 — 상태가 즉시 재시작 상태(UPLOADED/EMBEDDING)로 바뀌므로 목록 재조회 */
+export const useReanalyzeResume = () => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (resumeId: number) => reanalyzeResume(resumeId),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["resumes"] }),
+  });
+};
 
 export const useReports = () => useQuery({ queryKey: ["reports"], queryFn: fetchReports });
 

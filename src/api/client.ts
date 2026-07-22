@@ -1,6 +1,6 @@
 /* ============================================================
    API 클라이언트 — 도메인별로 목 → 실제 API 점진 교체 중.
-   [실제] 인증(auth)  [목] 이력서·리포트·사용자·알림
+   [실제] 인증(auth)·이력서(resume)  [목] 리포트·사용자·알림
    ============================================================ */
 import * as fixtures from "./fixtures";
 import { ApiError, FE_ERROR_CODES, request } from "./request";
@@ -14,6 +14,8 @@ import type {
   ReportStats,
   ReportSummary,
   Resume,
+  ResumePreview,
+  ResumeStatus,
   Subscription,
 } from "./types";
 
@@ -64,7 +66,113 @@ export const fetchSubscription = (): Promise<Subscription> => delay(fixtures.sub
 
 export const fetchNotifications = (): Promise<NotificationItem[]> => delay(fixtures.notifications);
 
-export const fetchResumes = (): Promise<Resume[]> => delay(fixtures.resumes);
+/* ---------- 이력서 (실제 API) ---------- */
+
+export type ResumeSummary = components["schemas"]["ResumeSummaryResponse"];
+export type ResumePageResponse = components["schemas"]["PageResponseResumeSummaryResponse"];
+export type ResumeUploadResponse = components["schemas"]["ResumeUploadResponse"];
+export type ResumeParsedResponse = components["schemas"]["ResumeParsedResponse"];
+export type ResumeReanalyzeResponse = components["schemas"]["ResumeReanalyzeResponse"];
+export type AnalysisStatus = NonNullable<ResumeSummary["analysisStatus"]>;
+
+/** 백엔드 8단계 상태 → UI 3분류. EMBEDDED만 완료 — PARSED는 색인 전이라 아직 면접에 못 쓴다. */
+export function toUiStatus(status: AnalysisStatus): ResumeStatus {
+  if (status === "EMBEDDED") return "done";
+  if (status === "FAILED") return "fail";
+  return "ing";
+}
+
+/** 진행률 표시용 매핑 — 서버는 progress를 내려주지 않는다(PRD §3, 프론트 소관).
+    파이프라인 단계 순서에 따른 대략치로, 단계 소요 시간과 무관한 표시용 값이다. */
+export const ANALYSIS_PROGRESS: Record<AnalysisStatus, number> = {
+  UPLOADED: 10,
+  PARSING: 30,
+  TEXT_EXTRACTING: 50,
+  STRUCTURING: 65,
+  PARSED: 80,
+  EMBEDDING: 90,
+  EMBEDDED: 100,
+  FAILED: 0,
+};
+
+const formatBytes = (bytes: number): string => {
+  if (bytes < 1024) return `${bytes}B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)}KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)}MB`;
+};
+
+const formatDate = (iso: string): string => {
+  const d = new Date(iso);
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}.${pad(d.getMonth() + 1)}.${pad(d.getDate())}`;
+};
+
+const formatRelative = (iso: string, now: Date): string => {
+  const diffMs = now.getTime() - new Date(iso).getTime();
+  const min = Math.floor(diffMs / 60_000);
+  if (min < 1) return "방금 전";
+  if (min < 60) return `${min}분 전`;
+  const hour = Math.floor(min / 60);
+  if (hour < 24) return `${hour}시간 전`;
+  const day = Math.floor(hour / 24);
+  if (day < 7) return `${day}일 전`;
+  return formatDate(iso);
+};
+
+/** 목록 응답 항목 → UI 모델. now는 상대 시각("2일 전") 계산 기준 — 테스트에서 고정 주입. */
+export function toUiResume(summary: ResumeSummary, now: Date = new Date()): Resume {
+  const status = summary.analysisStatus ?? "UPLOADED";
+  const uiStatus = toUiStatus(status);
+  const createdAt = summary.createdAt ?? now.toISOString();
+  return {
+    id: summary.resumeId ?? 0,
+    name: summary.title ?? "",
+    ext: "PDF", // 백엔드가 PDF만 허용(R002) — 파일 형식은 고정
+    meta: `${formatBytes(summary.fileSize ?? 0)} · ${formatRelative(createdAt, now)}`,
+    uploadedAt: formatDate(createdAt),
+    status: uiStatus,
+    ...(uiStatus === "ing" ? { progress: ANALYSIS_PROGRESS[status] } : {}),
+  };
+}
+
+/** 파싱 결과 → 미리보기 표시 모델. 필드 누락·빈 배열은 계약상 허용이라 전부 방어한다. */
+export function toResumePreview(parsed: ResumeParsedResponse): ResumePreview {
+  const sd = parsed.structuredData;
+  return {
+    name: sd?.profile?.name ?? "-",
+    career: sd?.experiences?.[0]?.title ?? "-",
+    skills: (sd?.skills ?? []).flatMap((s) => s.items ?? []),
+    projects:
+      (sd?.projects ?? [])
+        .map((p) => p.name)
+        .filter(Boolean)
+        .join(", ") || "-",
+  };
+}
+
+/** UI에 페이지네이션이 없어 상한(size=100)까지 한 번에 조회한다 — MVP 가정(1인당 이력서 소수).
+    초과분은 잘리므로 페이지네이션 UI 도입 시 이 가정을 함께 걷어낼 것. */
+export const fetchResumes = async (): Promise<Resume[]> => {
+  const page = await request<ResumePageResponse>("GET", "/api/v1/resumes?size=100");
+  const now = new Date();
+  return (page.content ?? []).map((s) => toUiResume(s, now));
+};
+
+export const uploadResume = (file: File, title?: string): Promise<ResumeUploadResponse> => {
+  const form = new FormData();
+  form.append("file", file);
+  if (title) form.append("title", title);
+  return request<ResumeUploadResponse>("POST", "/api/v1/resumes", { body: form });
+};
+
+export const deleteResume = (resumeId: number): Promise<null> =>
+  request<null>("DELETE", `/api/v1/resumes/${resumeId}`);
+
+export const reanalyzeResume = (resumeId: number): Promise<ResumeReanalyzeResponse> =>
+  request<ResumeReanalyzeResponse>("POST", `/api/v1/resumes/${resumeId}/reanalyze`);
+
+export const fetchResumeParsed = async (resumeId: number): Promise<ResumePreview> =>
+  toResumePreview(await request<ResumeParsedResponse>("GET", `/api/v1/resumes/${resumeId}/parsed`));
 
 export const fetchReports = (): Promise<ReportSummary[]> => delay(fixtures.reports);
 

@@ -110,6 +110,15 @@ a:hover {
   cursor: pointer;
   transition: background-color 0.12s ease;
 }
+/* 목록 영역의 로딩·빈 상태·에러 안내 문구 */
+.hbb-table-note {
+  font-family: var(--font-sans);
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--fg-tertiary);
+  padding: 18px 4px;
+  margin: 0;
+}
 .hbb-table__row:hover {
   background: var(--bg-subtle);
 }

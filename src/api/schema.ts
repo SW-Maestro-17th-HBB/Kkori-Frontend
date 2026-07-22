@@ -27,7 +27,7 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
-  "/api/v1/resumes": {
+  "/api/v1/sessions": {
     parameters: {
       query?: never;
       header?: never;
@@ -37,11 +37,62 @@ export interface paths {
     get?: never;
     put?: never;
     /**
+     * 음성 세션 접속 토큰 발급
+     * @description 인증 유저에게 새 룸의 LiveKit 입장 토큰(JWT)과 서버 URL을 발급한다.
+     *     요청마다 새 roomName이 생성되며, 발행 권한은 마이크로 한정된다(카메라·화면공유·데이터 차단).
+     *     클라이언트는 livekitUrl에 livekitToken을 들고 접속해 오디오를 송수신한다.
+     */
+    post: operations["issueToken"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/v1/resumes": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * 이력서 목록 조회
+     * @description 본인 이력서 목록을 createdAt 내림차순으로 조회한다. 항목은 UI 소비 최소 필드만 내려주며
+     *     분석 결과 미리보기는 포함하지 않는다 — 행 펼침 시 GET /{resumeId}/parsed로 조회한다.
+     *     status 파라미터로 분석 상태 필터링이 가능하다(예: EMBEDDED — 면접 시작 전 선택 화면).
+     */
+    get: operations["getList"];
+    put?: never;
+    /**
      * 이력서 PDF 업로드
      * @description 이력서 PDF를 업로드한다. 서버는 파일을 검증(PDF, 10MB, 10페이지)한 뒤 S3에 저장하고
      *     비동기 분석을 요청한다. 분석 진행 상태는 SSE(GET /sse/v1/resumes)로 전달된다.
      */
     post: operations["upload"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/v1/resumes/{resumeId}/reanalyze": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * 재분석 요청
+     * @description 이력서를 다시 분석하도록 요청한다. 모드는 서버가 상태로 결정한다 —
+     *     EMBEDDED(수정 반영)는 저장된 구조화 결과부터 재색인(REINDEX),
+     *     FAILED(실패 복구)는 S3 원본부터 전체 파이프라인(FULL).
+     *     진행 상태는 SSE(GET /sse/v1/resumes)로 전달된다.
+     */
+    post: operations["reanalyze"];
     delete?: never;
     options?: never;
     head?: never;
@@ -166,6 +217,32 @@ export interface paths {
     patch: operations["update"];
     trace?: never;
   };
+  "/api/v1/resumes/{resumeId}/parsed": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * 파싱 결과 조회
+     * @description AI 분석이 완료(EMBEDDED)된 이력서의 구조화 결과를 조회한다. 원문 텍스트(rawText)는 제공하지 않는다.
+     */
+    get: operations["getParsed"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    /**
+     * 파싱 결과 수정
+     * @description 구조화 결과를 사용자가 수정한다. 저장만 하며 색인에는 반영되지 않는다 —
+     *     면접 질문 생성에 반영하려면 재분석(POST /{resumeId}/reanalyze)을 호출해야 한다.
+     *     검증은 형태만 엄격하다: 구조 오류·배열 내 null은 400, 필드 누락·빈 배열은 허용.
+     */
+    patch: operations["updateParsed"];
+    trace?: never;
+  };
   "/sse/v1/resumes": {
     parameters: {
       query?: never;
@@ -234,6 +311,27 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  "/api/v1/resumes/{resumeId}": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    post?: never;
+    /**
+     * 이력서 삭제
+     * @description 이력서를 삭제한다(soft delete) — 즉시 목록·조회에서 사라진다.
+     *     원본(S3)·구조화 데이터·청크·임베딩의 물리 삭제는 후속 배치가 수행한다.
+     */
+    delete: operations["delete"];
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -269,6 +367,16 @@ export interface components {
     UserConsentsResponse: {
       consents?: components["schemas"]["ConsentStateItem"][];
     };
+    ApiResponseSessionTokenResponse: {
+      success?: boolean;
+      data?: components["schemas"]["SessionTokenResponse"];
+      error?: components["schemas"]["ErrorResponse"];
+    };
+    SessionTokenResponse: {
+      livekitToken?: string;
+      livekitUrl?: string;
+      livekitRoom?: string;
+    };
     ApiResponseResumeUploadResponse: {
       success?: boolean;
       data?: components["schemas"]["ResumeUploadResponse"];
@@ -297,6 +405,25 @@ export interface components {
       /** Format: date-time */
       createdAt?: string;
       duplicated?: boolean;
+    };
+    ApiResponseResumeReanalyzeResponse: {
+      success?: boolean;
+      data?: components["schemas"]["ResumeReanalyzeResponse"];
+      error?: components["schemas"]["ErrorResponse"];
+    };
+    ResumeReanalyzeResponse: {
+      /** Format: int64 */
+      resumeId?: number;
+      /** @enum {string} */
+      analysisStatus?:
+        | "UPLOADED"
+        | "PARSING"
+        | "TEXT_EXTRACTING"
+        | "STRUCTURING"
+        | "PARSED"
+        | "EMBEDDING"
+        | "EMBEDDED"
+        | "FAILED";
     };
     ConsentItem: {
       /** @enum {string} */
@@ -360,9 +487,92 @@ export interface components {
       /** Format: date-time */
       createdAt?: string;
     };
+    Experience: {
+      title?: string;
+      description?: string;
+    };
+    Profile: {
+      name?: string;
+      email?: string;
+    };
+    Project: {
+      name?: string;
+      role?: string;
+      description?: string;
+      techStacks?: string[];
+    };
+    ResumeParsedUpdateRequest: {
+      structuredData: components["schemas"]["StructuredData"];
+    };
+    Skill: {
+      category?: string;
+      items?: string[];
+    };
+    StructuredData: {
+      profile?: components["schemas"]["Profile"];
+      skills?: components["schemas"]["Skill"][];
+      projects?: components["schemas"]["Project"][];
+      experiences?: components["schemas"]["Experience"][];
+    };
+    ApiResponseResumeParsedResponse: {
+      success?: boolean;
+      data?: components["schemas"]["ResumeParsedResponse"];
+      error?: components["schemas"]["ErrorResponse"];
+    };
+    ResumeParsedResponse: {
+      /** Format: int64 */
+      resumeId?: number;
+      /** @enum {string} */
+      analysisStatus?:
+        | "UPLOADED"
+        | "PARSING"
+        | "TEXT_EXTRACTING"
+        | "STRUCTURING"
+        | "PARSED"
+        | "EMBEDDING"
+        | "EMBEDDED"
+        | "FAILED";
+      structuredData?: components["schemas"]["StructuredData"];
+      /** Format: date-time */
+      updatedAt?: string;
+    };
     SseEmitter: {
       /** Format: int64 */
       timeout?: number;
+    };
+    ApiResponsePageResponseResumeSummaryResponse: {
+      success?: boolean;
+      data?: components["schemas"]["PageResponseResumeSummaryResponse"];
+      error?: components["schemas"]["ErrorResponse"];
+    };
+    PageResponseResumeSummaryResponse: {
+      content?: components["schemas"]["ResumeSummaryResponse"][];
+      /** Format: int32 */
+      page?: number;
+      /** Format: int32 */
+      size?: number;
+      /** Format: int64 */
+      totalElements?: number;
+      hasNext?: boolean;
+    };
+    ResumeSummaryResponse: {
+      /** Format: int64 */
+      resumeId?: number;
+      title?: string;
+      /** @enum {string} */
+      analysisStatus?:
+        | "UPLOADED"
+        | "PARSING"
+        | "TEXT_EXTRACTING"
+        | "STRUCTURING"
+        | "PARSED"
+        | "EMBEDDING"
+        | "EMBEDDED"
+        | "FAILED";
+      /** Format: date-time */
+      createdAt?: string;
+      /** Format: int64 */
+      fileSize?: number;
     };
     ApiResponseConsentCatalogResponse: {
       success?: boolean;
@@ -420,6 +630,62 @@ export interface operations {
         };
         content: {
           "*/*": components["schemas"]["ApiResponseUserConsentsResponse"];
+        };
+      };
+    };
+  };
+  issueToken: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Created */
+      201: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "*/*": components["schemas"]["ApiResponseSessionTokenResponse"];
+        };
+      };
+    };
+  };
+  getList: {
+    parameters: {
+      query?: {
+        /** @description 분석 상태 필터. 미지정 시 전체 조회 */
+        status?: string;
+        /** @description 페이지 번호 (0부터, 기본 0) */
+        page?: number;
+        /** @description 페이지 크기 (기본 20, 최대 100) */
+        size?: number;
+      };
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description 조회 성공 — 페이지 엔벨로프 { content, page, size, totalElements, hasNext } */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "*/*": components["schemas"]["ApiResponsePageResponseResumeSummaryResponse"];
+        };
+      };
+      /** @description 범위를 벗어난 page/size(C002)·잘못된 status 값(R012) */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "*/*": components["schemas"]["ApiResponsePageResponseResumeSummaryResponse"];
         };
       };
     };
@@ -489,6 +755,65 @@ export interface operations {
         };
         content: {
           "*/*": components["schemas"]["ApiResponseResumeUploadResponse"];
+        };
+      };
+    };
+  };
+  reanalyze: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        /** @description 이력서 ID */
+        resumeId: number;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description 재분석 요청 접수 — 재시작된 상태 반환(REINDEX→EMBEDDING, FULL→UPLOADED) */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "*/*": components["schemas"]["ApiResponseResumeReanalyzeResponse"];
+        };
+      };
+      /** @description 타인의 이력서(R009) */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "*/*": components["schemas"]["ApiResponseResumeReanalyzeResponse"];
+        };
+      };
+      /** @description 이력서 없음(R008) */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "*/*": components["schemas"]["ApiResponseResumeReanalyzeResponse"];
+        };
+      };
+      /** @description 분석 진행 중(R010) */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "*/*": components["schemas"]["ApiResponseResumeReanalyzeResponse"];
+        };
+      };
+      /** @description 분석 요청 발행 실패(R007) */
+      500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "*/*": components["schemas"]["ApiResponseResumeReanalyzeResponse"];
         };
       };
     };
@@ -653,6 +978,119 @@ export interface operations {
       };
     };
   };
+  getParsed: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        /** @description 이력서 ID */
+        resumeId: number;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description 조회 성공 */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "*/*": components["schemas"]["ApiResponseResumeParsedResponse"];
+        };
+      };
+      /** @description 타인의 이력서(R009) */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "*/*": components["schemas"]["ApiResponseResumeParsedResponse"];
+        };
+      };
+      /** @description 이력서 없음(R008) */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "*/*": components["schemas"]["ApiResponseResumeParsedResponse"];
+        };
+      };
+      /** @description 분석 진행 중(R010)·분석 실패 상태(R011 — 재분석 필요) */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "*/*": components["schemas"]["ApiResponseResumeParsedResponse"];
+        };
+      };
+    };
+  };
+  updateParsed: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        /** @description 이력서 ID */
+        resumeId: number;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["ResumeParsedUpdateRequest"];
+      };
+    };
+    responses: {
+      /** @description 수정 성공 — 저장된 결과 반환 */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "*/*": components["schemas"]["ApiResponseResumeParsedResponse"];
+        };
+      };
+      /** @description 구조 오류·배열 내 null·100KB 초과(C002) */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "*/*": components["schemas"]["ApiResponseResumeParsedResponse"];
+        };
+      };
+      /** @description 타인의 이력서(R009) */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "*/*": components["schemas"]["ApiResponseResumeParsedResponse"];
+        };
+      };
+      /** @description 이력서 없음(R008) */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "*/*": components["schemas"]["ApiResponseResumeParsedResponse"];
+        };
+      };
+      /** @description 분석 진행 중(R010)·분석 실패 상태(R011 — 재분석 필요) */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "*/*": components["schemas"]["ApiResponseResumeParsedResponse"];
+        };
+      };
+    };
+  };
   subscribe: {
     parameters: {
       query?: never;
@@ -709,6 +1147,47 @@ export interface operations {
         };
         content: {
           "*/*": components["schemas"]["ApiResponseConsentCatalogResponse"];
+        };
+      };
+    };
+  };
+  delete: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        /** @description 이력서 ID */
+        resumeId: number;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description 삭제 성공 */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "*/*": components["schemas"]["ApiResponseVoid"];
+        };
+      };
+      /** @description 타인의 이력서(R009) */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "*/*": components["schemas"]["ApiResponseVoid"];
+        };
+      };
+      /** @description 이력서 없음·이미 삭제됨(R008) */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "*/*": components["schemas"]["ApiResponseVoid"];
         };
       };
     };

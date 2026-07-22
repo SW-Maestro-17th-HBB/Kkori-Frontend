@@ -31,6 +31,16 @@ export const ERROR_CODES = {
   FILE_UPLOAD_FAILED: "R006",
   /** 500 — 이력서 분석 요청에 실패했습니다. */
   RESUME_ANALYSIS_REQUEST_FAILED: "R007",
+  /** 404 — 이력서를 찾을 수 없습니다. */
+  RESUME_NOT_FOUND: "R008",
+  /** 403 — 해당 이력서에 접근할 권한이 없습니다. */
+  RESUME_FORBIDDEN: "R009",
+  /** 409 — 이력서 분석이 진행 중입니다. 완료 후 다시 시도해 주세요. */
+  RESUME_ANALYSIS_IN_PROGRESS: "R010",
+  /** 409 — 이력서 분석이 실패한 상태입니다. 재분석을 먼저 요청해 주세요. */
+  RESUME_ANALYSIS_FAILED: "R011",
+  /** 400 — 유효하지 않은 분석 상태 값입니다. */
+  INVALID_STATUS: "R012",
 
   // ---------- 인증 (A) ----------
   /** 400 — 카카오 인가 코드가 누락되었거나 형식이 올바르지 않습니다. */
