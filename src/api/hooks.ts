@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
+  createInterviewSession,
   fetchLiveKitSession,
   fetchNotifications,
   fetchProfile,
@@ -116,8 +117,12 @@ export const useReportDetail = (id: number | string) =>
     queryFn: () => fetchReportDetail(id),
   });
 
-/** LiveKit 접속 세션 — 토큰이 연결 수명과 묶이므로 자동 재조회 차단.
-    재조회로 토큰이 조용히 바뀌면 연결 훅(session 참조 변경)이 룸을 재접속해 버린다 */
+/** 면접 세션 생성 — 룸·토큰을 발급하는 비멱등 POST 라 mutation
+    (자동 재시도 없음, isPending 으로 이중 제출 방지) */
+export const useCreateInterviewSession = () => useMutation({ mutationFn: createInterviewSession });
+
+/** LiveKit 접속 세션 — /live 진입 게이트 전환 커밋에서 제거된다.
+    토큰이 연결 수명과 묶이므로 자동 재조회 차단 */
 export const useLiveKitSession = () =>
   useQuery({
     queryKey: ["livekit", "session"],
