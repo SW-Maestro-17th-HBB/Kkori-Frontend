@@ -192,6 +192,28 @@ describe("탭 간 세션 반응 (storage 이벤트)", () => {
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument(); // A 가 열어둔 모달 미승계
   });
 
+  it("로그아웃·계정 교체 전이에서 면접 세션 저장값을 제거한다", async () => {
+    seedLogin("sess-A");
+    sessionStorage.setItem(
+      "hbb.interview.session",
+      JSON.stringify({
+        url: "wss://test.example",
+        token: "jwt-token",
+        room: "room-1",
+        authSessionId: "sess-A",
+      }),
+    );
+    renderWithProviders(<App />, { route: ROUTES.dash });
+    await screen.findByText(DASH_TEXT);
+
+    // 이전 계정의 유효한 LiveKit 토큰이 다음 사용자에게 남으면 안 된다
+    crossTabAuthChange(() => seedLogin("sess-B"));
+    await screen.findByText(DASH_TEXT);
+    await waitFor(() => {
+      expect(sessionStorage.getItem("hbb.interview.session")).toBeNull();
+    });
+  });
+
   it("다른 탭 계정 교체(A→B): 루트 클라이언트도 비운다 (게스트 쿼리 위생)", async () => {
     seedLogin("sess-A");
     const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });

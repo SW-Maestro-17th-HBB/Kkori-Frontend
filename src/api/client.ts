@@ -8,7 +8,6 @@ import type { components } from "./schema";
 import { getAuthSnapshot } from "./tokenStore";
 import type {
   CreateSessionRequest,
-  LiveKitSession,
   NotificationItem,
   Profile,
   ReportDetail,
@@ -89,22 +88,3 @@ export const createInterviewSession = (
   body: CreateSessionRequest,
 ): Promise<CreateSessionResponse> =>
   request<CreateSessionResponse>("POST", "/api/v1/sessions", { body });
-
-/* ---------- LiveKit (목 — env 임시 토큰) ---------- */
-
-/** LiveKit 접속 세션 — /live 진입 게이트 전환 커밋에서 제거된다 */
-export const fetchLiveKitSession = (): Promise<LiveKitSession> => {
-  // dev 전용 경로 — VITE_* 값은 번들에 그대로 박히므로, 배포 환경에 토큰이
-  // 설정되면 모든 방문자가 같은 룸 권한을 공유하게 된다. 프로덕션 번들에서 차단.
-  if (!import.meta.env.DEV) {
-    return Promise.reject(new Error("LiveKit 접속은 아직 개발 환경에서만 지원됩니다."));
-  }
-  const url = import.meta.env.VITE_LIVEKIT_URL;
-  const token = import.meta.env.VITE_LIVEKIT_TOKEN;
-  if (!url || !token) {
-    return Promise.reject(
-      new Error("LiveKit 접속 정보가 없습니다 — .env.local 에 VITE_LIVEKIT_URL/TOKEN 설정 필요"),
-    );
-  }
-  return delay({ url, token });
-};

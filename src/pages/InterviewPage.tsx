@@ -1,9 +1,12 @@
 /* ============================ 면접 진행 (/live) — 다크 풀스크린 ============================ */
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { Navigate } from "react-router";
 import { Icon } from "../components/Icon";
+import { clearInterviewSession, loadInterviewSession } from "../hooks/interviewSession";
+import { useAuthSessionId } from "../hooks/useAuthStatus";
 import { useNav } from "../hooks/useNav";
-import { useLiveKitSession } from "../api/hooks";
 import { ConnectionState, useLiveKitRoom, useRemoteAudio } from "../hooks/useLiveKitRoom";
+import { ROUTES } from "../routes";
 
 const CONNECTION_LABEL: Record<ConnectionState, string> = {
   [ConnectionState.Disconnected]: "연결 끊김",
@@ -25,7 +28,17 @@ export function InterviewPage() {
   const nav = useNav();
   const [showQ, setShowQ] = useState(true);
   const [micFailed, setMicFailed] = useState(false);
-  const session = useLiveKitSession();
+  // setup 핸드오프 저장값 — 마운트 시 1회만 로드해 참조를 고정한다
+  // (매 렌더 새 객체를 만들면 useLiveKitRoom 의 세션 effect 가 재접속을 반복한다)
+  const [stored] = useState(loadInterviewSession);
+  const authSessionId = useAuthSessionId();
+  // 저장값이 없거나(직행·손상) 발급 당시 계정과 다르면 통과 불가 — 이전 계정의
+  // 토큰이 다음 사용자에게 넘어가는 것을 막는다 (PRD 인증 세션 검증)
+  const gateOk = stored !== null && stored.authSessionId === authSessionId;
+  useEffect(() => {
+    // 상태가 아니라 storage 정리 — 손상 원문·타 계정 잔존물을 남기지 않는다 (멱등)
+    if (!gateOk) clearInterviewSession();
+  }, [gateOk]);
   const {
     room,
     connectionState,
@@ -34,23 +47,14 @@ export function InterviewPage() {
     toggleMicrophone,
     canPlayAudio,
     startAudio,
-  } = useLiveKitRoom(session.data);
+  } = useLiveKitRoom(gateOk ? stored : undefined);
   const remoteAudioRef = useRemoteAudio(room);
 
-  // 우선순위: 세션 조회 중 → 조회 실패 → 접속 거부 → SDK 연결 상태
-  // (조회 중을 구분하지 않으면 초기 렌더가 '연결 끊김'으로 보인다)
-  const statusLabel = session.isPending
-    ? "접속 준비 중…"
-    : session.isError
-      ? "접속 정보 없음"
-      : connectError
-        ? "접속 실패"
-        : CONNECTION_LABEL[connectionState];
-  const statusDot = session.isPending
-    ? "var(--blue-400)"
-    : session.isError || connectError
-      ? "var(--red-600)"
-      : CONNECTION_DOT[connectionState];
+  const statusLabel = connectError ? "접속 실패" : CONNECTION_LABEL[connectionState];
+  const statusDot = connectError ? "var(--red-600)" : CONNECTION_DOT[connectionState];
+
+  // 세션 없이는 면접 화면이 성립하지 않는다 — 설정 화면으로 돌려보낸다 (히스토리 미기록)
+  if (!gateOk) return <Navigate to={ROUTES.setup} replace />;
 
   return (
     <div
