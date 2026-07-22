@@ -1,11 +1,12 @@
 /* ============================ 면접 설정 (/setup) ============================ */
 import { Fragment, useEffect, useRef, useState, type ReactNode } from "react";
+import { Room } from "livekit-client";
 import { useSearchParams } from "react-router";
 import type { CreateSessionResponse } from "../api/client";
 import { useCreateInterviewSession, useResumes } from "../api/hooks";
 import { getAuthSessionId } from "../api/tokenStore";
 import type { CreateSessionRequest, Position } from "../api/types";
-import { Button, Card } from "../components/ds";
+import { Button, Card, Modal } from "../components/ds";
 import { Icon } from "../components/Icon";
 import { Display, DocThumb } from "../components/primitives";
 import { TopNav } from "../components/TopNav";
@@ -17,6 +18,7 @@ import {
   type DeviceNotice,
   type DeviceSetupState,
 } from "../hooks/useDeviceSetup";
+import { stashConnectedRoom } from "../hooks/useLiveKitRoom";
 import { useNav } from "../hooks/useNav";
 
 function StepCard({
@@ -721,6 +723,13 @@ export function SetupPage() {
   const [position, setPosition] = useState<Position>("BACKEND");
   const [pickOpen, setPickOpen] = useState(false);
   const [startFailure, setStartFailure] = useState<{ detail: string | null } | null>(null);
+  // 시작 흐름(발급→접속) 진행 중 — 모달이 전 과정을 덮어 ①~④ 입력 변경을 차단한다
+  // (클릭 시점 선택값으로 세션이 만들어지므로, 대기 중 변경은 화면·실제 불일치가 된다)
+  const [preparing, setPreparing] = useState(false);
+  // 시작 시도 세대 — 취소·화면 이탈이 값을 올려 진행 중이던 흐름을 무효화한다
+  // (늦게 도착한 응답이 저장·이동을 실행하는 것을 막는다)
+  const startAttemptRef = useRef(0);
+  const connectingRoomRef = useRef<Room | null>(null);
   const resumesQuery = useResumes();
   const resumeOpts = (resumesQuery.data ?? []).filter((r) => r.status === "done");
   const createSession = useCreateInterviewSession();
@@ -737,8 +746,28 @@ export function SetupPage() {
   const resumeRequirementMet =
     selectedResume !== null || (resumesQuery.isSuccess && resumeOpts.length === 0);
 
+  // 화면 이탈 시 진행 중 시작 흐름을 무효화하고 연결을 정리한다 — 늦게 도착한
+  // 응답이 언마운트된 화면의 저장·이동을 실행하지 못하게 한다 (언마운트 안전망)
+  useEffect(
+    () => () => {
+      startAttemptRef.current += 1;
+      const room = connectingRoomRef.current;
+      connectingRoomRef.current = null;
+      void room?.disconnect();
+    },
+    [],
+  );
+
+  const cancelStart = () => {
+    startAttemptRef.current += 1; // 진행 중인 handleStart 가 취소를 감지하는 신호
+    const room = connectingRoomRef.current;
+    connectingRoomRef.current = null;
+    setPreparing(false);
+    void room?.disconnect(); // 접속 단계였다면 진행 중인 connect 를 중단시킨다
+  };
+
   const handleStart = async () => {
-    if (createSession.isPending) return;
+    if (preparing) return;
     setStartFailure(null);
     // 요청 시작 직전 인증 세션 캡처 — 응답 후 재대조해 대기 중 계정 교체를 방어한다
     const capturedAuthSessionId = getAuthSessionId();
@@ -746,6 +775,13 @@ export function SetupPage() {
       setStartFailure({ detail: null });
       return;
     }
+    const attempt = ++startAttemptRef.current;
+    const stale = () => startAttemptRef.current !== attempt; // 취소·이탈로 무효화됨
+    const fail = (detail: string | null = null) => {
+      setPreparing(false);
+      setStartFailure({ detail });
+    };
+    setPreparing(true);
     const body: CreateSessionRequest = {
       ...(selectedResume ? { resumeId: selectedResume.id } : {}),
       interviewType: effectiveDur === "real" ? "THIRTY_MIN" : "FIVE_MIN",
@@ -755,20 +791,50 @@ export function SetupPage() {
     try {
       data = await createSession.mutateAsync(body);
     } catch (err) {
-      setStartFailure({ detail: err instanceof Error ? err.message : null });
+      if (stale()) return;
+      fail(err instanceof Error ? err.message : null);
       return;
     }
+    // 취소·이탈 후 도착한 응답 — 발급된 토큰은 버린다(서버의 PENDING 자동 교체가 회수)
+    if (stale()) return;
     // 스키마상 응답 필드가 모두 optional — 저장 전에 실제 값 존재를 확인한다 (id 부재는 허용)
     const { livekitToken, livekitUrl, livekitRoom, id } = data ?? {};
     const filled = (value: unknown): value is string =>
       typeof value === "string" && value.length > 0;
     if (!filled(livekitUrl) || !filled(livekitToken) || !filled(livekitRoom)) {
-      setStartFailure({ detail: null });
+      fail();
       return;
     }
-    if (getAuthSessionId() !== capturedAuthSessionId) {
-      return; // 요청 중 계정 교체 — 이전 계정의 토큰을 폐기하고 아무것도 남기지 않는다
+    // LiveKit 접속을 이 화면에서 확립한다 — 실패를 /live 진입 후가 아니라
+    // 장비 점검 상태가 살아있는 setup 문맥에서 처리하기 위함(재클릭 = 재발급·재접속).
+    // 성공한 룸은 보관해 /live 가 재접속 없이 인수한다.
+    const room = new Room(
+      setup.micId ? { audioCaptureDefaults: { deviceId: { exact: setup.micId } } } : undefined,
+    );
+    connectingRoomRef.current = room;
+    try {
+      await room.connect(livekitUrl, livekitToken);
+    } catch {
+      // SDK 에러 메시지는 영어 기술 문구라 노출하지 않는다 — 고정 안내만
+      void room.disconnect();
+      if (stale()) return; // 취소·이탈로 인한 중단 — 안내 없음
+      connectingRoomRef.current = null;
+      fail();
+      return;
     }
+    if (stale()) {
+      void room.disconnect(); // 성공 직전 취소·이탈 — 연결을 남기지 않는다
+      return;
+    }
+    connectingRoomRef.current = null;
+    // 대기 중 계정 교체 방어 — 저장 직전(최종 지점)에 재대조한다
+    if (getAuthSessionId() !== capturedAuthSessionId) {
+      void room.disconnect();
+      setPreparing(false);
+      return; // 이전 계정의 토큰·연결을 폐기하고 아무것도 남기지 않는다
+    }
+    // 접속까지 성공한 뒤에만 저장한다 — 취소·접속 실패 경로에 저장값이 남지 않아
+    // 실패한 세션으로 /live 직행 재접속하는 경로가 생기지 않는다
     const saved = saveInterviewSession({
       url: livekitUrl,
       token: livekitToken,
@@ -777,9 +843,16 @@ export function SetupPage() {
       ...(typeof id === "number" ? { id } : {}),
     });
     if (!saved) {
-      setStartFailure({ detail: null });
+      void room.disconnect();
+      fail();
       return;
     }
+    setPreparing(false);
+    stashConnectedRoom(room, {
+      url: livekitUrl,
+      token: livekitToken,
+      authSessionId: capturedAuthSessionId,
+    });
     // 점검에서 고른 마이크를 /live 로 전달 — 실패한 시도가 선호를 덮지 않게 성공 후에만
     saveDevicePreferences({ micId: setup.micId ?? undefined });
     nav("interview");
@@ -988,10 +1061,10 @@ export function SetupPage() {
             variant="solid"
             size="lg"
             fullWidth
-            disabled={!setup.canStart || !resumeRequirementMet || createSession.isPending}
+            disabled={!setup.canStart || !resumeRequirementMet || preparing}
             onClick={() => void handleStart()}
           >
-            {createSession.isPending ? "면접 준비 중…" : "면접 시작"}
+            {preparing ? "면접 준비 중…" : "면접 시작"}
           </Button>
           {startFailure && (
             <p
@@ -1031,6 +1104,32 @@ export function SetupPage() {
           )}
         </div>
       </div>
+
+      {/* 시작 흐름(발급→접속) 전 과정을 덮는 모달 — 대기 중 선택 변경(화면·실제 불일치)을
+          차단하고, 성공해야만 /live 로 이동하므로 접속 실패가 면접 화면에서 뜨지 않는다 */}
+      <Modal
+        open={preparing}
+        onClose={cancelStart}
+        title="면접 준비 중"
+        actions={[
+          <Button key="cancel" variant="assistive" onClick={cancelStart}>
+            취소
+          </Button>,
+        ]}
+      >
+        <p
+          style={{
+            margin: 0,
+            fontFamily: "var(--font-sans)",
+            fontSize: 14,
+            fontWeight: 500,
+            lineHeight: 1.6,
+            color: "var(--fg-secondary)",
+          }}
+        >
+          면접실에 연결하고 있어요 — 잠시만 기다려 주세요.
+        </p>
+      </Modal>
     </div>
   );
 }

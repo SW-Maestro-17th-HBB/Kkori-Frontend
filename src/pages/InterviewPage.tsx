@@ -5,7 +5,12 @@ import { Icon } from "../components/Icon";
 import { clearInterviewSession, loadInterviewSession } from "../hooks/interviewSession";
 import { useAuthSessionId } from "../hooks/useAuthStatus";
 import { useNav } from "../hooks/useNav";
-import { ConnectionState, useLiveKitRoom, useRemoteAudio } from "../hooks/useLiveKitRoom";
+import {
+  ConnectionState,
+  discardConnectedRoom,
+  useLiveKitRoom,
+  useRemoteAudio,
+} from "../hooks/useLiveKitRoom";
 import { ROUTES } from "../routes";
 
 const CONNECTION_LABEL: Record<ConnectionState, string> = {
@@ -36,8 +41,12 @@ export function InterviewPage() {
   // 토큰이 다음 사용자에게 넘어가는 것을 막는다 (PRD 인증 세션 검증)
   const gateOk = stored !== null && stored.authSessionId === authSessionId;
   useEffect(() => {
-    // 상태가 아니라 storage 정리 — 손상 원문·타 계정 잔존물을 남기지 않는다 (멱등)
-    if (!gateOk) clearInterviewSession();
+    // 상태가 아니라 storage·핸드오프 정리 — 손상 원문·타 계정 잔존물(저장값과
+    // 보관된 연결 모두)을 남기지 않는다 (멱등)
+    if (!gateOk) {
+      clearInterviewSession();
+      discardConnectedRoom();
+    }
   }, [gateOk]);
   const {
     room,

@@ -8,6 +8,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { useLocation } from "react-router";
 import * as fixtures from "../api/fixtures";
 import type { Resume } from "../api/types";
+import { discardConnectedRoom } from "../hooks/useLiveKitRoom";
 import { renderWithProviders } from "../test/render";
 import { FakeMedia, FakeRoom } from "../test/livekitMock";
 import { SetupPage } from "./SetupPage";
@@ -112,6 +113,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  discardConnectedRoom(); // /live 가 인수하지 않은 핸드오프 보관분 격리
   vi.unstubAllGlobals();
   vi.restoreAllMocks();
 });
@@ -355,6 +357,9 @@ describe("SetupPage — 장비 점검", () => {
     expect(JSON.parse(sessionStorage.getItem("hbb.interview.devicePrefs")!)).toEqual({
       micId: "mic-default",
     });
+    // 이동 전에 이 화면에서 LiveKit 접속을 확립한다 (핸드오프용 룸)
+    const room = FakeRoom.instances.at(-1)!;
+    expect(room.connect).toHaveBeenCalledWith("wss://lk.example", "lk-token");
   });
 });
 
@@ -519,6 +524,89 @@ describe("SetupPage — 세션 생성", () => {
       expect(screen.getByTestId("location")).toHaveTextContent("/live");
     });
     expect(sessionBodyOf(fetchMock).position).toBe("FRONTEND");
+  });
+
+  it("LiveKit 접속이 실패하면 /live 로 이동하지 않고 안내를 표시한다", async () => {
+    stubSessionFetch();
+    FakeRoom.connectBehavior = "fail";
+    await reachReady();
+    await userEvent.click(screen.getByRole("button", { name: "면접 시작" }));
+    expect(await screen.findByRole("alert")).toHaveTextContent("면접 준비에 실패했어요");
+    expect(screen.getByTestId("location")).toHaveTextContent("/setup");
+    expect(sessionStorage.getItem("hbb.interview.devicePrefs")).toBeNull(); // 이동 직전 저장이라 미기록
+    // 접속 성공 후에만 저장 — 실패한 세션으로 /live 직행 재접속하는 경로가 없다
+    expect(sessionStorage.getItem("hbb.interview.session")).toBeNull();
+
+    // 재클릭 = 재발급 + 재접속으로 복구
+    FakeRoom.connectBehavior = "ok";
+    await userEvent.click(screen.getByRole("button", { name: "면접 시작" }));
+    await waitFor(() => {
+      expect(screen.getByTestId("location")).toHaveTextContent("/live");
+    });
+  });
+
+  it("접속 확립 중에는 연결 모달이 뜨고, 취소하면 setup 에 머문다", async () => {
+    stubSessionFetch();
+    FakeRoom.connectBehavior = "hang";
+    await reachReady();
+    await userEvent.click(screen.getByRole("button", { name: "면접 시작" }));
+    expect(
+      await screen.findByText("면접실에 연결하고 있어요 — 잠시만 기다려 주세요."),
+    ).toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole("button", { name: "취소" }));
+    await waitFor(() => {
+      expect(screen.queryByText("면접실에 연결하고 있어요 — 잠시만 기다려 주세요.")).toBeNull();
+    });
+    expect(screen.getByTestId("location")).toHaveTextContent("/setup");
+    // 진행 중이던 접속은 중단된다
+    const room = FakeRoom.instances.at(-1)!;
+    expect(room.disconnect).toHaveBeenCalled();
+  });
+
+  it("발급 대기 중 취소하면 늦게 도착한 응답을 폐기한다", async () => {
+    let resolveFetch!: (response: Response) => void;
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockReturnValue(
+        new Promise<Response>((resolve) => {
+          resolveFetch = resolve;
+        }),
+      ),
+    );
+    await reachReady();
+    await userEvent.click(screen.getByRole("button", { name: "면접 시작" }));
+    await screen.findByText("면접실에 연결하고 있어요 — 잠시만 기다려 주세요."); // 발급 단계부터 모달
+    await userEvent.click(screen.getByRole("button", { name: "취소" }));
+    await act(async () => {
+      resolveFetch(envelope(SESSION_DATA));
+    });
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: "면접 시작" })).toBeEnabled();
+    });
+    expect(screen.getByTestId("location")).toHaveTextContent("/setup");
+    expect(sessionStorage.getItem("hbb.interview.session")).toBeNull();
+  });
+
+  it("발급 대기 중 화면을 떠나면 완료 응답이 저장·이동을 유발하지 않는다", async () => {
+    let resolveFetch!: (response: Response) => void;
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockReturnValue(
+        new Promise<Response>((resolve) => {
+          resolveFetch = resolve;
+        }),
+      ),
+    );
+    const view = renderSetupPage();
+    await startCheck();
+    await speakIntoMic();
+    await userEvent.click(screen.getByRole("button", { name: "면접 시작" }));
+    view.unmount(); // TopNav 등으로 화면 이탈
+    await act(async () => {
+      resolveFetch(envelope(SESSION_DATA));
+    });
+    expect(sessionStorage.getItem("hbb.interview.session")).toBeNull();
   });
 
   it("완료 이력서가 있으면 선택 전까지 시작이 잠긴다", async () => {

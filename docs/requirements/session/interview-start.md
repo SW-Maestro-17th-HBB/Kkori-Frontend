@@ -23,8 +23,11 @@
     └─ ④ 장비 점검 통과(HBB1-19) ──▶ "면접 시작" 활성
 "면접 시작" 클릭 ──▶ POST /api/v1/sessions { resumeId?, interviewType, position }
     │                 (합의 계약 — 백엔드 구현·스키마 반영 대기)
-    ├─ 성공: { id?, livekitToken, livekitUrl, livekitRoom } → sessionStorage 저장 → /live 이동·접속
-    └─ 실패: 버튼 아래 인라인 안내 + 재클릭 재시도 (요청 중 버튼 비활성)
+    ├─ 성공: { id?, livekitToken, livekitUrl, livekitRoom } → sessionStorage 저장
+    │        → setup 에서 LiveKit 접속 확립("면접 연결 중" 모달·취소 가능)
+    │           ├─ 접속 성공: /live 이동 (연결된 룸을 재접속 없이 인수)
+    │           └─ 접속 실패: 이동 없음 + 인라인 안내 (재클릭 = 재발급·재접속)
+    └─ 발급 실패: 버튼 아래 인라인 안내 + 재클릭 재시도 (요청 중 버튼 비활성)
 /live 직행(저장값 없음·손상) ──▶ /setup 리다이렉트
 ```
 
@@ -32,7 +35,7 @@
 
 | No. | Function             | Description                                                                                                 |
 | --- | -------------------- | ----------------------------------------------------------------------------------------------------------- |
-| 1   | 면접 자료 선택       | ①분석 완료 이력서 ②직무(position, 추천 기본값) ③면접 시간(5/30분)을 선택하고, 조합별 시작 가능 조건을 게이팅한다. |
+| 1   | 면접 자료 선택       | ①분석 완료 이력서 ②직무(position, 기본값 백엔드) ③면접 시간(5/30분)을 선택하고, 조합별 시작 가능 조건을 게이팅한다. |
 | 2   | 빠른 면접 시작 진입  | 대시보드·이력서 화면의 시작 CTA가 `/setup?resume=<id>`로 이동해 ①을 프리셀렉트한다.                              |
 | 3   | 세션 생성            | "면접 시작" 클릭 시 세션 토큰 발급 API를 호출하고, 요청 중·실패 상태와 이중 제출을 처리한다.                      |
 | 4   | /live 핸드오프·진입 게이트 | 세션 응답을 sessionStorage로 전달해 `/live`가 접속하게 하고, 세션 없는 직행을 차단한다.                        |
@@ -165,7 +168,8 @@
 - **응답** — 201, envelope `data`: `{ id, livekitToken, livekitUrl, livekitRoom }`(합의 계약 — `id`는 세션 식별자로 종료·재연결 후속에서 사용). **현행 배포 스키마(`SessionTokenResponse`)에는 `id`가 아직 없으므로 FE는 `id`를 optional로 취급**한다 — 있으면 저장하고, 없어도 실패로 처리하지 않는다(필수화는 schema.ts 재생성 후속 티켓에서). 요청마다 새 룸이 발급되고(기존 `PENDING` 세션은 서버가 `ABORTED`로 자동 교체·룸 삭제 — BE PRD 기능 1), 토큰 발행 권한은 마이크로 한정된다(카메라·화면공유·데이터 차단).
   - 필수 검증은 `livekitToken`·`livekitUrl`·`livekitRoom` 세 필드 — 스키마상 optional이므로 **저장 전에 셋 다 비어 있지 않은 문자열인지 런타임 검증**한다. 하나라도 누락이면 성공으로 취급하지 않고 일반 실패 안내로 처리한다.
 - 기존 `.env.local` 개발 토큰 경로(`fetchLiveKitSession`의 `VITE_LIVEKIT_URL`/`VITE_LIVEKIT_TOKEN`·DEV 가드)는 제거한다 — 개발 환경도 로컬 백엔드에서 토큰을 발급받는다.
-- **요청 상태 처리**: 비멱등 POST이므로 `useMutation`(자동 재시도 없음). 요청 중 "면접 시작" 버튼 비활성 + 로딩 표시(이중 제출 방지). 성공 시에만 저장·이동(기능 4)으로 진행한다.
+- **요청 상태 처리**: 비멱등 POST이므로 `useMutation`(자동 재시도 없음). 시작 클릭부터 이동까지 **전 과정(발급→접속)을 "면접 준비 중" 모달이 덮어** 이중 제출과 ①~④ 선택 변경을 차단한다 — 진행 중 선택을 바꾸면 화면과 실제 세션 설정(클릭 시점 값)이 달라지기 때문. 성공 시에만 저장·이동(기능 4)으로 진행한다.
+- **취소·이탈 무효화**: 모달의 취소는 어느 단계에서든 시작 흐름을 중단한다(발급 단계 취소로 버려진 토큰·세션은 서버의 `PENDING` 자동 교체가 회수). 요청 대기 중 화면을 떠나면(언마운트) 진행 중 흐름을 무효화한다 — **늦게 도착한 응답이 저장·이동을 실행해 사용자를 `/live`로 끌고 가지 않는다.**
 - **실패 처리**: 버튼 아래 인라인 안내("면접 준비에 실패했어요 — 다시 시도해 주세요" + 원인 메시지)를 표시하고 이동하지 않는다. 재시도는 버튼 재클릭. 장비 점검 상태는 유지된다(재점검 불필요).
 - **에러 처리**: MVP 에러 UI는 일반 실패 안내(인라인 + 재클릭 재시도)로 통일하고, 401 등 인증 실패는 기존 `request()`의 재발급·재로그인 흐름을 따른다. 백엔드 반영 후 유효해지는 비즈니스 코드(BE PRD 에러 코드 표 — interview.md 초안의 `INVALID_RESUME`는 폐기됨): `INVALID_INPUT_VALUE`(400, fieldErrors) · `RESUME_NOT_FOUND`(404) · `RESUME_FORBIDDEN`(403) · `RESUME_ANALYSIS_IN_PROGRESS`·`RESUME_ANALYSIS_FAILED`·`SESSION_ALREADY_IN_PROGRESS`(409) · `SESSION_ROOM_CREATE_FAILED`·`SESSION_TOKEN_ISSUE_FAILED`(500). FE가 분석 완료 이력서만 노출하므로 이력서 계열 코드는 정상 흐름에서 도달하지 않는다 — 코드별 세분 안내(재분석 유도 등)는 연동 확인 후속 티켓에서 다룬다.
 - 마이크 선호 저장(`saveDevicePreferences`, HBB1-19)은 세션 생성 **성공 후 이동 직전**에 수행한다(실패한 시작 시도가 선호를 덮어쓰지 않게 순서 명시).
@@ -218,7 +222,9 @@
 - **요청 중 계정 교체 방어**: `authSessionId`는 세션 생성 **요청 시작 직전에 캡처**하고, **응답 도착 후 현재 인증 세션과 캡처값을 재대조**한다 — 다르면 응답(토큰)을 폐기하고 저장·이동하지 않는다. 요청 대기 중 다른 탭에서 계정이 교체되면(A 요청 → B 로그인 → A 토큰 도착) 응답 후 현재 ID로 저장할 경우 B가 A의 토큰으로 `/live` 검증을 통과하기 때문이다(`request()`는 정상 응답의 세션 일치를 검사하지 않는다). 저장하는 `authSessionId`도 응답 후 현재 ID가 아니라 **캡처한 ID**다. (동일 계열 방어: `postLogout`의 `bodyFactory` 소유 세션 확인.)
 - **인증 세션 검증**: `/live` 로드 시 저장값의 `authSessionId`가 **현재 인증 세션과 일치할 때만** 사용한다. 불일치(로그아웃 후 다른 계정 로그인 등)면 저장값을 제거하고 `/setup`으로 리다이렉트한다 — 이전 계정의 유효한 LiveKit 토큰이 다음 사용자에게 넘어가지 않게. 방어를 이중으로: **인증 세션 전이(로그아웃 A→null·계정 교체 A→B) 시에도** 저장값을 제거한다 — 전이 관찰 지점은 기존 `AuthSessionObserver`(App.tsx, 루트 쿼리 캐시 위생 처리와 동일 지점).
 - **저장 실패 시**(시크릿 모드 쿼터 등) 이동하지 않고 세션 생성 실패와 동일한 인라인 안내를 표시한다 — 토큰 없이 `/live`에 가면 접속이 불가능하므로 장치 선호(비차단)와 달리 **차단**이 맞다. 실패 감지는 `saveInterviewSession`의 **boolean 반환값**으로 한다 — 예외를 삼키고 결과를 반환하지 않는 `saveDevicePreferences`와 달리, 호출자(SetupPage)가 `false`를 받으면 이동하지 않는다. 버려진 토큰의 서버 자원 점유는 없다 — 현 API는 토큰 발급뿐이고, 향후 세션 리소스 도입 시에는 준비 타임아웃(`PENDING → ABORTED`, interview.md §3)이 회수한다.
-- **`/live` 진입 게이트**: 마운트 시 저장값을 로드해 — 정상이면 `useLiveKitRoom`으로 접속(기존 연결 로직 유지), **없거나 손상이면 `/setup`으로 replace 리다이렉트**한다. 기존의 env 직접 조회(`useLiveKitSession`) 경로는 제거된다 — 개발 중에도 `/setup`을 거쳐 진입한다.
+- **접속 확립 후 저장·이동**: 발급 성공 후 **이 화면에서 LiveKit 접속을 확립**한다 — 발급 단계부터 이어지는 "면접 준비 중" 모달(취소 가능)을 유지하고, **접속까지 성공한 뒤에만 sessionStorage에 저장**한다(취소·접속 실패 경로에 저장값이 남지 않아 실패한 세션으로 `/live` 직행 재접속하는 경로가 없다). 성공하면 연결된 룸을 **소유 정보(url·token·authSessionId)와 함께 보관**한 채 `/live`로 이동해 `/live`가 **재접속 없이 인수**한다. 실패하면 이동하지 않고 인라인 안내를 표시한다(재클릭 = 재발급·재접속). 접속 실패를 면접 화면이 아니라 **장비 점검 상태가 유지되는 setup 문맥에서 처리**하기 위한 설계다. 취소·화면 이탈 시 진행 중 접속을 중단한다.
+- **핸드오프 인수 조건**: `/live`는 보관된 룸의 소유 정보가 **저장값의 url·token과 정확히 일치할 때만** 인수한다 — 토큰은 발급마다 유일하고 게이트가 저장값↔현재 계정을 검증하므로, 다른 인증 세션이 이전 사용자의 연결을 넘겨받을 수 없다. 불일치 보관분과 게이트 실패·인증 세션 전이 시의 보관분은 폐기한다(연결 종료).
+- **`/live` 진입 게이트**: 마운트 시 저장값을 로드해 — 정상이면 `useLiveKitRoom`으로 접속(setup이 보관한 연결 룸이 있으면 인수, 없으면 — 직행·새로고침 — 저장값으로 접속), **없거나 손상이면 `/setup`으로 replace 리다이렉트**한다. 기존의 env 직접 조회(`useLiveKitSession`) 경로는 제거된다 — 개발 중에도 `/setup`을 거쳐 진입한다.
 - **새로고침**: sessionStorage가 유지되므로 같은 토큰으로 재접속을 시도한다. **단, 새로고침은 기존 연결의 재연결이 아니라 새 입장이므로 토큰 유효기간(TTL — 백엔드 `livekit.token-ttl`, 현행 기본 1h. 짧은 입장 윈도우로의 단축은 rejoin과 함께 후속 — BE PRD "TTL 후속 조정 예고") 내에서만 성공한다.** TTL 경과 후 새로고침은 기존 `/live` 접속 실패 안내로 처리한다 — 토큰 재발급(rejoin)은 세션 리소스 API와 함께 후속 스토리.
 - **탭 격리**: sessionStorage 특성상 같은 탭 전용 — 다른 탭과 세션이 공유되지 않는다. 저장값 정리는 로그아웃·계정 교체 시 제거 외에는 면접 종료 스토리(후속)에서 다루고, MVP에서는 탭 종료 시 자연 소멸에 맡긴다.
 - 마이크 선호 핸드오프(`hbb.interview.devicePrefs` → Room 캡처 기본값, HBB1-19)는 그대로 동작해야 한다.
@@ -229,7 +235,11 @@
 
 ### 검증 기준
 
-- 시작 성공 시 저장값이 기록되고 `/live`가 그 url·token으로 접속하는지 확인
+- 시작 성공 시 저장값이 기록되고 setup에서 확립된 접속을 `/live`가 재접속 없이 인수하는지 확인
+- 시작 클릭부터 "면접 준비 중" 모달이 표시되어 준비 중 선택 변경이 차단되는지 확인
+- 취소가 발급·접속 어느 단계에서든 흐름을 중단하고 setup에 머무는지 확인 (늦게 도착한 응답 폐기)
+- 요청 대기 중 화면을 떠나면 완료 응답이 저장·이동을 유발하지 않는지 확인
+- LiveKit 접속 실패 시 `/live`로 이동하지 않고 인라인 안내가 표시되며 재클릭으로 복구되는지 확인
 - 저장값 없이 `/live` 직행 시 `/setup`으로 리다이렉트되는지 확인(히스토리에 남지 않음)
 - 저장값이 손상(JSON 파싱 불가·필드 누락)이어도 리다이렉트로 안전하게 처리되는지 확인
 - 토큰 유효기간 내 `/live` 새로고침 시 저장값으로 재접속되는지 확인(만료 후에는 접속 실패 안내)
@@ -246,11 +256,11 @@
 ### 인터페이스 요구사항
 
 - 저장소: sessionStorage 키 `hbb.interview.session` — `{ url: string, token: string, room: string, authSessionId: string, id?: number }`
-- 모듈: `src/hooks/interviewSession.ts` — `saveInterviewSession(session): boolean`(성공 여부 반환 — 실패를 삼키는 `devicePreferences` 패턴과 의도적으로 다름) · `loadInterviewSession()`(손상 시 null) · `clearInterviewSession()`, `src/pages/InterviewPage.tsx`(게이트·접속 교체), `src/App.tsx`(`AuthSessionObserver` 전이 처리에 면접 세션 제거 추가)
+- 모듈: `src/hooks/interviewSession.ts` — `saveInterviewSession(session): boolean`(성공 여부 반환 — 실패를 삼키는 `devicePreferences` 패턴과 의도적으로 다름) · `loadInterviewSession()`(손상 시 null) · `clearInterviewSession()`, `src/hooks/useLiveKitRoom.ts`(연결 룸 보관·인수 — `stashConnectedRoom`/`discardConnectedRoom`), `src/pages/InterviewPage.tsx`(게이트·접속 교체), `src/App.tsx`(`AuthSessionObserver` 전이 처리에 면접 세션 제거 추가)
 
 ### 제약사항
 
-- 재연결 창 밖 복귀·토큰 만료 처리(rejoin)는 범위 외 — 접속 실패 시 기존 `/live` 실패 안내를 그대로 사용한다.
+- 재연결 창 밖 복귀·토큰 만료 처리(rejoin)는 범위 외. `/live` 직행·새로고침 경로는 `/live`에서 접속하므로 이때의 실패(토큰 만료 등)는 기존 `/live` 실패 표시로 남는다 — rejoin 도입 시 함께 개선.
 - 서버는 새 발급 시 같은 유저의 기존 `PENDING` 세션을 자동 교체(룸 삭제)한다 — 다른 탭에서 새로 발급하면 이 탭의 저장 토큰은 무효가 되며, 별도 감지 없이 접속 실패 안내로 수렴한다.
 
 ### 기타 요구사항

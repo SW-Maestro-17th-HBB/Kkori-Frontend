@@ -2,8 +2,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { act, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { QueryClient } from "@tanstack/react-query";
+import type { Room } from "livekit-client";
 import { renderWithProviders } from "./test/render";
 import * as apiClient from "./api/client";
+import { discardConnectedRoom, stashConnectedRoom } from "./hooks/useLiveKitRoom";
 import { consumePostLoginRedirect } from "./api/tokenStore";
 import { kakaoAuthorizeRedirect } from "./utils/kakaoLogin";
 import { ROUTE_ACCESS, ROUTES, type NavKey } from "./routes";
@@ -59,6 +61,7 @@ beforeEach(() => {
 
 afterEach(() => {
   authStatusOverride.value = null;
+  discardConnectedRoom(); // 테스트가 보관해 둔 면접 연결 격리
   vi.unstubAllEnvs();
   vi.restoreAllMocks();
   localStorage.clear();
@@ -211,6 +214,24 @@ describe("탭 간 세션 반응 (storage 이벤트)", () => {
     await screen.findByText(DASH_TEXT);
     await waitFor(() => {
       expect(sessionStorage.getItem("hbb.interview.session")).toBeNull();
+    });
+  });
+
+  it("계정 교체 전이에서 보관된 면접 연결(핸드오프)도 폐기한다", async () => {
+    seedLogin("sess-A");
+    const stashedRoom = { disconnect: vi.fn() } as unknown as Room;
+    stashConnectedRoom(stashedRoom, {
+      url: "wss://test.example",
+      token: "jwt-token",
+      authSessionId: "sess-A",
+    });
+    renderWithProviders(<App />, { route: ROUTES.dash });
+    await screen.findByText(DASH_TEXT);
+
+    crossTabAuthChange(() => seedLogin("sess-B"));
+    await screen.findByText(DASH_TEXT);
+    await waitFor(() => {
+      expect(stashedRoom.disconnect).toHaveBeenCalled();
     });
   });
 

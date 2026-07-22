@@ -5,6 +5,7 @@ import { makeQueryClient } from "./api/queryClient";
 import { REPORT_DETAIL_PATTERN, ROUTES } from "./routes";
 import { clearInterviewSession } from "./hooks/interviewSession";
 import { useAuthSessionId, useAuthStatus } from "./hooks/useAuthStatus";
+import { discardConnectedRoom } from "./hooks/useLiveKitRoom";
 import { LandingPage } from "./pages/LandingPage";
 import { AuthPage } from "./pages/AuthPage";
 import { KakaoCallbackPage } from "./pages/KakaoCallbackPage";
@@ -94,9 +95,10 @@ function AuthSessionObserver() {
     prev.current = sessionId;
     if (previous !== null && previous !== sessionId) {
       queryClient.clear();
-      // 면접 세션 토큰도 함께 폐기 — 이전 계정의 유효한 LiveKit 토큰이
-      // 같은 탭의 다음 사용자에게 넘어가지 않게 한다 (/live 게이트와 이중 방어)
+      // 면접 세션 토큰과 보관된 연결도 함께 폐기 — 이전 계정의 유효한 LiveKit
+      // 토큰·룸이 같은 탭의 다음 사용자에게 넘어가지 않게 한다 (/live 게이트와 이중 방어)
       clearInterviewSession();
+      discardConnectedRoom();
     }
   }, [sessionId, queryClient]);
   return null;

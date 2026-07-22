@@ -4,7 +4,9 @@ import { act, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { Route, Routes } from "react-router";
+import type { Room } from "livekit-client";
 import { saveInterviewSession, type InterviewSessionRecord } from "../hooks/interviewSession";
+import { discardConnectedRoom, stashConnectedRoom } from "../hooks/useLiveKitRoom";
 import { renderWithProviders } from "../test/render";
 import { FakeRoom, makeFakeAudioTrack } from "../test/livekitMock";
 import { InterviewPage } from "./InterviewPage";
@@ -49,6 +51,7 @@ const renderLive = () =>
 
 describe("InterviewPage — 진입 게이트", () => {
   beforeEach(() => {
+    discardConnectedRoom();
     FakeRoom.reset();
     sessionStorage.clear();
     localStorage.clear();
@@ -88,10 +91,30 @@ describe("InterviewPage — 진입 게이트", () => {
       expect(sessionStorage.getItem(SESSION_KEY)).toBeNull();
     });
   });
+
+  it("게이트 실패 시 보관된 연결(핸드오프)도 폐기한다", async () => {
+    seedLogin();
+    // 이전 시도의 연결이 보관돼 있으나 저장값이 없어 게이트를 통과하지 못하는 상황
+    const { Room: MockRoom } = await import("livekit-client");
+    const established = new MockRoom() as unknown as InstanceType<typeof FakeRoom>;
+    await established.connect("wss://test.example", "jwt-token");
+    stashConnectedRoom(established as unknown as Room, {
+      url: "wss://test.example",
+      token: "jwt-token",
+      authSessionId: "sess-A",
+    });
+
+    renderLive();
+    expect(await screen.findByTestId("setup-screen")).toBeInTheDocument();
+    await waitFor(() => {
+      expect(vi.mocked(established.disconnect)).toHaveBeenCalled();
+    });
+  });
 });
 
 describe("InterviewPage — LiveKit 룸 접속", () => {
   beforeEach(() => {
+    discardConnectedRoom();
     FakeRoom.reset();
     sessionStorage.clear();
     localStorage.clear();
