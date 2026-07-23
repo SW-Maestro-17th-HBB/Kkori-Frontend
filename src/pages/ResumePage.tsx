@@ -35,16 +35,12 @@ export function ResumePage() {
   const [editingId, setEditingId] = useState<number | null>(null);
   /** 수정 저장 직후 "재분석 필요" 안내를 보여줄 행 */
   const [savedId, setSavedId] = useState<number | null>(null);
-  /** 오류·안내 토스트 — 인라인 문구 대신 화면 상단에 잠시 떠 있다 사라진다 */
+  /** 오류·안내 토스트 — 자동으로 사라지지 않고 사용자가 닫기 버튼으로 직접 닫는다 */
   const [toast, setToast] = useState<{ message: string; tone: "error" | "info" } | null>(null);
-  const toastTimer = useRef<number | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const showToast = (message: string, tone: "error" | "info" = "error") => {
-    if (toastTimer.current !== null) window.clearTimeout(toastTimer.current);
+  const showToast = (message: string, tone: "error" | "info" = "error") =>
     setToast({ message, tone });
-    toastTimer.current = window.setTimeout(() => setToast(null), 4000);
-  };
 
   const { data: resumes = [], isPending, isError, error } = useResumes();
   const upload = useUploadResume();
@@ -432,7 +428,9 @@ export function ResumePage() {
               zIndex: 100,
             }}
           >
-            <NoticeToast tone={toast.tone}>{toast.message}</NoticeToast>
+            <NoticeToast tone={toast.tone} onClose={() => setToast(null)}>
+              {toast.message}
+            </NoticeToast>
           </div>,
           document.body,
         )}
@@ -442,7 +440,15 @@ export function ResumePage() {
 
 /* ---------- 알림 토스트 — 화면 톤(흰 서피스 + 상태색 아이콘 배지)에 맞춘 스타일 ---------- */
 
-function NoticeToast({ tone, children }: { tone: "error" | "info"; children: ReactNode }) {
+function NoticeToast({
+  tone,
+  onClose,
+  children,
+}: {
+  tone: "error" | "info";
+  onClose: () => void;
+  children: ReactNode;
+}) {
   const isError = tone === "error";
   return (
     <div
@@ -479,6 +485,15 @@ function NoticeToast({ tone, children }: { tone: "error" | "info"; children: Rea
         <Icon name={isError ? "x" : "info"} size={15} />
       </span>
       {children}
+      <button
+        type="button"
+        className="linkbtn ib-sm"
+        aria-label="알림 닫기"
+        onClick={onClose}
+        style={{ color: "var(--fg-tertiary)", marginLeft: 2, flexShrink: 0 }}
+      >
+        <Icon name="x" size={15} />
+      </button>
     </div>
   );
 }
