@@ -34,10 +34,11 @@ export function ResumePage() {
   const [menu, setMenu] = useState<{ id: number; top: number; right: number } | null>(null);
   const [editingId, setEditingId] = useState<number | null>(null);
   /** 오류·안내 토스트 — 자동으로 사라지지 않고 사용자가 닫기 버튼으로 직접 닫는다 */
-  const [toast, setToast] = useState<string | null>(null);
+  const [toast, setToast] = useState<{ message: string; tone: "error" | "success" } | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const showToast = (message: string) => setToast(message);
+  const showToast = (message: string, tone: "error" | "success" = "error") =>
+    setToast({ message, tone });
 
   const { data: resumes = [], isPending, isError, error } = useResumes();
   const upload = useUploadResume();
@@ -335,6 +336,7 @@ export function ResumePage() {
                                       setEditingId(null);
                                       showToast(
                                         "수정 사항이 저장됐어요 — 면접 질문에 반영하려면 메뉴에서 재분석을 실행하세요.",
+                                        "success",
                                       );
                                     },
                                     onError: (e) => showToast(errorMessage(e)),
@@ -407,7 +409,9 @@ export function ResumePage() {
               zIndex: 100,
             }}
           >
-            <NoticeToast onClose={() => setToast(null)}>{toast}</NoticeToast>
+            <NoticeToast tone={toast.tone} onClose={() => setToast(null)}>
+              {toast.message}
+            </NoticeToast>
           </div>,
           document.body,
         )}
@@ -417,7 +421,16 @@ export function ResumePage() {
 
 /* ---------- 알림 토스트 — 화면 톤(흰 서피스 + 상태색 아이콘 배지)에 맞춘 스타일 ---------- */
 
-function NoticeToast({ onClose, children }: { onClose: () => void; children: ReactNode }) {
+function NoticeToast({
+  tone,
+  onClose,
+  children,
+}: {
+  tone: "error" | "success";
+  onClose: () => void;
+  children: ReactNode;
+}) {
+  const isError = tone === "error";
   return (
     <div
       className="notice-toast"
@@ -446,11 +459,11 @@ function NoticeToast({ onClose, children }: { onClose: () => void; children: Rea
           alignItems: "center",
           justifyContent: "center",
           flexShrink: 0,
-          background: "var(--bg-danger-subtle)",
-          color: "var(--red-600)",
+          background: isError ? "var(--bg-danger-subtle)" : "var(--bg-success-subtle)",
+          color: isError ? "var(--red-600)" : "var(--green-600)",
         }}
       >
-        <Icon name="x" size={15} />
+        <Icon name={isError ? "x" : "check"} size={15} />
       </span>
       {children}
       <button
