@@ -63,7 +63,7 @@ export function ResumePage() {
         onError: (e) => showToast(errorMessage(e)),
         onSuccess: (data) => {
           if (data?.duplicated)
-            showToast("이미 업로드된 이력서예요 — 기존 항목을 그대로 사용합니다.");
+            showToast("이미 업로드된 이력서예요. 기존 이력서를 그대로 사용합니다.");
         },
       },
     );
@@ -335,7 +335,7 @@ export function ResumePage() {
                                     onSuccess: () => {
                                       setEditingId(null);
                                       showToast(
-                                        "수정 사항이 저장됐어요 — 면접 질문에 반영하려면 메뉴에서 재분석을 실행하세요.",
+                                        "수정 사항이 저장됐어요. 면접 질문에 반영하려면 재분석을 실행해 주세요.",
                                         "success",
                                       );
                                     },
