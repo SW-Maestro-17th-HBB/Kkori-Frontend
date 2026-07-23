@@ -12,7 +12,7 @@ import {
   useUploadResume,
 } from "../api/hooks";
 import { isApiError } from "../api/request";
-import { Badge, Button, Card, Input, Progress, Toast } from "../components/ds";
+import { Badge, Button, Card, Input, Progress } from "../components/ds";
 import { Icon } from "../components/Icon";
 import { Display, DocThumb, SectionLabel, StatusBadge } from "../components/primitives";
 import { TopNav } from "../components/TopNav";
@@ -36,13 +36,13 @@ export function ResumePage() {
   /** 수정 저장 직후 "재분석 필요" 안내를 보여줄 행 */
   const [savedId, setSavedId] = useState<number | null>(null);
   /** 오류·안내 토스트 — 인라인 문구 대신 화면 상단에 잠시 떠 있다 사라진다 */
-  const [toast, setToast] = useState<{ message: string; icon: string } | null>(null);
+  const [toast, setToast] = useState<{ message: string; tone: "error" | "info" } | null>(null);
   const toastTimer = useRef<number | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const showToast = (message: string, icon = "x") => {
+  const showToast = (message: string, tone: "error" | "info" = "error") => {
     if (toastTimer.current !== null) window.clearTimeout(toastTimer.current);
-    setToast({ message, icon });
+    setToast({ message, tone });
     toastTimer.current = window.setTimeout(() => setToast(null), 4000);
   };
 
@@ -432,10 +432,53 @@ export function ResumePage() {
               zIndex: 100,
             }}
           >
-            <Toast icon={<Icon name={toast.icon} size={16} />}>{toast.message}</Toast>
+            <NoticeToast tone={toast.tone}>{toast.message}</NoticeToast>
           </div>,
           document.body,
         )}
+    </div>
+  );
+}
+
+/* ---------- 알림 토스트 — 화면 톤(흰 서피스 + 상태색 아이콘 배지)에 맞춘 스타일 ---------- */
+
+function NoticeToast({ tone, children }: { tone: "error" | "info"; children: ReactNode }) {
+  const isError = tone === "error";
+  return (
+    <div
+      className="notice-toast"
+      style={{
+        display: "flex",
+        alignItems: "center",
+        gap: 10,
+        maxWidth: 480,
+        background: "var(--bg-surface)",
+        border: "1px solid var(--border-subtle)",
+        borderRadius: "var(--radius-12)",
+        boxShadow: "0 8px 24px rgba(0, 0, 0, 0.12)",
+        padding: "12px 16px",
+        fontFamily: "var(--font-sans)",
+        fontSize: 14,
+        fontWeight: 600,
+        color: "var(--fg-strong)",
+      }}
+    >
+      <span
+        style={{
+          width: 28,
+          height: 28,
+          borderRadius: "var(--radius-full)",
+          display: "inline-flex",
+          alignItems: "center",
+          justifyContent: "center",
+          flexShrink: 0,
+          background: isError ? "var(--bg-danger-subtle)" : "var(--bg-brand-subtle)",
+          color: isError ? "var(--red-600)" : "var(--blue-800)",
+        }}
+      >
+        <Icon name={isError ? "x" : "info"} size={15} />
+      </span>
+      {children}
     </div>
   );
 }
