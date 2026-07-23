@@ -645,10 +645,60 @@ function RemoveRowButton({ label, onClick }: { label: string; onClick: () => voi
 }
 
 /**
- * 분석 결과 인라인 수정 — 미리보기 영역이 그대로 편집 폼으로 전환된다(모달 없음).
- * 저장은 PATCH /parsed 로 structuredData 전문을 보낸다. 백엔드 검증은 형태만
- * 엄격(배열 내 null 400, 필드 누락·빈 배열 허용, PRD §4)이라 빈 행만 걷어내고 전송한다.
+ * structuredData 편집 폼. 쉼표 구분 입력(스킬 항목·기술 스택)은 타이핑 중 파싱하면
+ * 쉼표·공백이 즉시 지워지므로, 폼 상태는 **문자열 그대로** 두고 저장 시점에만 배열로 변환한다.
+ * 저장은 PATCH /parsed 로 전문을 보낸다 — 백엔드 검증은 형태만 엄격(배열 내 null 400,
+ * 필드 누락·빈 배열 허용, PRD §4)이라 빈 행만 걷어내고 전송한다.
  */
+interface ParsedEditForm {
+  name: string;
+  email: string;
+  skills: { category: string; itemsText: string }[];
+  projects: { name: string; role: string; description: string; techStacksText: string }[];
+  experiences: { title: string; description: string }[];
+}
+
+function toEditForm(initial: StructuredData): ParsedEditForm {
+  return {
+    name: initial.profile?.name ?? "",
+    email: initial.profile?.email ?? "",
+    skills: (initial.skills ?? []).map((s) => ({
+      category: s.category ?? "",
+      itemsText: (s.items ?? []).join(", "),
+    })),
+    projects: (initial.projects ?? []).map((p) => ({
+      name: p.name ?? "",
+      role: p.role ?? "",
+      description: p.description ?? "",
+      techStacksText: (p.techStacks ?? []).join(", "),
+    })),
+    experiences: (initial.experiences ?? []).map((e) => ({
+      title: e.title ?? "",
+      description: e.description ?? "",
+    })),
+  };
+}
+
+function fromEditForm(form: ParsedEditForm): StructuredData {
+  return {
+    profile: { name: form.name, email: form.email },
+    skills: form.skills
+      .filter((s) => s.category.trim() || s.itemsText.trim())
+      .map((s) => ({ category: s.category, items: splitCsv(s.itemsText) })),
+    projects: form.projects
+      .filter(
+        (p) => p.name.trim() || p.role.trim() || p.description.trim() || p.techStacksText.trim(),
+      )
+      .map((p) => ({
+        name: p.name,
+        role: p.role,
+        description: p.description,
+        techStacks: splitCsv(p.techStacksText),
+      })),
+    experiences: form.experiences.filter((e) => e.title.trim() || e.description.trim()),
+  };
+}
+
 function ParsedEditPanel({
   initial,
   saving,
@@ -660,22 +710,11 @@ function ParsedEditPanel({
   onCancel: () => void;
   onSave: (data: StructuredData) => void;
 }) {
-  const [draft, setDraft] = useState<StructuredData>(() => structuredClone(initial));
-
-  const skills = draft.skills ?? [];
-  const projects = draft.projects ?? [];
-  const experiences = draft.experiences ?? [];
+  const [form, setForm] = useState<ParsedEditForm>(() => toEditForm(initial));
 
   const submit = () => {
     if (saving) return;
-    onSave({
-      profile: draft.profile,
-      skills: skills.filter((s) => s.category?.trim() || s.items?.length),
-      projects: projects.filter(
-        (p) => p.name?.trim() || p.role?.trim() || p.description?.trim() || p.techStacks?.length,
-      ),
-      experiences: experiences.filter((e) => e.title?.trim() || e.description?.trim()),
-    });
+    onSave(fromEditForm(form));
   };
 
   return (
@@ -709,6 +748,7 @@ function ParsedEditPanel({
       >
         저장 후 면접 질문에 반영하려면 메뉴에서 재분석을 실행해야 해요.
       </p>
+
       <div
         style={{
           background: "var(--bg-surface)",
@@ -722,21 +762,17 @@ function ParsedEditPanel({
             <div>
               <div style={fieldLabel}>이름</div>
               <Input
-                value={draft.profile?.name ?? ""}
+                value={form.name}
                 placeholder="이름"
-                onChange={(e) =>
-                  setDraft({ ...draft, profile: { ...draft.profile, name: e.target.value } })
-                }
+                onChange={(e) => setForm({ ...form, name: e.target.value })}
               />
             </div>
             <div>
               <div style={fieldLabel}>이메일</div>
               <Input
-                value={draft.profile?.email ?? ""}
+                value={form.email}
                 placeholder="이메일"
-                onChange={(e) =>
-                  setDraft({ ...draft, profile: { ...draft.profile, email: e.target.value } })
-                }
+                onChange={(e) => setForm({ ...form, email: e.target.value })}
               />
             </div>
           </div>
@@ -745,15 +781,17 @@ function ParsedEditPanel({
         <EditSection
           title="스킬"
           addLabel="스킬 추가"
-          onAdd={() => setDraft({ ...draft, skills: [...skills, { category: "", items: [] }] })}
+          onAdd={() =>
+            setForm({ ...form, skills: [...form.skills, { category: "", itemsText: "" }] })
+          }
         >
-          {skills.length === 0 && (
+          {form.skills.length === 0 && (
             <p className="hbb-table-note" style={{ padding: "2px 0" }}>
               아직 스킬이 없어요. 오른쪽 위 버튼으로 추가하세요.
             </p>
           )}
           <div style={{ display: "grid", gap: 8 }}>
-            {skills.map((skill, i) => (
+            {form.skills.map((skill, i) => (
               <div
                 key={i}
                 style={{ display: "grid", gridTemplateColumns: "200px 1fr 32px", gap: 10 }}
@@ -761,12 +799,12 @@ function ParsedEditPanel({
                 <div>
                   {i === 0 && <div style={fieldLabel}>카테고리</div>}
                   <Input
-                    value={skill.category ?? ""}
+                    value={skill.category}
                     placeholder="예: 백엔드"
                     onChange={(e) =>
-                      setDraft({
-                        ...draft,
-                        skills: skills.map((s, j) =>
+                      setForm({
+                        ...form,
+                        skills: form.skills.map((s, j) =>
                           j === i ? { ...s, category: e.target.value } : s,
                         ),
                       })
@@ -776,13 +814,13 @@ function ParsedEditPanel({
                 <div>
                   {i === 0 && <div style={fieldLabel}>항목 (쉼표로 구분)</div>}
                   <Input
-                    value={(skill.items ?? []).join(", ")}
+                    value={skill.itemsText}
                     placeholder="예: Java, Spring Boot, Redis"
                     onChange={(e) =>
-                      setDraft({
-                        ...draft,
-                        skills: skills.map((s, j) =>
-                          j === i ? { ...s, items: splitCsv(e.target.value) } : s,
+                      setForm({
+                        ...form,
+                        skills: form.skills.map((s, j) =>
+                          j === i ? { ...s, itemsText: e.target.value } : s,
                         ),
                       })
                     }
@@ -791,7 +829,9 @@ function ParsedEditPanel({
                 <div style={{ display: "flex", alignItems: "flex-end", paddingBottom: 4 }}>
                   <RemoveRowButton
                     label="스킬 삭제"
-                    onClick={() => setDraft({ ...draft, skills: skills.filter((_, j) => j !== i) })}
+                    onClick={() =>
+                      setForm({ ...form, skills: form.skills.filter((_, j) => j !== i) })
+                    }
                   />
                 </div>
               </div>
@@ -803,19 +843,22 @@ function ParsedEditPanel({
           title="프로젝트"
           addLabel="프로젝트 추가"
           onAdd={() =>
-            setDraft({
-              ...draft,
-              projects: [...projects, { name: "", role: "", description: "", techStacks: [] }],
+            setForm({
+              ...form,
+              projects: [
+                ...form.projects,
+                { name: "", role: "", description: "", techStacksText: "" },
+              ],
             })
           }
         >
-          {projects.length === 0 && (
+          {form.projects.length === 0 && (
             <p className="hbb-table-note" style={{ padding: "2px 0" }}>
               아직 프로젝트가 없어요. 오른쪽 위 버튼으로 추가하세요.
             </p>
           )}
           <div style={{ display: "grid", gap: 12 }}>
-            {projects.map((project, i) => (
+            {form.projects.map((project, i) => (
               <div
                 key={i}
                 style={{
@@ -831,12 +874,12 @@ function ParsedEditPanel({
                   <div>
                     <div style={fieldLabel}>프로젝트 이름</div>
                     <Input
-                      value={project.name ?? ""}
+                      value={project.name}
                       placeholder="예: Kkori"
                       onChange={(e) =>
-                        setDraft({
-                          ...draft,
-                          projects: projects.map((p, j) =>
+                        setForm({
+                          ...form,
+                          projects: form.projects.map((p, j) =>
                             j === i ? { ...p, name: e.target.value } : p,
                           ),
                         })
@@ -846,12 +889,12 @@ function ParsedEditPanel({
                   <div>
                     <div style={fieldLabel}>역할</div>
                     <Input
-                      value={project.role ?? ""}
+                      value={project.role}
                       placeholder="예: 백엔드"
                       onChange={(e) =>
-                        setDraft({
-                          ...draft,
-                          projects: projects.map((p, j) =>
+                        setForm({
+                          ...form,
+                          projects: form.projects.map((p, j) =>
                             j === i ? { ...p, role: e.target.value } : p,
                           ),
                         })
@@ -862,7 +905,7 @@ function ParsedEditPanel({
                     <RemoveRowButton
                       label="프로젝트 삭제"
                       onClick={() =>
-                        setDraft({ ...draft, projects: projects.filter((_, j) => j !== i) })
+                        setForm({ ...form, projects: form.projects.filter((_, j) => j !== i) })
                       }
                     />
                   </div>
@@ -870,12 +913,12 @@ function ParsedEditPanel({
                 <div>
                   <div style={fieldLabel}>설명</div>
                   <Input
-                    value={project.description ?? ""}
+                    value={project.description}
                     placeholder="어떤 프로젝트였는지 간단히"
                     onChange={(e) =>
-                      setDraft({
-                        ...draft,
-                        projects: projects.map((p, j) =>
+                      setForm({
+                        ...form,
+                        projects: form.projects.map((p, j) =>
                           j === i ? { ...p, description: e.target.value } : p,
                         ),
                       })
@@ -885,13 +928,13 @@ function ParsedEditPanel({
                 <div>
                   <div style={fieldLabel}>기술 스택 (쉼표로 구분)</div>
                   <Input
-                    value={(project.techStacks ?? []).join(", ")}
+                    value={project.techStacksText}
                     placeholder="예: Spring Boot, PostgreSQL"
                     onChange={(e) =>
-                      setDraft({
-                        ...draft,
-                        projects: projects.map((p, j) =>
-                          j === i ? { ...p, techStacks: splitCsv(e.target.value) } : p,
+                      setForm({
+                        ...form,
+                        projects: form.projects.map((p, j) =>
+                          j === i ? { ...p, techStacksText: e.target.value } : p,
                         ),
                       })
                     }
@@ -906,16 +949,19 @@ function ParsedEditPanel({
           title="경력"
           addLabel="경력 추가"
           onAdd={() =>
-            setDraft({ ...draft, experiences: [...experiences, { title: "", description: "" }] })
+            setForm({
+              ...form,
+              experiences: [...form.experiences, { title: "", description: "" }],
+            })
           }
         >
-          {experiences.length === 0 && (
+          {form.experiences.length === 0 && (
             <p className="hbb-table-note" style={{ padding: "2px 0" }}>
               아직 경력이 없어요. 오른쪽 위 버튼으로 추가하세요.
             </p>
           )}
           <div style={{ display: "grid", gap: 8 }}>
-            {experiences.map((exp, i) => (
+            {form.experiences.map((exp, i) => (
               <div
                 key={i}
                 style={{ display: "grid", gridTemplateColumns: "1fr 1.4fr 32px", gap: 10 }}
@@ -923,12 +969,12 @@ function ParsedEditPanel({
                 <div>
                   {i === 0 && <div style={fieldLabel}>제목</div>}
                   <Input
-                    value={exp.title ?? ""}
+                    value={exp.title}
                     placeholder="예: 3년 · 백엔드"
                     onChange={(e) =>
-                      setDraft({
-                        ...draft,
-                        experiences: experiences.map((x, j) =>
+                      setForm({
+                        ...form,
+                        experiences: form.experiences.map((x, j) =>
                           j === i ? { ...x, title: e.target.value } : x,
                         ),
                       })
@@ -938,12 +984,12 @@ function ParsedEditPanel({
                 <div>
                   {i === 0 && <div style={fieldLabel}>설명</div>}
                   <Input
-                    value={exp.description ?? ""}
+                    value={exp.description}
                     placeholder="무엇을 했는지 간단히"
                     onChange={(e) =>
-                      setDraft({
-                        ...draft,
-                        experiences: experiences.map((x, j) =>
+                      setForm({
+                        ...form,
+                        experiences: form.experiences.map((x, j) =>
                           j === i ? { ...x, description: e.target.value } : x,
                         ),
                       })
@@ -954,7 +1000,10 @@ function ParsedEditPanel({
                   <RemoveRowButton
                     label="경력 삭제"
                     onClick={() =>
-                      setDraft({ ...draft, experiences: experiences.filter((_, j) => j !== i) })
+                      setForm({
+                        ...form,
+                        experiences: form.experiences.filter((_, j) => j !== i),
+                      })
                     }
                   />
                 </div>
