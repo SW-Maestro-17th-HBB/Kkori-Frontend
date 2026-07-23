@@ -33,12 +33,17 @@ export function ResumePage() {
   /** 열린 행 메뉴 — 테이블(overflow: hidden)에 잘리지 않도록 버튼 화면 좌표에 포털로 띄운다 */
   const [menu, setMenu] = useState<{ id: number; top: number; right: number } | null>(null);
   const [editingId, setEditingId] = useState<number | null>(null);
-  /** 오류·안내 토스트 — 자동으로 사라지지 않고 사용자가 닫기 버튼으로 직접 닫는다 */
-  const [toast, setToast] = useState<{ message: string; tone: "error" | "success" } | null>(null);
+  /** 오류·안내 토스트 — 자동으로 사라지지 않고 사용자가 닫기 버튼으로 직접 닫는다.
+      두 문장을 한 줄에 잇지 않도록 제목·설명을 분리해서 보여준다 */
+  const [toast, setToast] = useState<{
+    title: string;
+    description?: string;
+    tone: "error" | "success";
+  } | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const showToast = (message: string, tone: "error" | "success" = "error") =>
-    setToast({ message, tone });
+  const showToast = (title: string, description?: string, tone: "error" | "success" = "error") =>
+    setToast({ title, description, tone });
 
   const { data: resumes = [], isPending, isError, error } = useResumes();
   const upload = useUploadResume();
@@ -63,7 +68,7 @@ export function ResumePage() {
         onError: (e) => showToast(errorMessage(e)),
         onSuccess: (data) => {
           if (data?.duplicated)
-            showToast("이미 업로드된 이력서예요. 기존 이력서를 그대로 사용합니다.");
+            showToast("이미 업로드된 이력서예요", "기존 이력서를 그대로 사용합니다.");
         },
       },
     );
@@ -335,7 +340,8 @@ export function ResumePage() {
                                     onSuccess: () => {
                                       setEditingId(null);
                                       showToast(
-                                        "수정 사항이 저장됐어요. 면접 질문에 반영하려면 재분석을 실행해 주세요.",
+                                        "수정 사항이 저장됐어요",
+                                        "면접 질문에 반영하려면 재분석을 실행해 주세요.",
                                         "success",
                                       );
                                     },
@@ -409,9 +415,12 @@ export function ResumePage() {
               zIndex: 100,
             }}
           >
-            <NoticeToast tone={toast.tone} onClose={() => setToast(null)}>
-              {toast.message}
-            </NoticeToast>
+            <NoticeToast
+              tone={toast.tone}
+              title={toast.title}
+              description={toast.description}
+              onClose={() => setToast(null)}
+            />
           </div>,
           document.body,
         )}
@@ -423,12 +432,14 @@ export function ResumePage() {
 
 function NoticeToast({
   tone,
+  title,
+  description,
   onClose,
-  children,
 }: {
   tone: "error" | "success";
+  title: string;
+  description?: string;
   onClose: () => void;
-  children: ReactNode;
 }) {
   const isError = tone === "error";
   return (
@@ -436,7 +447,7 @@ function NoticeToast({
       className="notice-toast"
       style={{
         display: "flex",
-        alignItems: "center",
+        alignItems: description ? "flex-start" : "center",
         gap: 10,
         maxWidth: 480,
         background: "var(--bg-surface)",
@@ -445,9 +456,6 @@ function NoticeToast({
         boxShadow: "0 8px 24px rgba(0, 0, 0, 0.12)",
         padding: "12px 16px",
         fontFamily: "var(--font-sans)",
-        fontSize: 14,
-        fontWeight: 600,
-        color: "var(--fg-strong)",
       }}
     >
       <span
@@ -465,7 +473,16 @@ function NoticeToast({
       >
         <Icon name={isError ? "x" : "check"} size={15} />
       </span>
-      {children}
+      <div style={{ wordBreak: "keep-all", lineHeight: 1.5 }}>
+        <div style={{ fontSize: 14, fontWeight: 600, color: "var(--fg-strong)" }}>{title}</div>
+        {description && (
+          <div
+            style={{ fontSize: 13, fontWeight: 500, color: "var(--fg-secondary)", marginTop: 2 }}
+          >
+            {description}
+          </div>
+        )}
+      </div>
       <button
         type="button"
         className="linkbtn ib-sm"
