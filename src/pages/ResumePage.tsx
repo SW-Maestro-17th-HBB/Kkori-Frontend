@@ -2,7 +2,6 @@
 import { Fragment, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import type { CSSProperties, DragEvent, ReactNode } from "react";
-import { toResumePreview } from "../api/client";
 import type { StructuredData } from "../api/client";
 import {
   useDeleteResume,
@@ -50,7 +49,6 @@ export function ResumePage() {
   const openRow = rows.find((r) => r.id === openId);
   // 미리보기는 완료 행을 펼친 시점에만 조회 (PRD §2 — 목록 payload 경량화)
   const parsed = useResumeParsed(openRow?.status === "done" ? openRow.id : null);
-  const preview = parsed.data ? toResumePreview(parsed.data) : null;
 
   const pickFile = () => fileInputRef.current?.click();
 
@@ -370,7 +368,7 @@ export function ResumePage() {
                                   marginBottom: 14,
                                 }}
                               >
-                                <SectionLabel>분석 결과 미리보기</SectionLabel>
+                                <SectionLabel>분석 결과</SectionLabel>
                                 <Button
                                   variant="solid"
                                   size="sm"
@@ -404,67 +402,17 @@ export function ResumePage() {
                                   background: "var(--bg-surface)",
                                   border: "1px solid var(--border-subtle)",
                                   borderRadius: "var(--radius-12)",
-                                  padding: "6px 16px",
+                                  padding: "6px 20px",
                                 }}
                               >
                                 {parsed.isPending ? (
-                                  <p className="hbb-table-note">미리보기를 불러오는 중…</p>
-                                ) : parsed.isError || !preview ? (
+                                  <p className="hbb-table-note">분석 결과를 불러오는 중…</p>
+                                ) : parsed.isError || !parsed.data ? (
                                   <p className="hbb-table-note" role="alert">
                                     {errorMessage(parsed.error)}
                                   </p>
                                 ) : (
-                                  (
-                                    [
-                                      ["이름", preview.name],
-                                      ["경력", preview.career],
-                                      ["핵심 스킬", null],
-                                      ["주요 프로젝트", preview.projects],
-                                    ] as [string, string | null][]
-                                  ).map(([k, v], j) => (
-                                    <div
-                                      key={k}
-                                      style={{
-                                        display: "flex",
-                                        gap: 12,
-                                        padding: "12px 0",
-                                        borderBottom:
-                                          j < 3 ? "1px solid var(--border-subtle)" : "none",
-                                        fontFamily: "var(--font-sans)",
-                                        fontSize: 14,
-                                        fontWeight: 500,
-                                      }}
-                                    >
-                                      <span
-                                        style={{
-                                          width: 96,
-                                          flexShrink: 0,
-                                          color: "var(--fg-tertiary)",
-                                        }}
-                                      >
-                                        {k}
-                                      </span>
-                                      {v ? (
-                                        <span
-                                          style={{ color: "var(--fg-strong)", fontWeight: 600 }}
-                                        >
-                                          {v}
-                                        </span>
-                                      ) : (
-                                        <span style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-                                          {preview.skills.length ? (
-                                            preview.skills.map((c) => (
-                                              <Badge key={c} variant="brand">
-                                                {c}
-                                              </Badge>
-                                            ))
-                                          ) : (
-                                            <span style={{ color: "var(--fg-tertiary)" }}>-</span>
-                                          )}
-                                        </span>
-                                      )}
-                                    </div>
-                                  ))
+                                  <ParsedDetail data={parsed.data.structuredData ?? {}} />
                                 )}
                               </div>
                             </div>
@@ -1001,5 +949,170 @@ function ParsedEditPanel({
         </EditSection>
       </div>
     </div>
+  );
+}
+
+/* ---------- 분석 결과 상세(읽기) — 수정 패널과 같은 섹션 구조로 정보 격차를 없앤다 ---------- */
+
+function DetailField({ label, value }: { label: string; value?: string }) {
+  return (
+    <div>
+      <div style={fieldLabel}>{label}</div>
+      <div
+        style={{
+          fontFamily: "var(--font-sans)",
+          fontSize: 14,
+          fontWeight: 600,
+          color: value ? "var(--fg-strong)" : "var(--fg-tertiary)",
+        }}
+      >
+        {value || "-"}
+      </div>
+    </div>
+  );
+}
+
+function EmptyNote({ children }: { children: ReactNode }) {
+  return (
+    <p className="hbb-table-note" style={{ padding: "2px 0" }}>
+      {children}
+    </p>
+  );
+}
+
+function ParsedDetail({ data }: { data: StructuredData }) {
+  const skills = data.skills ?? [];
+  const projects = data.projects ?? [];
+  const experiences = data.experiences ?? [];
+
+  return (
+    <>
+      <EditSection title="프로필" first>
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+          <DetailField label="이름" value={data.profile?.name} />
+          <DetailField label="이메일" value={data.profile?.email} />
+        </div>
+      </EditSection>
+
+      <EditSection title="스킬">
+        {skills.length === 0 ? (
+          <EmptyNote>분석된 스킬이 없어요.</EmptyNote>
+        ) : (
+          <div style={{ display: "grid", gap: 10 }}>
+            {skills.map((skill, i) => (
+              <div
+                key={i}
+                style={{
+                  display: "grid",
+                  gridTemplateColumns: "200px 1fr",
+                  gap: 10,
+                  alignItems: "center",
+                }}
+              >
+                <span
+                  style={{
+                    fontFamily: "var(--font-sans)",
+                    fontSize: 13,
+                    fontWeight: 600,
+                    color: "var(--fg-secondary)",
+                  }}
+                >
+                  {skill.category || "-"}
+                </span>
+                <span style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                  {(skill.items ?? []).length ? (
+                    (skill.items ?? []).map((item) => (
+                      <Badge key={item} variant="brand">
+                        {item}
+                      </Badge>
+                    ))
+                  ) : (
+                    <span style={{ color: "var(--fg-tertiary)", fontSize: 13 }}>-</span>
+                  )}
+                </span>
+              </div>
+            ))}
+          </div>
+        )}
+      </EditSection>
+
+      <EditSection title="프로젝트">
+        {projects.length === 0 ? (
+          <EmptyNote>분석된 프로젝트가 없어요.</EmptyNote>
+        ) : (
+          <div style={{ display: "grid", gap: 12 }}>
+            {projects.map((project, i) => (
+              <div
+                key={i}
+                style={{
+                  border: "1px solid var(--border-subtle)",
+                  borderRadius: "var(--radius-12)",
+                  background: "var(--bg-subtle)",
+                  padding: 14,
+                  display: "grid",
+                  gap: 8,
+                  fontFamily: "var(--font-sans)",
+                }}
+              >
+                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                  <span style={{ fontSize: 14, fontWeight: 700, color: "var(--fg-strong)" }}>
+                    {project.name || "-"}
+                  </span>
+                  {project.role && (
+                    <span style={{ fontSize: 13, fontWeight: 500, color: "var(--fg-tertiary)" }}>
+                      · {project.role}
+                    </span>
+                  )}
+                </div>
+                {project.description && (
+                  <p
+                    style={{
+                      margin: 0,
+                      fontSize: 13,
+                      fontWeight: 500,
+                      color: "var(--fg-secondary)",
+                      lineHeight: 1.5,
+                    }}
+                  >
+                    {project.description}
+                  </p>
+                )}
+                {(project.techStacks ?? []).length > 0 && (
+                  <span style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                    {(project.techStacks ?? []).map((t) => (
+                      <Badge key={t} variant="brand">
+                        {t}
+                      </Badge>
+                    ))}
+                  </span>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+      </EditSection>
+
+      <EditSection title="경력">
+        {experiences.length === 0 ? (
+          <EmptyNote>분석된 경력이 없어요.</EmptyNote>
+        ) : (
+          <div style={{ display: "grid", gap: 8 }}>
+            {experiences.map((exp, i) => (
+              <div key={i} style={{ fontFamily: "var(--font-sans)" }}>
+                <span style={{ fontSize: 14, fontWeight: 600, color: "var(--fg-strong)" }}>
+                  {exp.title || "-"}
+                </span>
+                {exp.description && (
+                  <span style={{ fontSize: 13, fontWeight: 500, color: "var(--fg-tertiary)" }}>
+                    {" "}
+                    — {exp.description}
+                  </span>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+      </EditSection>
+    </>
   );
 }

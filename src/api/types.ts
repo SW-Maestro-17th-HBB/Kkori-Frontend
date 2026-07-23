@@ -5,13 +5,6 @@ import type { NavKey } from "../routes";
 
 export type ResumeStatus = "done" | "ing" | "fail";
 
-export interface ResumePreview {
-  name: string;
-  career: string;
-  skills: string[];
-  projects: string;
-}
-
 export interface Resume {
   id: number;
   name: string;

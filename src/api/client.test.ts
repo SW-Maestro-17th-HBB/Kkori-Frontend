@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { toResumePreview, toUiResume, toUiStatus } from "./client";
-import type { ResumeParsedResponse, ResumeSummary } from "./client";
+import { toUiResume, toUiStatus } from "./client";
+import type { ResumeSummary } from "./client";
 
 const NOW = new Date("2026-06-03T12:00:00Z");
 
@@ -52,42 +52,5 @@ describe("toUiResume", () => {
   it("1주일 이상 지난 업로드는 상대시각 대신 날짜를 보여준다", () => {
     const old = toUiResume(summary({ createdAt: "2026-05-01T12:00:00Z" }), NOW);
     expect(old.meta).toBe("2.4MB · 2026.05.01");
-  });
-});
-
-describe("toResumePreview", () => {
-  it("structuredData를 미리보기 표시 모델로 매핑한다", () => {
-    const parsed: ResumeParsedResponse = {
-      resumeId: 1,
-      analysisStatus: "EMBEDDED",
-      structuredData: {
-        profile: { name: "김꼬리", email: "kkori@example.com" },
-        skills: [
-          { category: "백엔드", items: ["Java", "Spring"] },
-          { category: "인프라", items: ["AWS"] },
-        ],
-        projects: [
-          { name: "꼬리", role: "백엔드", description: "AI 면접", techStacks: ["Spring"] },
-          { name: "정산 시스템" },
-        ],
-        experiences: [{ title: "인턴 6개월", description: "백엔드 개발" }],
-      },
-    };
-
-    expect(toResumePreview(parsed)).toEqual({
-      name: "김꼬리",
-      career: "인턴 6개월",
-      skills: ["Java", "Spring", "AWS"],
-      projects: "꼬리, 정산 시스템",
-    });
-  });
-
-  it("필드 누락·빈 배열은 계약상 허용 — 전부 placeholder로 방어한다", () => {
-    expect(toResumePreview({ resumeId: 1, analysisStatus: "EMBEDDED" })).toEqual({
-      name: "-",
-      career: "-",
-      skills: [],
-      projects: "-",
-    });
   });
 });

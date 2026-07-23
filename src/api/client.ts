@@ -30,7 +30,6 @@ import type {
   ReportStats,
   ReportSummary,
   Resume,
-  ResumePreview,
   ResumeStatus,
   Subscription,
 } from "./types";
@@ -154,21 +153,6 @@ export function toUiResume(summary: ResumeSummary, now: Date = new Date()): Resu
   };
 }
 
-/** 파싱 결과 → 미리보기 표시 모델. 필드 누락·빈 배열은 계약상 허용이라 전부 방어한다. */
-export function toResumePreview(parsed: ResumeParsedResponse): ResumePreview {
-  const sd = parsed.structuredData;
-  return {
-    name: sd?.profile?.name ?? "-",
-    career: sd?.experiences?.[0]?.title ?? "-",
-    skills: (sd?.skills ?? []).flatMap((s) => s.items ?? []),
-    projects:
-      (sd?.projects ?? [])
-        .map((p) => p.name)
-        .filter(Boolean)
-        .join(", ") || "-",
-  };
-}
-
 /** UI에 페이지네이션이 없어 상한(size=100)까지 한 번에 조회한다 — MVP 가정(1인당 이력서 소수).
     초과분은 잘리므로 페이지네이션 UI 도입 시 이 가정을 함께 걷어낼 것. */
 export const fetchResumes = async (): Promise<Resume[]> => {
@@ -191,8 +175,8 @@ export const reanalyzeResume = async (
   resumeId: number,
 ): Promise<ResumeReanalyzeResponse | undefined> => (await reanalyze(resumeId)).data;
 
-/** 파싱 결과 원본 조회 — 미리보기 표시(toResumePreview)와 수정 폼 초기값이 함께 쓰므로
-    매핑 전 structuredData 를 그대로 반환한다 (표시용 매핑은 화면에서). */
+/** 파싱 결과 원본 조회 — 상세 표시와 수정 폼 초기값이 같은 structuredData 를 쓰므로
+    매핑 없이 그대로 반환한다 (표시는 화면 소관). */
 export const fetchResumeParsed = async (resumeId: number): Promise<ResumeParsedResponse> =>
   (await getParsed(resumeId)).data ?? {};
 
