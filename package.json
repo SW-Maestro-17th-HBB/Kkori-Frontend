@@ -17,9 +17,11 @@
     "lint:fix": "eslint . --fix",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
-    "generate:api": "openapi-typescript docs/drafts/openapi.json -o src/api/schema.ts && prettier --write src/api/schema.ts"
+    "generate:api": "openapi-typescript docs/drafts/openapi.json -o src/api/schema.ts && prettier --write src/api/schema.ts",
+    "orval": "orval"
   },
   "dependencies": {
+    "@microsoft/fetch-event-source": "^2.0.1",
     "@tanstack/react-query": "^5.62.0",
     "livekit-client": "^2.20.1",
     "lucide-react": "^0.462.0",
@@ -44,6 +46,7 @@
     "globals": "^17.7.0",
     "jsdom": "^29.1.1",
     "openapi-typescript": "^7.13.0",
+    "orval": "^8.22.0",
     "prettier": "^3.9.5",
     "typescript": "^5.6.3",
     "typescript-eslint": "^8.64.0",
