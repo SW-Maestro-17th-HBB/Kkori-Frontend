@@ -1,5 +1,6 @@
 /* ============================ 이력서 관리 (/resumes) ============================ */
 import { Fragment, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import type { CSSProperties, DragEvent, ReactNode } from "react";
 import { toResumePreview } from "../api/client";
 import type { StructuredData } from "../api/client";
@@ -30,7 +31,8 @@ const splitCsv = (value: string): string[] =>
 export function ResumePage() {
   const nav = useNav();
   const [openId, setOpenId] = useState<number | null>(null);
-  const [menuId, setMenuId] = useState<number | null>(null);
+  /** 열린 행 메뉴 — 테이블(overflow: hidden)에 잘리지 않도록 버튼 화면 좌표에 포털로 띄운다 */
+  const [menu, setMenu] = useState<{ id: number; top: number; right: number } | null>(null);
   const [editingId, setEditingId] = useState<number | null>(null);
   /** 수정 저장 직후 "재분석 필요" 안내를 보여줄 행 */
   const [savedId, setSavedId] = useState<number | null>(null);
@@ -275,22 +277,35 @@ export function ResumePage() {
                         </StatusBadge>
                       </td>
                       <td style={{ textAlign: "right" }}>
-                        <span style={{ position: "relative", display: "inline-block" }}>
+                        <span style={{ display: "inline-block" }}>
                           <button
                             type="button"
                             className="linkbtn ib-sm"
                             aria-label="더보기 메뉴"
-                            aria-expanded={menuId === r.id}
+                            aria-expanded={menu?.id === r.id}
                             style={{ color: "var(--fg-tertiary)" }}
                             onClick={(e) => {
                               e.stopPropagation();
-                              setMenuId(menuId === r.id ? null : r.id);
+                              if (menu?.id === r.id) {
+                                setMenu(null);
+                                return;
+                              }
+                              const rect = e.currentTarget.getBoundingClientRect();
+                              setMenu({
+                                id: r.id,
+                                top: rect.bottom + 4,
+                                right: window.innerWidth - rect.right,
+                              });
                             }}
                           >
                             <Icon name="more-horizontal" size={16} />
                           </button>
-                          {menuId === r.id && (
-                            <RowMenu onClose={() => setMenuId(null)}>
+                          {menu?.id === r.id && (
+                            <RowMenu
+                              top={menu.top}
+                              right={menu.right}
+                              onClose={() => setMenu(null)}
+                            >
                               {r.status === "done" && (
                                 <RowMenuItem
                                   icon="pencil"
@@ -470,8 +485,20 @@ export function ResumePage() {
 
 /* ---------- 행 메뉴 ---------- */
 
-function RowMenu({ onClose, children }: { onClose: () => void; children: ReactNode }) {
-  return (
+/** 행 메뉴 — 테이블이 overflow: hidden(둥근 모서리)이라 셀 내부에 붙이면 잘린다.
+    body 포털 + 버튼 화면 좌표(fixed)로 띄워 클리핑을 벗어난다. */
+function RowMenu({
+  top,
+  right,
+  onClose,
+  children,
+}: {
+  top: number;
+  right: number;
+  onClose: () => void;
+  children: ReactNode;
+}) {
+  return createPortal(
     <>
       {/* 바깥 클릭으로 닫는 투명 오버레이 */}
       <div
@@ -484,9 +511,9 @@ function RowMenu({ onClose, children }: { onClose: () => void; children: ReactNo
       <div
         role="menu"
         style={{
-          position: "absolute",
-          top: "calc(100% + 4px)",
-          right: 0,
+          position: "fixed",
+          top,
+          right,
           zIndex: 11,
           minWidth: 132,
           background: "var(--bg-surface)",
@@ -502,7 +529,8 @@ function RowMenu({ onClose, children }: { onClose: () => void; children: ReactNo
       >
         {children}
       </div>
-    </>
+    </>,
+    document.body,
   );
 }
 
