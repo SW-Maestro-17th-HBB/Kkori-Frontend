@@ -13,7 +13,7 @@ import {
   useUploadResume,
 } from "../api/hooks";
 import { isApiError } from "../api/request";
-import { Badge, Button, Card, Input, Modal, Progress } from "../components/ds";
+import { Badge, Button, Card, Input, Progress } from "../components/ds";
 import { Icon } from "../components/Icon";
 import { Display, DocThumb, SectionLabel, StatusBadge } from "../components/primitives";
 import { TopNav } from "../components/TopNav";
@@ -338,111 +338,137 @@ export function ResumePage() {
                     {openId === r.id && r.status === "done" && (
                       <tr>
                         <td colSpan={4} style={{ padding: 0, background: "var(--bg-subtle)" }}>
-                          <div style={{ padding: "18px 18px 20px 44px" }}>
-                            <div
-                              style={{
-                                display: "flex",
-                                alignItems: "center",
-                                justifyContent: "space-between",
-                                marginBottom: 14,
+                          {editingId === r.id && parsed.data ? (
+                            <ParsedEditPanel
+                              key={r.id}
+                              initial={parsed.data.structuredData ?? {}}
+                              saving={update.isPending}
+                              error={update.isError ? errorMessage(update.error) : null}
+                              onCancel={() => {
+                                update.reset();
+                                setEditingId(null);
                               }}
-                            >
-                              <SectionLabel>분석 결과 미리보기</SectionLabel>
-                              <Button
-                                variant="solid"
-                                size="sm"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  nav("setup");
-                                }}
-                              >
-                                이 이력서로 면접 시작 →
-                              </Button>
-                            </div>
-                            {savedId === r.id && (
-                              <p
+                              onSave={(structuredData) => {
+                                update.mutate(
+                                  { resumeId: r.id, structuredData },
+                                  {
+                                    onSuccess: () => {
+                                      setEditingId(null);
+                                      setSavedId(r.id);
+                                    },
+                                  },
+                                );
+                              }}
+                            />
+                          ) : (
+                            <div style={{ padding: "18px 18px 20px 44px" }}>
+                              <div
                                 style={{
-                                  fontFamily: "var(--font-sans)",
-                                  fontSize: 13,
-                                  fontWeight: 600,
-                                  color: "var(--blue-800)",
-                                  background: "var(--bg-brand-subtle)",
-                                  borderRadius: "var(--radius-8, 8px)",
-                                  padding: "10px 12px",
-                                  margin: "0 0 12px",
+                                  display: "flex",
+                                  alignItems: "center",
+                                  justifyContent: "space-between",
+                                  marginBottom: 14,
                                 }}
                               >
-                                수정 사항이 저장됐어요. 면접 질문에 반영하려면 메뉴에서 재분석을
-                                실행하세요.
-                              </p>
-                            )}
-                            <div
-                              style={{
-                                background: "var(--bg-surface)",
-                                border: "1px solid var(--border-subtle)",
-                                borderRadius: "var(--radius-12)",
-                                padding: "6px 16px",
-                              }}
-                            >
-                              {parsed.isPending ? (
-                                <p className="hbb-table-note">미리보기를 불러오는 중…</p>
-                              ) : parsed.isError || !preview ? (
-                                <p className="hbb-table-note" role="alert">
-                                  {errorMessage(parsed.error)}
+                                <SectionLabel>분석 결과 미리보기</SectionLabel>
+                                <Button
+                                  variant="solid"
+                                  size="sm"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    nav("setup");
+                                  }}
+                                >
+                                  이 이력서로 면접 시작 →
+                                </Button>
+                              </div>
+                              {savedId === r.id && (
+                                <p
+                                  style={{
+                                    fontFamily: "var(--font-sans)",
+                                    fontSize: 13,
+                                    fontWeight: 600,
+                                    color: "var(--blue-800)",
+                                    background: "var(--bg-brand-subtle)",
+                                    borderRadius: "var(--radius-8, 8px)",
+                                    padding: "10px 12px",
+                                    margin: "0 0 12px",
+                                  }}
+                                >
+                                  수정 사항이 저장됐어요. 면접 질문에 반영하려면 메뉴에서 재분석을
+                                  실행하세요.
                                 </p>
-                              ) : (
-                                (
-                                  [
-                                    ["이름", preview.name],
-                                    ["경력", preview.career],
-                                    ["핵심 스킬", null],
-                                    ["주요 프로젝트", preview.projects],
-                                  ] as [string, string | null][]
-                                ).map(([k, v], j) => (
-                                  <div
-                                    key={k}
-                                    style={{
-                                      display: "flex",
-                                      gap: 12,
-                                      padding: "12px 0",
-                                      borderBottom:
-                                        j < 3 ? "1px solid var(--border-subtle)" : "none",
-                                      fontFamily: "var(--font-sans)",
-                                      fontSize: 14,
-                                      fontWeight: 500,
-                                    }}
-                                  >
-                                    <span
+                              )}
+                              <div
+                                style={{
+                                  background: "var(--bg-surface)",
+                                  border: "1px solid var(--border-subtle)",
+                                  borderRadius: "var(--radius-12)",
+                                  padding: "6px 16px",
+                                }}
+                              >
+                                {parsed.isPending ? (
+                                  <p className="hbb-table-note">미리보기를 불러오는 중…</p>
+                                ) : parsed.isError || !preview ? (
+                                  <p className="hbb-table-note" role="alert">
+                                    {errorMessage(parsed.error)}
+                                  </p>
+                                ) : (
+                                  (
+                                    [
+                                      ["이름", preview.name],
+                                      ["경력", preview.career],
+                                      ["핵심 스킬", null],
+                                      ["주요 프로젝트", preview.projects],
+                                    ] as [string, string | null][]
+                                  ).map(([k, v], j) => (
+                                    <div
+                                      key={k}
                                       style={{
-                                        width: 96,
-                                        flexShrink: 0,
-                                        color: "var(--fg-tertiary)",
+                                        display: "flex",
+                                        gap: 12,
+                                        padding: "12px 0",
+                                        borderBottom:
+                                          j < 3 ? "1px solid var(--border-subtle)" : "none",
+                                        fontFamily: "var(--font-sans)",
+                                        fontSize: 14,
+                                        fontWeight: 500,
                                       }}
                                     >
-                                      {k}
-                                    </span>
-                                    {v ? (
-                                      <span style={{ color: "var(--fg-strong)", fontWeight: 600 }}>
-                                        {v}
+                                      <span
+                                        style={{
+                                          width: 96,
+                                          flexShrink: 0,
+                                          color: "var(--fg-tertiary)",
+                                        }}
+                                      >
+                                        {k}
                                       </span>
-                                    ) : (
-                                      <span style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-                                        {preview.skills.length ? (
-                                          preview.skills.map((c) => (
-                                            <Badge key={c} variant="brand">
-                                              {c}
-                                            </Badge>
-                                          ))
-                                        ) : (
-                                          <span style={{ color: "var(--fg-tertiary)" }}>-</span>
-                                        )}
-                                      </span>
-                                    )}
-                                  </div>
-                                ))
-                              )}
+                                      {v ? (
+                                        <span
+                                          style={{ color: "var(--fg-strong)", fontWeight: 600 }}
+                                        >
+                                          {v}
+                                        </span>
+                                      ) : (
+                                        <span style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                                          {preview.skills.length ? (
+                                            preview.skills.map((c) => (
+                                              <Badge key={c} variant="brand">
+                                                {c}
+                                              </Badge>
+                                            ))
+                                          ) : (
+                                            <span style={{ color: "var(--fg-tertiary)" }}>-</span>
+                                          )}
+                                        </span>
+                                      )}
+                                    </div>
+                                  ))
+                                )}
+                              </div>
                             </div>
-                          </div>
+                          )}
                         </td>
                       </tr>
                     )}
@@ -453,32 +479,6 @@ export function ResumePage() {
           )}
         </div>
       </div>
-
-      {/* 수정 모달 — key 로 행마다 폼 상태를 새로 초기화한다 */}
-      {editingId !== null && openRow?.id === editingId && parsed.data && (
-        <ParsedEditModal
-          key={editingId}
-          resumeName={openRow.name}
-          initial={parsed.data.structuredData ?? {}}
-          saving={update.isPending}
-          error={update.isError ? errorMessage(update.error) : null}
-          onClose={() => {
-            update.reset();
-            setEditingId(null);
-          }}
-          onSave={(structuredData) => {
-            update.mutate(
-              { resumeId: editingId, structuredData },
-              {
-                onSuccess: () => {
-                  setEditingId(null);
-                  setSavedId(editingId);
-                },
-              },
-            );
-          }}
-        />
-      )}
     </div>
   );
 }
@@ -574,42 +574,109 @@ function RowMenuItem({
   );
 }
 
-/* ---------- 분석 결과 수정 모달 ---------- */
+/* ---------- 분석 결과 인라인 수정 패널 ---------- */
 
 const fieldLabel: CSSProperties = {
   fontFamily: "var(--font-sans)",
-  fontSize: 13,
+  fontSize: 12,
   fontWeight: 600,
   color: "var(--fg-tertiary)",
   marginBottom: 6,
 };
 
-const sectionTitle: CSSProperties = {
-  fontFamily: "var(--font-sans)",
-  fontSize: 14,
-  fontWeight: 700,
-  color: "var(--fg-strong)",
-  margin: "18px 0 10px",
-};
+function EditSection({
+  title,
+  onAdd,
+  addLabel,
+  first,
+  children,
+}: {
+  title: string;
+  onAdd?: () => void;
+  addLabel?: string;
+  first?: boolean;
+  children: ReactNode;
+}) {
+  return (
+    <div
+      style={{
+        padding: "18px 0",
+        borderTop: first ? "none" : "1px solid var(--border-subtle)",
+      }}
+    >
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          marginBottom: 12,
+        }}
+      >
+        <span
+          style={{
+            fontFamily: "var(--font-sans)",
+            fontSize: 14,
+            fontWeight: 700,
+            color: "var(--fg-strong)",
+          }}
+        >
+          {title}
+        </span>
+        {onAdd && (
+          <button
+            type="button"
+            className="linkbtn"
+            onClick={onAdd}
+            style={{
+              fontFamily: "var(--font-sans)",
+              fontSize: 13,
+              fontWeight: 600,
+              color: "var(--blue-700)",
+              display: "inline-flex",
+              alignItems: "center",
+              gap: 4,
+            }}
+          >
+            <Icon name="plus" size={14} />
+            {addLabel}
+          </button>
+        )}
+      </div>
+      {children}
+    </div>
+  );
+}
+
+function RemoveRowButton({ label, onClick }: { label: string; onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      className="linkbtn ib-sm"
+      aria-label={label}
+      onClick={onClick}
+      style={{ color: "var(--fg-tertiary)", alignSelf: "center" }}
+    >
+      <Icon name="trash-2" size={15} />
+    </button>
+  );
+}
 
 /**
- * structuredData 편집 폼. 저장은 PATCH /parsed 로 전문을 보낸다 —
- * 백엔드 검증은 형태만 엄격(배열 내 null 400, 필드 누락·빈 배열 허용, PRD §4)이라
- * 비어 있는 행만 걷어내고 그대로 전송한다.
+ * 분석 결과 인라인 수정 — 미리보기 영역이 그대로 편집 폼으로 전환된다(모달 없음).
+ * 저장은 PATCH /parsed 로 structuredData 전문을 보낸다. 백엔드 검증은 형태만
+ * 엄격(배열 내 null 400, 필드 누락·빈 배열 허용, PRD §4)이라 빈 행만 걷어내고 전송한다.
  */
-function ParsedEditModal({
-  resumeName,
+function ParsedEditPanel({
   initial,
   saving,
   error,
-  onClose,
+  onCancel,
   onSave,
 }: {
-  resumeName: string;
   initial: StructuredData;
   saving: boolean;
   error: string | null;
-  onClose: () => void;
+  onCancel: () => void;
   onSave: (data: StructuredData) => void;
 }) {
   const [draft, setDraft] = useState<StructuredData>(() => structuredClone(initial));
@@ -631,255 +698,308 @@ function ParsedEditModal({
   };
 
   return (
-    <Modal
-      open
-      onClose={onClose}
-      title={`분석 결과 수정 — ${resumeName}`}
-      style={{ width: 560, maxHeight: "80vh", overflowY: "auto" }}
-      actions={[
-        <Button key="cancel" variant="assistive" onClick={onClose} disabled={saving}>
-          취소
-        </Button>,
-        <Button key="save" variant="solid" onClick={submit} disabled={saving}>
-          {saving ? "저장 중…" : "저장"}
-        </Button>,
-      ]}
-    >
+    <div style={{ padding: "18px 18px 22px 44px" }}>
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          marginBottom: 4,
+        }}
+      >
+        <SectionLabel>분석 결과 수정</SectionLabel>
+        <div style={{ display: "flex", gap: 8 }}>
+          <Button variant="assistive" size="sm" onClick={onCancel} disabled={saving}>
+            취소
+          </Button>
+          <Button variant="solid" size="sm" onClick={submit} disabled={saving}>
+            {saving ? "저장 중…" : "저장"}
+          </Button>
+        </div>
+      </div>
       <p
         style={{
           fontFamily: "var(--font-sans)",
           fontSize: 13,
           fontWeight: 500,
           color: "var(--fg-tertiary)",
-          margin: "0 0 4px",
+          margin: "0 0 14px",
         }}
       >
-        저장 후 면접 질문에 반영하려면 재분석을 실행해야 해요.
+        저장 후 면접 질문에 반영하려면 메뉴에서 재분석을 실행해야 해요.
       </p>
-
-      <div style={sectionTitle}>프로필</div>
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
-        <div>
-          <div style={fieldLabel}>이름</div>
-          <Input
-            value={draft.profile?.name ?? ""}
-            placeholder="이름"
-            onChange={(e) =>
-              setDraft({ ...draft, profile: { ...draft.profile, name: e.target.value } })
-            }
-          />
-        </div>
-        <div>
-          <div style={fieldLabel}>이메일</div>
-          <Input
-            value={draft.profile?.email ?? ""}
-            placeholder="이메일"
-            onChange={(e) =>
-              setDraft({ ...draft, profile: { ...draft.profile, email: e.target.value } })
-            }
-          />
-        </div>
-      </div>
-
-      <div style={sectionTitle}>스킬</div>
-      {skills.map((skill, i) => (
-        <div
-          key={i}
-          style={{
-            display: "grid",
-            gridTemplateColumns: "140px 1fr 30px",
-            gap: 8,
-            marginBottom: 8,
-          }}
-        >
-          <Input
-            value={skill.category ?? ""}
-            placeholder="카테고리"
-            onChange={(e) =>
-              setDraft({
-                ...draft,
-                skills: skills.map((s, j) => (j === i ? { ...s, category: e.target.value } : s)),
-              })
-            }
-          />
-          <Input
-            value={(skill.items ?? []).join(", ")}
-            placeholder="항목 (쉼표로 구분)"
-            onChange={(e) =>
-              setDraft({
-                ...draft,
-                skills: skills.map((s, j) =>
-                  j === i ? { ...s, items: splitCsv(e.target.value) } : s,
-                ),
-              })
-            }
-          />
-          <button
-            type="button"
-            className="linkbtn ib-sm"
-            aria-label="스킬 삭제"
-            onClick={() => setDraft({ ...draft, skills: skills.filter((_, j) => j !== i) })}
-          >
-            <Icon name="trash-2" size={14} />
-          </button>
-        </div>
-      ))}
-      <Button
-        variant="assistive"
-        size="sm"
-        onClick={() => setDraft({ ...draft, skills: [...skills, { category: "", items: [] }] })}
-      >
-        + 스킬 추가
-      </Button>
-
-      <div style={sectionTitle}>프로젝트</div>
-      {projects.map((project, i) => (
-        <div
-          key={i}
-          style={{
-            border: "1px solid var(--border-subtle)",
-            borderRadius: "var(--radius-12)",
-            padding: 12,
-            marginBottom: 10,
-            display: "grid",
-            gap: 8,
-          }}
-        >
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 30px", gap: 8 }}>
-            <Input
-              value={project.name ?? ""}
-              placeholder="프로젝트 이름"
-              onChange={(e) =>
-                setDraft({
-                  ...draft,
-                  projects: projects.map((p, j) => (j === i ? { ...p, name: e.target.value } : p)),
-                })
-              }
-            />
-            <Input
-              value={project.role ?? ""}
-              placeholder="역할"
-              onChange={(e) =>
-                setDraft({
-                  ...draft,
-                  projects: projects.map((p, j) => (j === i ? { ...p, role: e.target.value } : p)),
-                })
-              }
-            />
-            <button
-              type="button"
-              className="linkbtn ib-sm"
-              aria-label="프로젝트 삭제"
-              onClick={() => setDraft({ ...draft, projects: projects.filter((_, j) => j !== i) })}
-            >
-              <Icon name="trash-2" size={14} />
-            </button>
-          </div>
-          <Input
-            value={project.description ?? ""}
-            placeholder="설명"
-            onChange={(e) =>
-              setDraft({
-                ...draft,
-                projects: projects.map((p, j) =>
-                  j === i ? { ...p, description: e.target.value } : p,
-                ),
-              })
-            }
-          />
-          <Input
-            value={(project.techStacks ?? []).join(", ")}
-            placeholder="기술 스택 (쉼표로 구분)"
-            onChange={(e) =>
-              setDraft({
-                ...draft,
-                projects: projects.map((p, j) =>
-                  j === i ? { ...p, techStacks: splitCsv(e.target.value) } : p,
-                ),
-              })
-            }
-          />
-        </div>
-      ))}
-      <Button
-        variant="assistive"
-        size="sm"
-        onClick={() =>
-          setDraft({
-            ...draft,
-            projects: [...projects, { name: "", role: "", description: "", techStacks: [] }],
-          })
-        }
-      >
-        + 프로젝트 추가
-      </Button>
-
-      <div style={sectionTitle}>경력</div>
-      {experiences.map((exp, i) => (
-        <div
-          key={i}
-          style={{ display: "grid", gridTemplateColumns: "1fr 1fr 30px", gap: 8, marginBottom: 8 }}
-        >
-          <Input
-            value={exp.title ?? ""}
-            placeholder="제목 (예: 3년 · 백엔드)"
-            onChange={(e) =>
-              setDraft({
-                ...draft,
-                experiences: experiences.map((x, j) =>
-                  j === i ? { ...x, title: e.target.value } : x,
-                ),
-              })
-            }
-          />
-          <Input
-            value={exp.description ?? ""}
-            placeholder="설명"
-            onChange={(e) =>
-              setDraft({
-                ...draft,
-                experiences: experiences.map((x, j) =>
-                  j === i ? { ...x, description: e.target.value } : x,
-                ),
-              })
-            }
-          />
-          <button
-            type="button"
-            className="linkbtn ib-sm"
-            aria-label="경력 삭제"
-            onClick={() =>
-              setDraft({ ...draft, experiences: experiences.filter((_, j) => j !== i) })
-            }
-          >
-            <Icon name="trash-2" size={14} />
-          </button>
-        </div>
-      ))}
-      <Button
-        variant="assistive"
-        size="sm"
-        onClick={() =>
-          setDraft({ ...draft, experiences: [...experiences, { title: "", description: "" }] })
-        }
-      >
-        + 경력 추가
-      </Button>
-
       {error && (
         <p
           role="alert"
           style={{
             fontFamily: "var(--font-sans)",
-            fontSize: 14,
+            fontSize: 13,
             fontWeight: 600,
             color: "var(--red-600)",
-            marginTop: 14,
+            background: "var(--bg-danger-subtle)",
+            borderRadius: "var(--radius-8, 8px)",
+            padding: "10px 12px",
+            margin: "0 0 12px",
           }}
         >
           {error}
         </p>
       )}
-    </Modal>
+
+      <div
+        style={{
+          background: "var(--bg-surface)",
+          border: "1px solid var(--border-subtle)",
+          borderRadius: "var(--radius-12)",
+          padding: "6px 20px",
+        }}
+      >
+        <EditSection title="프로필" first>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+            <div>
+              <div style={fieldLabel}>이름</div>
+              <Input
+                value={draft.profile?.name ?? ""}
+                placeholder="이름"
+                onChange={(e) =>
+                  setDraft({ ...draft, profile: { ...draft.profile, name: e.target.value } })
+                }
+              />
+            </div>
+            <div>
+              <div style={fieldLabel}>이메일</div>
+              <Input
+                value={draft.profile?.email ?? ""}
+                placeholder="이메일"
+                onChange={(e) =>
+                  setDraft({ ...draft, profile: { ...draft.profile, email: e.target.value } })
+                }
+              />
+            </div>
+          </div>
+        </EditSection>
+
+        <EditSection
+          title="스킬"
+          addLabel="스킬 추가"
+          onAdd={() => setDraft({ ...draft, skills: [...skills, { category: "", items: [] }] })}
+        >
+          {skills.length === 0 && (
+            <p className="hbb-table-note" style={{ padding: "2px 0" }}>
+              아직 스킬이 없어요. 오른쪽 위 버튼으로 추가하세요.
+            </p>
+          )}
+          <div style={{ display: "grid", gap: 8 }}>
+            {skills.map((skill, i) => (
+              <div
+                key={i}
+                style={{ display: "grid", gridTemplateColumns: "200px 1fr 32px", gap: 10 }}
+              >
+                <div>
+                  {i === 0 && <div style={fieldLabel}>카테고리</div>}
+                  <Input
+                    value={skill.category ?? ""}
+                    placeholder="예: 백엔드"
+                    onChange={(e) =>
+                      setDraft({
+                        ...draft,
+                        skills: skills.map((s, j) =>
+                          j === i ? { ...s, category: e.target.value } : s,
+                        ),
+                      })
+                    }
+                  />
+                </div>
+                <div>
+                  {i === 0 && <div style={fieldLabel}>항목 (쉼표로 구분)</div>}
+                  <Input
+                    value={(skill.items ?? []).join(", ")}
+                    placeholder="예: Java, Spring Boot, Redis"
+                    onChange={(e) =>
+                      setDraft({
+                        ...draft,
+                        skills: skills.map((s, j) =>
+                          j === i ? { ...s, items: splitCsv(e.target.value) } : s,
+                        ),
+                      })
+                    }
+                  />
+                </div>
+                <div style={{ display: "flex", alignItems: "flex-end", paddingBottom: 4 }}>
+                  <RemoveRowButton
+                    label="스킬 삭제"
+                    onClick={() => setDraft({ ...draft, skills: skills.filter((_, j) => j !== i) })}
+                  />
+                </div>
+              </div>
+            ))}
+          </div>
+        </EditSection>
+
+        <EditSection
+          title="프로젝트"
+          addLabel="프로젝트 추가"
+          onAdd={() =>
+            setDraft({
+              ...draft,
+              projects: [...projects, { name: "", role: "", description: "", techStacks: [] }],
+            })
+          }
+        >
+          {projects.length === 0 && (
+            <p className="hbb-table-note" style={{ padding: "2px 0" }}>
+              아직 프로젝트가 없어요. 오른쪽 위 버튼으로 추가하세요.
+            </p>
+          )}
+          <div style={{ display: "grid", gap: 12 }}>
+            {projects.map((project, i) => (
+              <div
+                key={i}
+                style={{
+                  border: "1px solid var(--border-subtle)",
+                  borderRadius: "var(--radius-12)",
+                  background: "var(--bg-subtle)",
+                  padding: 14,
+                  display: "grid",
+                  gap: 10,
+                }}
+              >
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 32px", gap: 10 }}>
+                  <div>
+                    <div style={fieldLabel}>프로젝트 이름</div>
+                    <Input
+                      value={project.name ?? ""}
+                      placeholder="예: Kkori"
+                      onChange={(e) =>
+                        setDraft({
+                          ...draft,
+                          projects: projects.map((p, j) =>
+                            j === i ? { ...p, name: e.target.value } : p,
+                          ),
+                        })
+                      }
+                    />
+                  </div>
+                  <div>
+                    <div style={fieldLabel}>역할</div>
+                    <Input
+                      value={project.role ?? ""}
+                      placeholder="예: 백엔드"
+                      onChange={(e) =>
+                        setDraft({
+                          ...draft,
+                          projects: projects.map((p, j) =>
+                            j === i ? { ...p, role: e.target.value } : p,
+                          ),
+                        })
+                      }
+                    />
+                  </div>
+                  <div style={{ display: "flex", alignItems: "flex-end", paddingBottom: 4 }}>
+                    <RemoveRowButton
+                      label="프로젝트 삭제"
+                      onClick={() =>
+                        setDraft({ ...draft, projects: projects.filter((_, j) => j !== i) })
+                      }
+                    />
+                  </div>
+                </div>
+                <div>
+                  <div style={fieldLabel}>설명</div>
+                  <Input
+                    value={project.description ?? ""}
+                    placeholder="어떤 프로젝트였는지 간단히"
+                    onChange={(e) =>
+                      setDraft({
+                        ...draft,
+                        projects: projects.map((p, j) =>
+                          j === i ? { ...p, description: e.target.value } : p,
+                        ),
+                      })
+                    }
+                  />
+                </div>
+                <div>
+                  <div style={fieldLabel}>기술 스택 (쉼표로 구분)</div>
+                  <Input
+                    value={(project.techStacks ?? []).join(", ")}
+                    placeholder="예: Spring Boot, PostgreSQL"
+                    onChange={(e) =>
+                      setDraft({
+                        ...draft,
+                        projects: projects.map((p, j) =>
+                          j === i ? { ...p, techStacks: splitCsv(e.target.value) } : p,
+                        ),
+                      })
+                    }
+                  />
+                </div>
+              </div>
+            ))}
+          </div>
+        </EditSection>
+
+        <EditSection
+          title="경력"
+          addLabel="경력 추가"
+          onAdd={() =>
+            setDraft({ ...draft, experiences: [...experiences, { title: "", description: "" }] })
+          }
+        >
+          {experiences.length === 0 && (
+            <p className="hbb-table-note" style={{ padding: "2px 0" }}>
+              아직 경력이 없어요. 오른쪽 위 버튼으로 추가하세요.
+            </p>
+          )}
+          <div style={{ display: "grid", gap: 8 }}>
+            {experiences.map((exp, i) => (
+              <div
+                key={i}
+                style={{ display: "grid", gridTemplateColumns: "1fr 1.4fr 32px", gap: 10 }}
+              >
+                <div>
+                  {i === 0 && <div style={fieldLabel}>제목</div>}
+                  <Input
+                    value={exp.title ?? ""}
+                    placeholder="예: 3년 · 백엔드"
+                    onChange={(e) =>
+                      setDraft({
+                        ...draft,
+                        experiences: experiences.map((x, j) =>
+                          j === i ? { ...x, title: e.target.value } : x,
+                        ),
+                      })
+                    }
+                  />
+                </div>
+                <div>
+                  {i === 0 && <div style={fieldLabel}>설명</div>}
+                  <Input
+                    value={exp.description ?? ""}
+                    placeholder="무엇을 했는지 간단히"
+                    onChange={(e) =>
+                      setDraft({
+                        ...draft,
+                        experiences: experiences.map((x, j) =>
+                          j === i ? { ...x, description: e.target.value } : x,
+                        ),
+                      })
+                    }
+                  />
+                </div>
+                <div style={{ display: "flex", alignItems: "flex-end", paddingBottom: 4 }}>
+                  <RemoveRowButton
+                    label="경력 삭제"
+                    onClick={() =>
+                      setDraft({ ...draft, experiences: experiences.filter((_, j) => j !== i) })
+                    }
+                  />
+                </div>
+              </div>
+            ))}
+          </div>
+        </EditSection>
+      </div>
+    </div>
   );
 }
