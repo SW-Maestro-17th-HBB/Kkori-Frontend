@@ -6,7 +6,7 @@ import { act, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { useLocation } from "react-router";
-import * as fixtures from "../api/fixtures";
+import * as fixtures from "../test/resumeFixtures";
 import type { Resume } from "../api/types";
 import { discardConnectedRoom } from "../hooks/useLiveKitRoom";
 import { renderWithProviders } from "../test/render";

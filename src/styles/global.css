@@ -110,6 +110,15 @@ a:hover {
   cursor: pointer;
   transition: background-color 0.12s ease;
 }
+/* 목록 영역의 로딩·빈 상태·에러 안내 문구 */
+.hbb-table-note {
+  font-family: var(--font-sans);
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--fg-tertiary);
+  padding: 18px 4px;
+  margin: 0;
+}
 .hbb-table__row:hover {
   background: var(--bg-subtle);
 }
@@ -265,5 +274,20 @@ a:hover {
   50% {
     transform: scale(1.02);
     opacity: 0.8;
+  }
+}
+
+/* 알림 토스트 등장 애니메이션 */
+.notice-toast {
+  animation: notice-toast-in 0.18s ease;
+}
+@keyframes notice-toast-in {
+  from {
+    opacity: 0;
+    transform: translateY(-8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
   }
 }

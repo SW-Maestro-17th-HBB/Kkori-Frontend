@@ -2,7 +2,7 @@
 import { useState } from "react";
 import { useNavigate } from "react-router";
 import { useProfile, useReports, useReportStats, useResumes } from "../api/hooks";
-import { Button, Card, Modal, Tag } from "../components/ds";
+import { Button, Card, Modal } from "../components/ds";
 import { Icon } from "../components/Icon";
 import {
   Display,
@@ -89,7 +89,6 @@ export function DashboardPage() {
                   </div>
                   <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 10 }}>
                     <StatusBadge kind="done">분석 완료</StatusBadge>
-                    {active?.tag && <Tag style={{ height: 26, fontSize: 12 }}>{active.tag}</Tag>}
                   </div>
                 </div>
               </div>

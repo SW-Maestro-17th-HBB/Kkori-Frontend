@@ -19,13 +19,6 @@ export interface CreateSessionRequest {
   position: Position;
 }
 
-export interface ResumePreview {
-  name: string;
-  career: string;
-  skills: string[];
-  projects: string;
-}
-
 export interface Resume {
   id: number;
   name: string;
@@ -33,9 +26,7 @@ export interface Resume {
   meta: string; // 예: "2.4MB · 2일 전"
   uploadedAt: string; // 예: "2026.06.01"
   status: ResumeStatus;
-  progress?: number; // 분석 중일 때 진행률
-  tag?: string; // 추천 태그 (분석 완료 시)
-  preview?: ResumePreview; // 분석 결과 미리보기 (분석 완료 시)
+  progress?: number; // 분석 중일 때 진행률 (백엔드 status 기반 프론트 매핑)
 }
 
 export interface ReportSummary {
