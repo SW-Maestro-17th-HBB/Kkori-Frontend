@@ -1,6 +1,6 @@
 /* 테스트용 렌더 헬퍼 — 페이지 컴포넌트에 필요한 프로바이더(Router + Query)를 감싼다.
    실제 앱(main.tsx)과 동일하게 StrictMode 로 감싸 이중 마운트 버그를 테스트에서 잡는다. */
-import { StrictMode, type ReactElement } from "react";
+import { StrictMode, type ReactElement, type ReactNode } from "react";
 import { render } from "@testing-library/react";
 import { MemoryRouter } from "react-router";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
@@ -27,5 +27,12 @@ export function renderWithProviders(ui: ReactElement, { route = "/", queryClient
       </StrictMode>,
     ),
     queryClient: client,
+  };
+}
+
+/** renderHook 용 QueryClientProvider 래퍼 — 캐시를 검증할 테스트가 자기 인스턴스를 주입한다 */
+export function createQueryWrapper(queryClient: QueryClient) {
+  return function QueryWrapper({ children }: { children: ReactNode }) {
+    return <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>;
   };
 }
