@@ -158,7 +158,10 @@ export function toUiResume(summary: ResumeSummary, now: Date = new Date()): Resu
 export const fetchResumes = async (): Promise<Resume[]> => {
   const page = (await getList({ size: 100 })).data;
   const now = new Date();
-  return (page?.content ?? []).map((s) => toUiResume(s, now));
+  // resumeId 없는 항목은 제외 — id는 삭제·재분석의 path parameter라 폴백(0)으로 채우면 위험하다
+  return (page?.content ?? [])
+    .filter((s) => s.resumeId !== undefined)
+    .map((s) => toUiResume(s, now));
 };
 
 export const uploadResume = async (

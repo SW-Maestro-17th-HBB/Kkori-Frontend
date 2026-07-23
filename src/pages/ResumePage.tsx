@@ -21,6 +21,8 @@ import { useNav } from "../hooks/useNav";
 const errorMessage = (e: unknown): string =>
   isApiError(e) ? e.message : "요청에 실패했습니다. 잠시 후 다시 시도해 주세요.";
 
+type ToastTone = "error" | "success" | "info";
+
 const splitCsv = (value: string): string[] =>
   value
     .split(",")
@@ -38,11 +40,11 @@ export function ResumePage() {
   const [toast, setToast] = useState<{
     title: string;
     description?: string;
-    tone: "error" | "success";
+    tone: ToastTone;
   } | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const showToast = (title: string, description?: string, tone: "error" | "success" = "error") =>
+  const showToast = (title: string, description?: string, tone: ToastTone = "error") =>
     setToast({ title, description, tone });
 
   const { data: resumes = [], isPending, isError, error } = useResumes();
@@ -68,7 +70,7 @@ export function ResumePage() {
         onError: (e) => showToast(errorMessage(e)),
         onSuccess: (data) => {
           if (data?.duplicated)
-            showToast("이미 업로드된 이력서예요", "기존 이력서를 그대로 사용합니다.");
+            showToast("이미 업로드된 이력서예요", "기존 이력서를 그대로 사용합니다.", "info");
         },
       },
     );
@@ -240,7 +242,22 @@ export function ResumePage() {
                   <Fragment key={r.id}>
                     <tr
                       className="hbb-table__row"
-                      onClick={() => setOpenId(openId === r.id ? null : r.id)}
+                      role="button"
+                      tabIndex={0}
+                      aria-expanded={openId === r.id}
+                      onClick={() => {
+                        if (editingId === r.id) return; // 편집 중 접힘 방지 — 미저장 입력이 소실된다
+                        setOpenId(openId === r.id ? null : r.id);
+                      }}
+                      onKeyDown={(e) => {
+                        // 행 자체에 포커스가 있을 때만 — 내부 버튼의 Enter가 행 토글로 번지지 않게
+                        if (e.target !== e.currentTarget) return;
+                        if (e.key === "Enter" || e.key === " ") {
+                          e.preventDefault();
+                          if (editingId === r.id) return;
+                          setOpenId(openId === r.id ? null : r.id);
+                        }
+                      }}
                       style={openId === r.id ? { background: "var(--bg-subtle)" } : undefined}
                     >
                       <td>
@@ -431,18 +448,24 @@ export function ResumePage() {
 
 /* ---------- 알림 토스트 — 화면 톤(흰 서피스 + 상태색 아이콘 배지)에 맞춘 스타일 ---------- */
 
+const TOAST_BADGE: Record<ToastTone, { background: string; color: string; icon: string }> = {
+  error: { background: "var(--bg-danger-subtle)", color: "var(--red-600)", icon: "x" },
+  success: { background: "var(--bg-success-subtle)", color: "var(--green-600)", icon: "check" },
+  info: { background: "var(--bg-brand-subtle)", color: "var(--blue-800)", icon: "info" },
+};
+
 function NoticeToast({
   tone,
   title,
   description,
   onClose,
 }: {
-  tone: "error" | "success";
+  tone: ToastTone;
   title: string;
   description?: string;
   onClose: () => void;
 }) {
-  const isError = tone === "error";
+  const badge = TOAST_BADGE[tone];
   return (
     <div
       className="notice-toast"
@@ -468,11 +491,11 @@ function NoticeToast({
           alignItems: "center",
           justifyContent: "center",
           flexShrink: 0,
-          background: isError ? "var(--bg-danger-subtle)" : "var(--bg-success-subtle)",
-          color: isError ? "var(--red-600)" : "var(--green-600)",
+          background: badge.background,
+          color: badge.color,
         }}
       >
-        <Icon name={isError ? "x" : "check"} size={15} />
+        <Icon name={badge.icon} size={15} />
       </span>
       <div style={{ wordBreak: "keep-all", lineHeight: 1.5 }}>
         <div style={{ fontSize: 14, fontWeight: 600, color: "var(--fg-strong)" }}>{title}</div>
@@ -524,6 +547,13 @@ function RowMenu({
       />
       <div
         role="menu"
+        ref={(el) => el?.querySelector("button")?.focus()}
+        onKeyDown={(e) => {
+          if (e.key === "Escape") {
+            e.stopPropagation();
+            onClose();
+          }
+        }}
         style={{
           position: "fixed",
           top,
