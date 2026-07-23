@@ -12,7 +12,7 @@ import {
   useUploadResume,
 } from "../api/hooks";
 import { isApiError } from "../api/request";
-import { Badge, Button, Card, Input, Progress } from "../components/ds";
+import { Badge, Button, Card, Input, Progress, Toast } from "../components/ds";
 import { Icon } from "../components/Icon";
 import { Display, DocThumb, SectionLabel, StatusBadge } from "../components/primitives";
 import { TopNav } from "../components/TopNav";
@@ -35,7 +35,16 @@ export function ResumePage() {
   const [editingId, setEditingId] = useState<number | null>(null);
   /** 수정 저장 직후 "재분석 필요" 안내를 보여줄 행 */
   const [savedId, setSavedId] = useState<number | null>(null);
+  /** 오류·안내 토스트 — 인라인 문구 대신 화면 상단에 잠시 떠 있다 사라진다 */
+  const [toast, setToast] = useState<{ message: string; icon: string } | null>(null);
+  const toastTimer = useRef<number | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const showToast = (message: string, icon = "x") => {
+    if (toastTimer.current !== null) window.clearTimeout(toastTimer.current);
+    setToast({ message, icon });
+    toastTimer.current = window.setTimeout(() => setToast(null), 4000);
+  };
 
   const { data: resumes = [], isPending, isError, error } = useResumes();
   const upload = useUploadResume();
@@ -54,7 +63,16 @@ export function ResumePage() {
 
   const submitFile = (file: File | undefined) => {
     if (!file || upload.isPending) return;
-    upload.mutate({ file });
+    upload.mutate(
+      { file },
+      {
+        onError: (e) => showToast(errorMessage(e)),
+        onSuccess: (data) => {
+          if (data?.duplicated)
+            showToast("이미 업로드된 이력서예요 — 기존 항목을 그대로 사용합니다.", "info");
+        },
+      },
+    );
   };
 
   const onDrop = (e: DragEvent) => {
@@ -64,13 +82,14 @@ export function ResumePage() {
 
   const onDelete = (resumeId: number) => {
     if (window.confirm("이 이력서를 삭제할까요? 분석 결과도 함께 사라집니다.")) {
-      remove.mutate(resumeId);
+      remove.mutate(resumeId, { onError: (e) => showToast(errorMessage(e)) });
     }
   };
 
   const onReanalyze = (resumeId: number) => {
     reanalyze.mutate(resumeId, {
       onSuccess: () => setSavedId((prev) => (prev === resumeId ? null : prev)),
+      onError: (e) => showToast(errorMessage(e)),
     });
   };
 
@@ -166,33 +185,6 @@ export function ResumePage() {
           >
             또는 파일 선택 · PDF · 최대 10MB / 10페이지
           </p>
-          {upload.isError && (
-            <p
-              role="alert"
-              style={{
-                fontFamily: "var(--font-sans)",
-                fontSize: 14,
-                fontWeight: 600,
-                color: "var(--red-600)",
-                marginTop: 12,
-              }}
-            >
-              {errorMessage(upload.error)}
-            </p>
-          )}
-          {upload.data?.duplicated && (
-            <p
-              style={{
-                fontFamily: "var(--font-sans)",
-                fontSize: 14,
-                fontWeight: 600,
-                color: "var(--fg-secondary)",
-                marginTop: 12,
-              }}
-            >
-              이미 업로드된 이력서예요 — 기존 항목을 그대로 사용합니다.
-            </p>
-          )}
         </div>
 
         {/* 분석 중 알림 */}
@@ -341,7 +333,6 @@ export function ResumePage() {
                               key={r.id}
                               initial={parsed.data.structuredData ?? {}}
                               saving={update.isPending}
-                              error={update.isError ? errorMessage(update.error) : null}
                               onCancel={() => {
                                 update.reset();
                                 setEditingId(null);
@@ -354,6 +345,7 @@ export function ResumePage() {
                                       setEditingId(null);
                                       setSavedId(r.id);
                                     },
+                                    onError: (e) => showToast(errorMessage(e)),
                                   },
                                 );
                               }}
@@ -427,6 +419,23 @@ export function ResumePage() {
           )}
         </div>
       </div>
+
+      {toast &&
+        createPortal(
+          <div
+            role="alert"
+            style={{
+              position: "fixed",
+              top: 24,
+              left: "50%",
+              transform: "translateX(-50%)",
+              zIndex: 100,
+            }}
+          >
+            <Toast icon={<Icon name={toast.icon} size={16} />}>{toast.message}</Toast>
+          </div>,
+          document.body,
+        )}
     </div>
   );
 }
@@ -617,13 +626,11 @@ function RemoveRowButton({ label, onClick }: { label: string; onClick: () => voi
 function ParsedEditPanel({
   initial,
   saving,
-  error,
   onCancel,
   onSave,
 }: {
   initial: StructuredData;
   saving: boolean;
-  error: string | null;
   onCancel: () => void;
   onSave: (data: StructuredData) => void;
 }) {
@@ -676,24 +683,6 @@ function ParsedEditPanel({
       >
         저장 후 면접 질문에 반영하려면 메뉴에서 재분석을 실행해야 해요.
       </p>
-      {error && (
-        <p
-          role="alert"
-          style={{
-            fontFamily: "var(--font-sans)",
-            fontSize: 13,
-            fontWeight: 600,
-            color: "var(--red-600)",
-            background: "var(--bg-danger-subtle)",
-            borderRadius: "var(--radius-8, 8px)",
-            padding: "10px 12px",
-            margin: "0 0 12px",
-          }}
-        >
-          {error}
-        </p>
-      )}
-
       <div
         style={{
           background: "var(--bg-surface)",
