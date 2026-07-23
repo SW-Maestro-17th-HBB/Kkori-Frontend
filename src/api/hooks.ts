@@ -15,8 +15,10 @@ import {
   postLogout,
   postSignup,
   reanalyzeResume,
+  updateResumeParsed,
   uploadResume,
 } from "./client";
+import type { StructuredData } from "./client";
 import { clearSignupSession, clearTokens, getAuthSnapshot } from "./tokenStore";
 import { useNav } from "../hooks/useNav";
 
@@ -134,6 +136,22 @@ export const useDeleteResume = () => {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (resumeId: number) => deleteResume(resumeId),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["resumes"] }),
+  });
+};
+
+/** 파싱 결과 수정 — 저장만 된다(면접 반영은 재분석 필요, PRD §4).
+    성공 시 resumes 무효화 — 접두사 매칭으로 미리보기(["resumes","parsed",id]) 캐시도 갱신된다 */
+export const useUpdateResumeParsed = () => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({
+      resumeId,
+      structuredData,
+    }: {
+      resumeId: number;
+      structuredData: StructuredData;
+    }) => updateResumeParsed(resumeId, structuredData),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["resumes"] }),
   });
 };

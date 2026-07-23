@@ -8,6 +8,7 @@ import {
   getList,
   getParsed,
   reanalyze,
+  updateParsed,
   upload,
 } from "./generated/resume/resume";
 import type {
@@ -16,6 +17,7 @@ import type {
   ResumeSummaryResponse,
   ResumeSummaryResponseAnalysisStatus,
   ResumeUploadResponse as ResumeUploadResponseModel,
+  StructuredData as StructuredDataModel,
 } from "./generated/kkoriAPI.schemas";
 import { ApiError, FE_ERROR_CODES, request } from "./request";
 import type { components } from "./schema";
@@ -90,6 +92,7 @@ export type ResumeUploadResponse = ResumeUploadResponseModel;
 export type ResumeParsedResponse = ResumeParsedResponseModel;
 export type ResumeReanalyzeResponse = ResumeReanalyzeResponseModel;
 export type AnalysisStatus = ResumeSummaryResponseAnalysisStatus;
+export type StructuredData = StructuredDataModel;
 
 /** 백엔드 8단계 상태 → UI 3분류. EMBEDDED만 완료 — PARSED는 색인 전이라 아직 면접에 못 쓴다. */
 export function toUiStatus(status: AnalysisStatus): ResumeStatus {
@@ -188,8 +191,16 @@ export const reanalyzeResume = async (
   resumeId: number,
 ): Promise<ResumeReanalyzeResponse | undefined> => (await reanalyze(resumeId)).data;
 
-export const fetchResumeParsed = async (resumeId: number): Promise<ResumePreview> =>
-  toResumePreview((await getParsed(resumeId)).data ?? {});
+/** 파싱 결과 원본 조회 — 미리보기 표시(toResumePreview)와 수정 폼 초기값이 함께 쓰므로
+    매핑 전 structuredData 를 그대로 반환한다 (표시용 매핑은 화면에서). */
+export const fetchResumeParsed = async (resumeId: number): Promise<ResumeParsedResponse> =>
+  (await getParsed(resumeId)).data ?? {};
+
+/** 파싱 결과 수정 — 저장만 된다. 면접 질문 생성에 반영하려면 재분석(REINDEX)이 필요하다 (PRD §4). */
+export const updateResumeParsed = async (
+  resumeId: number,
+  structuredData: StructuredData,
+): Promise<ResumeParsedResponse> => (await updateParsed(resumeId, { structuredData })).data ?? {};
 
 export const fetchReports = (): Promise<ReportSummary[]> => delay(fixtures.reports);
 
