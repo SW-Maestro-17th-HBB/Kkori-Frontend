@@ -5,7 +5,13 @@ import { act, renderHook, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { Room } from "livekit-client";
 import { FakeRoom, makeFakeAudioTrack } from "../test/livekitMock";
-import { ConnectionState, useLiveKitRoom, useRemoteAudio } from "./useLiveKitRoom";
+import {
+  ConnectionState,
+  discardConnectedRoom,
+  stashConnectedRoom,
+  useLiveKitRoom,
+  useRemoteAudio,
+} from "./useLiveKitRoom";
 
 vi.mock("livekit-client", async () => (await import("../test/livekitMock")).createLiveKitMock());
 
@@ -17,8 +23,69 @@ const connectedRoom = () =>
 
 describe("useLiveKitRoom", () => {
   beforeEach(() => {
+    discardConnectedRoom(); // 이전 테스트의 핸드오프 보관분 격리
     FakeRoom.reset();
     sessionStorage.clear();
+  });
+
+  it("setup 이 보관한 접속 룸을 재접속 없이 인수한다 (StrictMode 포함 connect 총 1회)", async () => {
+    // setup 의 접속 확립을 재현 — 연결된 룸을 소유 정보와 함께 보관해 둔다
+    const { Room } = await import("livekit-client");
+    const established = new Room() as unknown as InstanceType<typeof FakeRoom>;
+    await established.connect(SESSION.url, SESSION.token);
+    stashConnectedRoom(established as unknown as Room, {
+      url: SESSION.url,
+      token: SESSION.token,
+      authSessionId: "sess-A",
+    });
+
+    const { result } = renderHook(() => useLiveKitRoom(SESSION), { wrapper: StrictMode });
+    expect(result.current.room).toBe(established); // 새 Room 생성 없이 인수
+    await waitFor(() => {
+      expect(result.current.connectionState).toBe(ConnectionState.Connected);
+    });
+    // "재접속 없이 인수" — StrictMode 이중 마운트에서도 setup 의 최초 접속 1회뿐
+    expect(vi.mocked(established.connect)).toHaveBeenCalledTimes(1);
+  });
+
+  it("인수한 룸도 실제 언마운트에서는 해제된다 (지연 해제가 실행됨)", async () => {
+    const { Room } = await import("livekit-client");
+    const established = new Room() as unknown as InstanceType<typeof FakeRoom>;
+    await established.connect(SESSION.url, SESSION.token);
+    stashConnectedRoom(established as unknown as Room, {
+      url: SESSION.url,
+      token: SESSION.token,
+      authSessionId: "sess-A",
+    });
+
+    const { result, unmount } = renderHook(() => useLiveKitRoom(SESSION), {
+      wrapper: StrictMode,
+    });
+    await waitFor(() => {
+      expect(result.current.connectionState).toBe(ConnectionState.Connected);
+    });
+    unmount(); // 재마운트 없는 진짜 언마운트 — 마이크로태스크로 미룬 해제가 실행돼야 한다
+    await waitFor(() => {
+      expect(established.state).toBe("disconnected");
+    });
+  });
+
+  it("소유 정보가 다른 보관 룸은 인수하지 않고 폐기한다", async () => {
+    const { Room } = await import("livekit-client");
+    const established = new Room() as unknown as InstanceType<typeof FakeRoom>;
+    await established.connect("wss://other.example", "other-token");
+    stashConnectedRoom(established as unknown as Room, {
+      url: "wss://other.example",
+      token: "other-token", // 다른 발급분(예: 이전 사용자)의 연결
+      authSessionId: "sess-B",
+    });
+
+    const { result } = renderHook(() => useLiveKitRoom(SESSION), { wrapper: StrictMode });
+    expect(result.current.room).not.toBe(established); // 인수 거부 — 새 룸으로 접속
+    await waitFor(() => {
+      expect(result.current.connectionState).toBe(ConnectionState.Connected);
+    });
+    expect(vi.mocked(established.disconnect)).toHaveBeenCalled(); // 잔여 연결 폐기
   });
 
   it("세션이 없으면 접속하지 않는다", () => {

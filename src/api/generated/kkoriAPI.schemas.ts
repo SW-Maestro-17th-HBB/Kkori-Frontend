@@ -47,15 +47,38 @@ export interface ApiResponseUserConsentsResponse {
   error?: ErrorResponse;
 }
 
-export interface SessionTokenResponse {
+export type InterviewSessionCreateRequestInterviewType =
+  (typeof InterviewSessionCreateRequestInterviewType)[keyof typeof InterviewSessionCreateRequestInterviewType];
+
+export const InterviewSessionCreateRequestInterviewType = {
+  THIRTY_MIN: "THIRTY_MIN",
+  FIVE_MIN: "FIVE_MIN",
+} as const;
+
+export type InterviewSessionCreateRequestPosition =
+  (typeof InterviewSessionCreateRequestPosition)[keyof typeof InterviewSessionCreateRequestPosition];
+
+export const InterviewSessionCreateRequestPosition = {
+  BACKEND: "BACKEND",
+  FRONTEND: "FRONTEND",
+} as const;
+
+export interface InterviewSessionCreateRequest {
+  resumeId?: number;
+  interviewType: InterviewSessionCreateRequestInterviewType;
+  position: InterviewSessionCreateRequestPosition;
+}
+
+export interface InterviewSessionCreateResponse {
+  id?: number;
   livekitToken?: string;
   livekitUrl?: string;
   livekitRoom?: string;
 }
 
-export interface ApiResponseSessionTokenResponse {
+export interface ApiResponseInterviewSessionCreateResponse {
   success?: boolean;
-  data?: SessionTokenResponse;
+  data?: InterviewSessionCreateResponse;
   error?: ErrorResponse;
 }
 

@@ -207,8 +207,9 @@ export type MicResult = "ok" | "notfound" | "denied";
 export class FakeRoom {
   /** 생성 순서대로 쌓인다 — StrictMode 이중 마운트로 여분이 생기니 마지막 것을 쓸 것 */
   static instances: FakeRoom[] = [];
-  /** "fail" 이면 connect 가 거부된다 — beforeEach 에서 "ok" 로 리셋 */
-  static connectBehavior: "ok" | "fail" = "ok";
+  /** "fail" 이면 connect 가 거부되고, "hang" 이면 영원히 대기한다(취소 검증용) —
+      beforeEach 에서 "ok" 로 리셋 */
+  static connectBehavior: "ok" | "fail" | "hang" = "ok";
   /** micResults 큐가 비었을 때 적용 — "fail" 이면 setMicrophoneEnabled 가 거부된다 */
   static micBehavior: "ok" | "fail" = "ok";
   /** 호출별 마이크 발행 결과 큐 (예: ["notfound", "ok"] = 저장 장치 소멸 → 기본 장치 성공) */
@@ -263,6 +264,7 @@ export class FakeRoom {
       }),
     };
     this.connect = vi.fn(async () => {
+      if (FakeRoom.connectBehavior === "hang") return new Promise<void>(() => {});
       if (FakeRoom.connectBehavior === "fail") throw new Error("connect refused");
       this.setState("connected");
     });

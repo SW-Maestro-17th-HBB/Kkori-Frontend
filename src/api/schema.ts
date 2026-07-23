@@ -37,12 +37,14 @@ export interface paths {
     get?: never;
     put?: never;
     /**
-     * 음성 세션 접속 토큰 발급
-     * @description 인증 유저에게 새 룸의 LiveKit 입장 토큰(JWT)과 서버 URL을 발급한다.
-     *     요청마다 새 roomName이 생성되며, 발행 권한은 마이크로 한정된다(카메라·화면공유·데이터 차단).
-     *     클라이언트는 livekitUrl에 livekitToken을 들고 접속해 오디오를 송수신한다.
+     * 면접 세션 생성
+     * @description 면접 유형(THIRTY_MIN/FIVE_MIN)·직무(BACKEND/FRONTEND)·대상 이력서를 받아
+     *     면접 세션(PENDING)을 생성하고, 세션 전용 LiveKit 룸과 입장 토큰(JWT)·서버 URL을 발급한다.
+     *     THIRTY_MIN은 분석 완료(EMBEDDED)된 본인 이력서가 필수이고, FIVE_MIN은 이력서를 생략할 수 있다.
+     *     기존 PENDING 세션은 새 세션이 자동 교체(ABORTED)하며, 진행 중 세션이 있으면 409로 거부된다.
+     *     참가자 신원은 candidate-{sessionId}로 서버가 확정한다.
      */
-    post: operations["issueToken"];
+    post: operations["create"];
     delete?: never;
     options?: never;
     head?: never;
@@ -326,7 +328,7 @@ export interface paths {
      * @description 이력서를 삭제한다(soft delete) — 즉시 목록·조회에서 사라진다.
      *     원본(S3)·구조화 데이터·청크·임베딩의 물리 삭제는 후속 배치가 수행한다.
      */
-    delete: operations["delete"];
+    delete: operations["deleteResume"];
     options?: never;
     head?: never;
     patch?: never;
@@ -367,12 +369,22 @@ export interface components {
     UserConsentsResponse: {
       consents?: components["schemas"]["ConsentStateItem"][];
     };
-    ApiResponseSessionTokenResponse: {
+    InterviewSessionCreateRequest: {
+      /** Format: int64 */
+      resumeId?: number;
+      /** @enum {string} */
+      interviewType: "THIRTY_MIN" | "FIVE_MIN";
+      /** @enum {string} */
+      position: "BACKEND" | "FRONTEND";
+    };
+    ApiResponseInterviewSessionCreateResponse: {
       success?: boolean;
-      data?: components["schemas"]["SessionTokenResponse"];
+      data?: components["schemas"]["InterviewSessionCreateResponse"];
       error?: components["schemas"]["ErrorResponse"];
     };
-    SessionTokenResponse: {
+    InterviewSessionCreateResponse: {
+      /** Format: int64 */
+      id?: number;
       livekitToken?: string;
       livekitUrl?: string;
       livekitRoom?: string;
@@ -634,22 +646,71 @@ export interface operations {
       };
     };
   };
-  issueToken: {
+  create: {
     parameters: {
       query?: never;
       header?: never;
       path?: never;
       cookie?: never;
     };
-    requestBody?: never;
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["InterviewSessionCreateRequest"];
+      };
+    };
     responses: {
-      /** @description Created */
+      /** @description 세션 생성 — id·livekitRoom·livekitToken·livekitUrl 반환 */
       201: {
         headers: {
           [name: string]: unknown;
         };
         content: {
-          "*/*": components["schemas"]["ApiResponseSessionTokenResponse"];
+          "*/*": components["schemas"]["ApiResponseInterviewSessionCreateResponse"];
+        };
+      };
+      /** @description 필드 누락·미정의 유형/직무·THIRTY_MIN의 resumeId 누락(C002, fieldErrors 포함) */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "*/*": components["schemas"]["ApiResponseInterviewSessionCreateResponse"];
+        };
+      };
+      /** @description 타인의 이력서(R009) */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "*/*": components["schemas"]["ApiResponseInterviewSessionCreateResponse"];
+        };
+      };
+      /** @description 이력서 없음·삭제됨(R008) */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "*/*": components["schemas"]["ApiResponseInterviewSessionCreateResponse"];
+        };
+      };
+      /** @description 이력서 분석 진행 중(R010)·분석 실패 상태(R011)·진행 중 면접 세션 존재(S003) */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "*/*": components["schemas"]["ApiResponseInterviewSessionCreateResponse"];
+        };
+      };
+      /** @description 룸 생성 실패(S002)·토큰 발급 실패(S001) */
+      500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "*/*": components["schemas"]["ApiResponseInterviewSessionCreateResponse"];
         };
       };
     };
@@ -1151,7 +1212,7 @@ export interface operations {
       };
     };
   };
-  delete: {
+  deleteResume: {
     parameters: {
       query?: never;
       header?: never;

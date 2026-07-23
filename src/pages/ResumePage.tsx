@@ -366,7 +366,8 @@ export function ResumePage() {
                                   size="sm"
                                   onClick={(e) => {
                                     e.stopPropagation();
-                                    nav("setup");
+                                    // 면접 설정 화면에 이 이력서를 프리셀렉트 (팀 HBB1-18 연동 규약)
+                                    nav("setup", { query: { resume: String(r.id) } });
                                   }}
                                 >
                                   이 이력서로 면접 시작 →
