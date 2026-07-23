@@ -33,8 +33,6 @@ export function ResumePage() {
   /** 열린 행 메뉴 — 테이블(overflow: hidden)에 잘리지 않도록 버튼 화면 좌표에 포털로 띄운다 */
   const [menu, setMenu] = useState<{ id: number; top: number; right: number } | null>(null);
   const [editingId, setEditingId] = useState<number | null>(null);
-  /** 수정 저장 직후 "재분석 필요" 안내를 보여줄 행 */
-  const [savedId, setSavedId] = useState<number | null>(null);
   /** 오류·안내 토스트 — 자동으로 사라지지 않고 사용자가 닫기 버튼으로 직접 닫는다 */
   const [toast, setToast] = useState<{ message: string; tone: "error" | "info" } | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -83,10 +81,7 @@ export function ResumePage() {
   };
 
   const onReanalyze = (resumeId: number) => {
-    reanalyze.mutate(resumeId, {
-      onSuccess: () => setSavedId((prev) => (prev === resumeId ? null : prev)),
-      onError: (e) => showToast(errorMessage(e)),
-    });
+    reanalyze.mutate(resumeId, { onError: (e) => showToast(errorMessage(e)) });
   };
 
   const onEdit = (resumeId: number) => {
@@ -339,7 +334,10 @@ export function ResumePage() {
                                   {
                                     onSuccess: () => {
                                       setEditingId(null);
-                                      setSavedId(r.id);
+                                      showToast(
+                                        "수정 사항이 저장됐어요 — 면접 질문에 반영하려면 메뉴에서 재분석을 실행하세요.",
+                                        "info",
+                                      );
                                     },
                                     onError: (e) => showToast(errorMessage(e)),
                                   },
@@ -368,23 +366,6 @@ export function ResumePage() {
                                   이 이력서로 면접 시작 →
                                 </Button>
                               </div>
-                              {savedId === r.id && (
-                                <p
-                                  style={{
-                                    fontFamily: "var(--font-sans)",
-                                    fontSize: 13,
-                                    fontWeight: 600,
-                                    color: "var(--blue-800)",
-                                    background: "var(--bg-brand-subtle)",
-                                    borderRadius: "var(--radius-8, 8px)",
-                                    padding: "10px 12px",
-                                    margin: "0 0 12px",
-                                  }}
-                                >
-                                  수정 사항이 저장됐어요. 면접 질문에 반영하려면 메뉴에서 재분석을
-                                  실행하세요.
-                                </p>
-                              )}
                               <div
                                 style={{
                                   background: "var(--bg-surface)",
