@@ -651,13 +651,15 @@ describe("SetupPage — 세션 생성", () => {
     const fetchMock = vi
       .fn()
       .mockImplementationOnce(async () =>
-        errorEnvelope("SESSION_ROOM_CREATE_FAILED", "LiveKit 룸 생성에 실패했습니다", 500),
+        errorEnvelope("S002", "면접 룸 생성에 실패했습니다.", 500),
       )
       .mockImplementation(async () => envelope(SESSION_DATA));
     vi.stubGlobal("fetch", fetchMock);
     await reachReady();
     await userEvent.click(screen.getByRole("button", { name: "면접 시작" }));
-    expect(await screen.findByRole("alert")).toHaveTextContent("면접 준비에 실패했어요");
+    const alert = await screen.findByRole("alert");
+    expect(alert).toHaveTextContent("면접 준비에 실패했어요");
+    expect(alert).toHaveTextContent("(면접 룸 생성에 실패했습니다.)"); // 전용 문구 없는 코드는 서버 메시지를 덧붙인다
     expect(screen.getByTestId("location")).toHaveTextContent("/setup");
     expect(sessionStorage.getItem("hbb.interview.session")).toBeNull();
 
@@ -701,6 +703,48 @@ describe("SetupPage — 세션 생성", () => {
     expect(await screen.findByRole("alert")).toHaveTextContent("면접 준비에 실패했어요");
     expect(screen.getByTestId("location")).toHaveTextContent("/setup");
     expect(sessionStorage.getItem("hbb.interview.session")).toBeNull();
+  });
+
+  it("S003(진행 중 세션)은 전용 안내를 표시한다", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi
+        .fn()
+        .mockImplementation(async () =>
+          errorEnvelope("S003", "진행 중인 면접 세션이 있습니다.", 409),
+        ),
+    );
+    await reachReady();
+    await userEvent.click(screen.getByRole("button", { name: "면접 시작" }));
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "이미 진행 중인 면접이 있어요. 기존 면접을 종료한 뒤 다시 시작해 주세요.",
+    );
+    expect(screen.getByTestId("location")).toHaveTextContent("/setup");
+  });
+
+  it("R010(분석 진행 중)·R011(분석 실패)은 이력서 상태 안내를 표시한다", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi
+        .fn()
+        .mockImplementationOnce(async () =>
+          errorEnvelope("R010", "이력서 분석이 진행 중입니다.", 409),
+        )
+        .mockImplementation(async () =>
+          errorEnvelope("R011", "이력서 분석이 실패한 상태입니다.", 409),
+        ),
+    );
+    await reachReady();
+    await userEvent.click(screen.getByRole("button", { name: "면접 시작" }));
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "선택한 이력서의 분석이 아직 끝나지 않았어요. 분석 완료 후 다시 시작해 주세요.",
+    );
+
+    await userEvent.click(screen.getByRole("button", { name: "면접 시작" }));
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "선택한 이력서의 분석에 실패했어요. 재분석을 마친 뒤 다시 시작해 주세요.",
+    );
+    expect(screen.getByTestId("location")).toHaveTextContent("/setup");
   });
 
   it("요청 중 계정이 교체되면 이전 계정의 응답을 폐기한다", async () => {
