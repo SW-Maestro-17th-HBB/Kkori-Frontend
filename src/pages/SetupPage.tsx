@@ -3,7 +3,9 @@ import { Fragment, useEffect, useRef, useState, type ReactNode } from "react";
 import { Room } from "livekit-client";
 import { useSearchParams } from "react-router";
 import type { CreateSessionResponse } from "../api/client";
+import { ERROR_CODES } from "../api/errorCodes";
 import { useCreateInterviewSession, useResumes } from "../api/hooks";
+import { ApiError } from "../api/request";
 import { getAuthSessionId } from "../api/tokenStore";
 import type { CreateSessionRequest, Position } from "../api/types";
 import { Button, Card, Modal } from "../components/ds";
@@ -706,6 +708,43 @@ function DeviceCheck({ setup }: { setup: DeviceSetupState }) {
   );
 }
 
+/* ---------- 시작 실패 안내 ---------- */
+
+const GENERIC_START_FAILURE = "면접 준비에 실패했어요 — 다시 시도해 주세요.";
+
+interface StartFailureNotice {
+  message: string;
+  /** 전용 문구가 없는 실패의 원인 표시 — 메시지 뒤 괄호로 붙는다 */
+  detail: string | null;
+}
+
+/** 세션 생성 실패를 사용자 안내로 변환 — 사용자가 스스로 조치할 수 있는 코드
+    (S003 진행 중 세션, R010/R011 이력서 분석 상태)만 전용 문구로 분기하고,
+    나머지는 공통 재시도 안내에 서버 메시지를 덧붙인다. */
+const toStartFailureNotice = (err: unknown): StartFailureNotice => {
+  if (err instanceof ApiError) {
+    if (err.code === ERROR_CODES.SESSION_ALREADY_IN_PROGRESS) {
+      return {
+        message: "이미 진행 중인 면접이 있어요. 기존 면접을 종료한 뒤 다시 시작해 주세요.",
+        detail: null,
+      };
+    }
+    if (err.code === ERROR_CODES.RESUME_ANALYSIS_IN_PROGRESS) {
+      return {
+        message: "선택한 이력서의 분석이 아직 끝나지 않았어요. 분석 완료 후 다시 시작해 주세요.",
+        detail: null,
+      };
+    }
+    if (err.code === ERROR_CODES.RESUME_ANALYSIS_FAILED) {
+      return {
+        message: "선택한 이력서의 분석에 실패했어요. 재분석을 마친 뒤 다시 시작해 주세요.",
+        detail: null,
+      };
+    }
+  }
+  return { message: GENERIC_START_FAILURE, detail: err instanceof Error ? err.message : null };
+};
+
 export function SetupPage() {
   const nav = useNav();
   const setup = useDeviceSetup();
@@ -722,7 +761,7 @@ export function SetupPage() {
   // 직무는 이 화면에서 직접 선택한다 — 이력서 분석 추천 연동 없음(기본값 백엔드)
   const [position, setPosition] = useState<Position>("BACKEND");
   const [pickOpen, setPickOpen] = useState(false);
-  const [startFailure, setStartFailure] = useState<{ detail: string | null } | null>(null);
+  const [startFailure, setStartFailure] = useState<StartFailureNotice | null>(null);
   // 시작 흐름(발급→접속) 진행 중 — 모달이 전 과정을 덮어 ①~④ 입력 변경을 차단한다
   // (클릭 시점 선택값으로 세션이 만들어지므로, 대기 중 변경은 화면·실제 불일치가 된다)
   const [preparing, setPreparing] = useState(false);
@@ -772,14 +811,16 @@ export function SetupPage() {
     // 요청 시작 직전 인증 세션 캡처 — 응답 후 재대조해 대기 중 계정 교체를 방어한다
     const capturedAuthSessionId = getAuthSessionId();
     if (capturedAuthSessionId === null) {
-      setStartFailure({ detail: null });
+      setStartFailure({ message: GENERIC_START_FAILURE, detail: null });
       return;
     }
     const attempt = ++startAttemptRef.current;
     const stale = () => startAttemptRef.current !== attempt; // 취소·이탈로 무효화됨
-    const fail = (detail: string | null = null) => {
+    const fail = (
+      notice: StartFailureNotice = { message: GENERIC_START_FAILURE, detail: null },
+    ) => {
       setPreparing(false);
-      setStartFailure({ detail });
+      setStartFailure(notice);
     };
     setPreparing(true);
     const body: CreateSessionRequest = {
@@ -792,16 +833,21 @@ export function SetupPage() {
       data = await createSession.mutateAsync(body);
     } catch (err) {
       if (stale()) return;
-      fail(err instanceof Error ? err.message : null);
+      fail(toStartFailureNotice(err));
       return;
     }
     // 취소·이탈 후 도착한 응답 — 발급된 토큰은 버린다(서버의 PENDING 자동 교체가 회수)
     if (stale()) return;
-    // 스키마상 응답 필드가 모두 optional — 저장 전에 실제 값 존재를 확인한다 (id 부재는 허용)
+    // 스키마상 응답 필드가 모두 optional — 저장 전에 실제 값 존재를 확인한다
     const { livekitToken, livekitUrl, livekitRoom, id } = data ?? {};
     const filled = (value: unknown): value is string =>
       typeof value === "string" && value.length > 0;
-    if (!filled(livekitUrl) || !filled(livekitToken) || !filled(livekitRoom)) {
+    if (
+      !filled(livekitUrl) ||
+      !filled(livekitToken) ||
+      !filled(livekitRoom) ||
+      typeof id !== "number"
+    ) {
       fail();
       return;
     }
@@ -840,7 +886,7 @@ export function SetupPage() {
       token: livekitToken,
       room: livekitRoom,
       authSessionId: capturedAuthSessionId,
-      ...(typeof id === "number" ? { id } : {}),
+      id,
     });
     if (!saved) {
       void room.disconnect();
@@ -1083,7 +1129,7 @@ export function SetupPage() {
                 marginBottom: 0,
               }}
             >
-              면접 준비에 실패했어요 — 다시 시도해 주세요.
+              {startFailure.message}
               {startFailure.detail ? ` (${startFailure.detail})` : ""}
             </p>
           )}

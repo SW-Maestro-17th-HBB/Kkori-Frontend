@@ -611,6 +611,7 @@ export function useSubscribe<TData = Awaited<ReturnType<typeof subscribe>>, TErr
 /**
  * 이력서를 삭제한다(soft delete) — 즉시 목록·조회에서 사라진다.
  * 원본(S3)·구조화 데이터·청크·임베딩의 물리 삭제는 후속 배치가 수행한다.
+ * 진행 중인 면접에서 사용 중인 이력서는 삭제할 수 없다.
  * @summary 이력서 삭제
  */
 export const deleteResume = (resumeId: number, signal?: AbortSignal) => {

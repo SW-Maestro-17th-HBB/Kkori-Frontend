@@ -11,7 +11,8 @@ export type Position = "BACKEND" | "FRONTEND";
 /** 면접 유형 — ③ 시간 선택이 곧 유형 (5분/30분, CS는 향후 값 추가) */
 export type InterviewType = "FIVE_MIN" | "THIRTY_MIN";
 
-/** 세션 생성 요청 — 백엔드 합의 계약(구현·스키마 반영 대기).
+/** 세션 생성 요청 — 생성 타입(InterviewSessionCreateRequest)과 구조 동일해야 하며
+    어긋나면 client.ts의 fetcher 호출이 컴파일 에러로 잡는다.
     resumeId는 실전 모의(THIRTY_MIN) 필수·빠른 연습(FIVE_MIN) 선택 — 미선택 시 필드 생략 */
 export interface CreateSessionRequest {
   resumeId?: number;

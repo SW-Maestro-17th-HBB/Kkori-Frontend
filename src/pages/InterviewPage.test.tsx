@@ -35,6 +35,7 @@ const seedSession = (over: Partial<InterviewSessionRecord> = {}) => {
     token: "jwt-token",
     room: "room-1",
     authSessionId: "sess-A",
+    id: 34,
     ...over,
   });
 };

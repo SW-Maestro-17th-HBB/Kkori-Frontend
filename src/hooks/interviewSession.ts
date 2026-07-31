@@ -16,17 +16,14 @@ export interface InterviewSessionRecord {
   room: string;
   /** 발급 요청 시작 시점에 캡처한 인증 세션 ID — 계정 교체 감지용 */
   authSessionId: string;
-  /** 세션 식별자 — 합의 계약엔 있으나 현행 배포 스키마엔 없어 선택적 */
-  id?: number;
+  /** 세션 식별자 — 이후 세션 API 호출(종료·리포트 등)의 key */
+  id: number;
 }
 
 export function saveInterviewSession(session: InterviewSessionRecord): boolean {
   try {
     const { url, token, room, authSessionId, id } = session;
-    sessionStorage.setItem(
-      STORAGE_KEY,
-      JSON.stringify({ url, token, room, authSessionId, ...(id !== undefined ? { id } : {}) }),
-    );
+    sessionStorage.setItem(STORAGE_KEY, JSON.stringify({ url, token, room, authSessionId, id }));
     return true;
   } catch {
     return false; // 쿼터 초과 등 — 호출자가 이동을 차단한다
@@ -45,13 +42,9 @@ export function loadInterviewSession(): InterviewSessionRecord | null {
     if (!isFilled(url) || !isFilled(token) || !isFilled(room) || !isFilled(authSessionId)) {
       return null;
     }
-    return {
-      url,
-      token,
-      room,
-      authSessionId,
-      ...(typeof id === "number" ? { id } : {}),
-    };
+    // id 없는 레코드는 구계약 저장분 — 무효 처리해 setup 재진입으로 유도한다
+    if (typeof id !== "number") return null;
+    return { url, token, room, authSessionId, id };
   } catch {
     return null;
   }
