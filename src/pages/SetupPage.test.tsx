@@ -691,18 +691,28 @@ describe("SetupPage — 세션 생성", () => {
     expect(JSON.parse(sessionStorage.getItem("hbb.interview.session")!)).toMatchObject({ id: 34 });
   });
 
-  it("응답에 세션 id 가 없으면 성공으로 취급하지 않는다", async () => {
+  it("응답의 세션 id 가 없거나 숫자가 아니면 성공으로 취급하지 않는다", async () => {
     const withoutId: Record<string, unknown> = { ...SESSION_DATA };
     delete withoutId.id;
     vi.stubGlobal(
       "fetch",
-      vi.fn().mockImplementation(async () => envelope(withoutId)),
+      vi
+        .fn()
+        .mockImplementationOnce(async () => envelope(withoutId))
+        .mockImplementation(async () => envelope({ ...SESSION_DATA, id: "34" })),
     );
     await reachReady();
     await userEvent.click(screen.getByRole("button", { name: "면접 시작" }));
     expect(await screen.findByRole("alert")).toHaveTextContent("면접 준비에 실패했어요");
     expect(screen.getByTestId("location")).toHaveTextContent("/setup");
     expect(sessionStorage.getItem("hbb.interview.session")).toBeNull();
+
+    // 숫자가 아닌 id(직렬화 이상 등)도 동일하게 거부 — 접속 시도 전에 걸러진다
+    await userEvent.click(screen.getByRole("button", { name: "면접 시작" }));
+    expect(await screen.findByRole("alert")).toHaveTextContent("면접 준비에 실패했어요");
+    expect(screen.getByTestId("location")).toHaveTextContent("/setup");
+    expect(sessionStorage.getItem("hbb.interview.session")).toBeNull();
+    expect(FakeRoom.instances).toHaveLength(0); // 응답 검증 실패 시 Room 접속 시도 없음
   });
 
   it("S003(진행 중 세션)은 전용 안내를 표시한다", async () => {
