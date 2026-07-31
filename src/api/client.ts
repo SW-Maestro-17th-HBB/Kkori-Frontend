@@ -11,7 +11,9 @@ import {
   updateParsed,
   upload,
 } from "./generated/resume/resume";
+import { create as createSessionApi } from "./generated/session/session";
 import type {
+  InterviewSessionCreateResponse,
   ResumeParsedResponse as ResumeParsedResponseModel,
   ResumeReanalyzeResponse as ResumeReanalyzeResponseModel,
   ResumeSummaryResponse,
@@ -196,14 +198,12 @@ export const fetchReportStats = (): Promise<ReportStats> => delay(fixtures.repor
 export const fetchReportDetail = (id: number | string): Promise<ReportDetail> =>
   delay({ ...fixtures.reportDetail, id: Number(id) || 1 });
 
-/* ---------- 면접 세션 (실제 API) ---------- */
+/* ---------- 면접 세션 (실제 API — orval 생성 fetcher 사용) ---------- */
 
-/** 세션 생성 응답 — 백엔드 반영 완료로 스키마 타입을 그대로 사용한다 (id 포함) */
-export type CreateSessionResponse = components["schemas"]["InterviewSessionCreateResponse"];
+export type CreateSessionResponse = InterviewSessionCreateResponse;
 
-/** 면접 세션 생성 — 요청 본문은 합의 계약 형태로 선전송한다(현행 서버는 미소비,
-    소비 시작 시 FE 무변경). 응답 필드 검증·저장은 화면(SetupPage) 책임 */
-export const createInterviewSession = (
+/** 면접 세션 생성 — 요청 계약(types.ts)과 생성 요청 타입의 구조 일치는 컴파일이 보증한다.
+    응답 필드 검증·저장은 화면(SetupPage) 책임 */
+export const createInterviewSession = async (
   body: CreateSessionRequest,
-): Promise<CreateSessionResponse> =>
-  request<CreateSessionResponse>("POST", "/api/v1/sessions", { body });
+): Promise<CreateSessionResponse> => (await createSessionApi(body)).data ?? {};
