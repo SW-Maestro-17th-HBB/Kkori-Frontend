@@ -797,11 +797,16 @@ export function SetupPage() {
     }
     // 취소·이탈 후 도착한 응답 — 발급된 토큰은 버린다(서버의 PENDING 자동 교체가 회수)
     if (stale()) return;
-    // 스키마상 응답 필드가 모두 optional — 저장 전에 실제 값 존재를 확인한다 (id 부재는 허용)
+    // 스키마상 응답 필드가 모두 optional — 저장 전에 실제 값 존재를 확인한다
     const { livekitToken, livekitUrl, livekitRoom, id } = data ?? {};
     const filled = (value: unknown): value is string =>
       typeof value === "string" && value.length > 0;
-    if (!filled(livekitUrl) || !filled(livekitToken) || !filled(livekitRoom)) {
+    if (
+      !filled(livekitUrl) ||
+      !filled(livekitToken) ||
+      !filled(livekitRoom) ||
+      typeof id !== "number"
+    ) {
       fail();
       return;
     }
@@ -840,7 +845,7 @@ export function SetupPage() {
       token: livekitToken,
       room: livekitRoom,
       authSessionId: capturedAuthSessionId,
-      ...(typeof id === "number" ? { id } : {}),
+      id,
     });
     if (!saved) {
       void room.disconnect();

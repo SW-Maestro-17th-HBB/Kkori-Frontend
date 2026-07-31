@@ -58,6 +58,7 @@ const errorEnvelope = (code: string, message: string, status: number) =>
   });
 
 const SESSION_DATA = {
+  id: 34,
   livekitToken: "lk-token",
   livekitUrl: "wss://lk.example",
   livekitRoom: "room-1",
@@ -353,6 +354,7 @@ describe("SetupPage — 장비 점검", () => {
       token: "lk-token",
       room: "room-1",
       authSessionId: "sess-A",
+      id: 34,
     });
     expect(JSON.parse(sessionStorage.getItem("hbb.interview.devicePrefs")!)).toEqual({
       micId: "mic-default",
@@ -677,17 +679,28 @@ describe("SetupPage — 세션 생성", () => {
     expect(sessionStorage.getItem("hbb.interview.session")).toBeNull();
   });
 
-  it("응답에 세션 id 가 있으면 함께 저장한다 (부재는 실패 아님)", async () => {
-    vi.stubGlobal(
-      "fetch",
-      vi.fn().mockImplementation(async () => envelope({ ...SESSION_DATA, id: 34 })),
-    );
+  it("응답의 세션 id 를 핸드오프에 저장한다", async () => {
+    stubSessionFetch();
     await reachReady();
     await userEvent.click(screen.getByRole("button", { name: "면접 시작" }));
     await waitFor(() => {
       expect(screen.getByTestId("location")).toHaveTextContent("/live");
     });
     expect(JSON.parse(sessionStorage.getItem("hbb.interview.session")!)).toMatchObject({ id: 34 });
+  });
+
+  it("응답에 세션 id 가 없으면 성공으로 취급하지 않는다", async () => {
+    const withoutId: Record<string, unknown> = { ...SESSION_DATA };
+    delete withoutId.id;
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockImplementation(async () => envelope(withoutId)),
+    );
+    await reachReady();
+    await userEvent.click(screen.getByRole("button", { name: "면접 시작" }));
+    expect(await screen.findByRole("alert")).toHaveTextContent("면접 준비에 실패했어요");
+    expect(screen.getByTestId("location")).toHaveTextContent("/setup");
+    expect(sessionStorage.getItem("hbb.interview.session")).toBeNull();
   });
 
   it("요청 중 계정이 교체되면 이전 계정의 응답을 폐기한다", async () => {

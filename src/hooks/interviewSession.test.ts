@@ -12,6 +12,7 @@ const record = {
   token: "jwt-token",
   room: "room-1",
   authSessionId: "sess-A",
+  id: 34,
 };
 
 describe("interviewSession", () => {
@@ -20,14 +21,16 @@ describe("interviewSession", () => {
     sessionStorage.clear();
   });
 
-  it("저장·로드 라운드트립 (id 없음)", () => {
+  it("저장·로드 라운드트립", () => {
     expect(saveInterviewSession(record)).toBe(true);
     expect(loadInterviewSession()).toEqual(record);
   });
 
-  it("id가 있으면 함께 저장·로드된다", () => {
-    saveInterviewSession({ ...record, id: 34 });
-    expect(loadInterviewSession()).toEqual({ ...record, id: 34 });
+  it("id 없는 저장분(구계약)은 무효로 로드한다", () => {
+    const legacy: Record<string, unknown> = { ...record };
+    delete legacy.id;
+    sessionStorage.setItem(KEY, JSON.stringify(legacy));
+    expect(loadInterviewSession()).toBeNull();
   });
 
   it("저장 실패(쿼터 등) 시 false를 반환한다", () => {
@@ -53,9 +56,9 @@ describe("interviewSession", () => {
     expect(loadInterviewSession()).toBeNull();
   });
 
-  it("id가 숫자가 아니면 제외하고 로드한다", () => {
+  it("id가 숫자가 아니면 null", () => {
     sessionStorage.setItem(KEY, JSON.stringify({ ...record, id: "34" }));
-    expect(loadInterviewSession()).toEqual(record);
+    expect(loadInterviewSession()).toBeNull();
   });
 
   it("clear로 저장값이 제거된다", () => {
