@@ -6,7 +6,7 @@
 >
 > **원천 문서**: `docs/drafts/design-handoff.md` §4(대시보드 바로 시작 카드)·§6-①②③(setup 자료 선택) · `docs/drafts/interview.md` §5(세션 API)·§6.1(세션 생성 시퀀스) · `docs/drafts/interview_q.md` §2(면접 유형). 이 문서는 **FE 화면 동작만** 정의한다.
 >
-> **계약 상태**: 세션 생성 계약은 **백엔드 합의 완료 — 구현·스키마 반영 대기**다(BE PRD "면접 세션 생성", HBB1-142·HBB1-265). 요청 `{ resumeId?, interviewType: "FIVE_MIN"|"THIRTY_MIN", position: "BACKEND"|"FRONTEND" }` → 응답 `{ id, livekitToken, livekitUrl, livekitRoom }`. 현행 배포 스키마(schema.ts `issueToken`)는 아직 본문 없음·응답 `id` 없음 — FE는 처음부터 합의 계약대로 전송하고(서버가 소비를 시작해도 FE 무변경), schema.ts는 백엔드 반영 후 재생성한다. ③ 시간 선택이 곧 `interviewType`이다.
+> **계약 상태**: 세션 생성 계약은 **백엔드 반영 완료 — FE 연동됨**(BE PRD "면접 세션 생성", HBB1-142·HBB1-265, FE 연동 HBB1-289). 요청 `{ resumeId?, interviewType: "FIVE_MIN"|"THIRTY_MIN", position: "BACKEND"|"FRONTEND" }` → 응답 `{ id, livekitToken, livekitUrl, livekitRoom }`. 스키마·생성 클라이언트는 orval로 재생성하며(`pnpm orval` — BE 서버 실행 중이어야 함), 세션 호출은 생성 fetcher(`src/api/generated/session`)를 경유한다. ③ 시간 선택이 곧 `interviewType`이다.
 >
 > **[미결] 5분 유형의 질문 성격 표현**: FE 디자인 문구는 "약 5분 · 핵심 질문 위주"(이력서 선택 시 개인화 반영)인데, BE PRD 유형 표는 `FIVE_MIN`을 "CS 지식 위주(정답 있는 질문, 별도 평가)"로 기술한다. 계약(필드·검증)에는 영향이 없고 질문 구성은 Agent 파이프라인(후속) 소관이나, **③ 카드의 화면 문구는 방향 확정 후 조정**한다.
 >
@@ -14,7 +14,7 @@
 
 ## Overview
 
-면접 설정 화면(`/setup`)의 자료 선택(①②③)과 세션 생성 흐름을 정의한다. 사용자는 분석 완료된 이력서·직무·면접 시간을 고르고, ④장비 점검(HBB1-19)을 통과하면 "면접 시작"으로 세션 토큰을 발급받아 면접 화면(`/live`)에 진입한다. 세션 토큰 발급은 **반영된 백엔드 API(`POST /api/v1/sessions`, schema.ts `issueToken`)를 실연동**하고, 기존 `.env.local` 개발 토큰 경로(`fetchLiveKitSession`·DEV 가드)는 제거한다. 이력서 목록은 목(`useResumes`)을 유지한다(목록 GET 미반영 — 기능 1 참조).
+면접 설정 화면(`/setup`)의 자료 선택(①②③)과 세션 생성 흐름을 정의한다. 사용자는 분석 완료된 이력서·직무·면접 시간을 고르고, ④장비 점검(HBB1-19)을 통과하면 "면접 시작"으로 세션 토큰을 발급받아 면접 화면(`/live`)에 진입한다. 세션 토큰 발급은 **반영된 백엔드 API(`POST /api/v1/sessions`, orval 생성 클라이언트)를 실연동**하고, 기존 `.env.local` 개발 토큰 경로(`fetchLiveKitSession`·DEV 가드)는 제거한다. 이력서 목록은 목(`useResumes`)을 유지한다(목록 GET 미반영 — 기능 1 참조).
 
 ```text
 대시보드 "면접 시작"·"이 이력서로 면접" / 이력서 확장 행 CTA
@@ -22,9 +22,8 @@
 /setup: ① 이력서(분석 완료만·30분 필수) ② 직무 position(기본 백엔드) ③ 시간(5/30분)
     └─ ④ 장비 점검 통과(HBB1-19) ──▶ "면접 시작" 활성
 "면접 시작" 클릭 ──▶ POST /api/v1/sessions { resumeId?, interviewType, position }
-    │                 (합의 계약 — 백엔드 구현·스키마 반영 대기.
-    │                  클릭부터 "면접 준비 중" 모달이 전 과정을 덮음 — 취소 가능)
-    ├─ 발급 성공: { id?, livekitToken, livekitUrl, livekitRoom }
+    │                 (클릭부터 "면접 준비 중" 모달이 전 과정을 덮음 — 취소 가능)
+    ├─ 발급 성공: { id, livekitToken, livekitUrl, livekitRoom }
     │        → setup 에서 LiveKit 접속 확립
     │           ├─ 접속 성공: sessionStorage 저장 → /live 이동 (연결 룸을 재접속 없이 인수)
     │           └─ 접속 실패: 저장·이동 없음 + 인라인 안내 (재클릭 = 재발급·재접속)
@@ -150,9 +149,9 @@
 
 ### 설명
 
-"면접 시작" 클릭 시 세션 토큰 발급 API를 호출해 룸·토큰을 받는다. **실제 API 연동**이다 — `POST /api/v1/sessions`(schema.ts `issueToken`, 인증 필수)가 반영되어 있어 기존 `request()` 인프라(Bearer 첨부·envelope 언래핑·재발급)를 그대로 쓴다.
+"면접 시작" 클릭 시 세션 생성 API를 호출해 세션 id·룸·토큰을 받는다. **실제 API 연동**이다 — `POST /api/v1/sessions`(인증 필수)를 orval 생성 fetcher(`src/api/generated/session`)로 호출하며, 전송 계층은 mutator(`orvalMutator.ts`)를 통해 기존 `request()` 인프라(Bearer 첨부·envelope 언래핑·재발급)를 그대로 쓴다.
 
-- **요청** — `POST /api/v1/sessions`. **백엔드 합의 완료 계약**(BE PRD HBB1-142 — 서버가 검증 후 `PENDING` 세션 레코드로 저장)이며 백엔드 구현·스키마 반영 대기다. FE는 처음부터 이 형태로 전송한다(현행 배포 서버는 본문 미소비 — 소비 시작 시 FE 무변경):
+- **요청** — `POST /api/v1/sessions`. **백엔드 반영 완료 계약**(BE PRD HBB1-142 — 서버가 검증 후 `PENDING` 세션 레코드로 저장)이다:
 
   ```json
   {
@@ -165,14 +164,14 @@
   - `resumeId`: 실전 모의(30분)는 필수(FE 게이팅이 보장), 빠른 연습(5분)은 선택한 이력서를 포함하고 **완료 이력서가 없는 유저만 필드 생략**(그 외 미선택 시작은 게이팅이 차단).
   - `interviewType`: ③ 선택값 — `"FIVE_MIN"`(빠른 연습) / `"THIRTY_MIN"`(실전 모의). CS는 향후 별도 값으로 추가.
   - `position`: ② 선택값 — `"BACKEND"` / `"FRONTEND"`.
-- **선택값 반영 시점**: 백엔드 구현(HBB1-142) 전의 배포 서버는 본문을 소비하지 않는다(토큰 발급·접속만 동작). 구현 후에는 선택값이 서버에서 검증되어 세션 레코드에 저장되지만, **실제 질문 반영은 Agent 디스패치(후속 스토리) 이후**다. **HBB1-141의 완료 범위는 FE 요청 구현·전송까지다.** 백엔드 반영 후의 schema.ts 재생성·에러 코드 연동 확인은 **별도 후속 티켓으로 분리**해 추적하며, 그 전까지 PR·이슈에 "선택값 미반영(서버 본문 미소비)" 상태를 명시한다.
-- **응답** — 201, envelope `data`: `{ id, livekitToken, livekitUrl, livekitRoom }`(합의 계약 — `id`는 세션 식별자로 종료·재연결 후속에서 사용). **현행 배포 스키마(`SessionTokenResponse`)에는 `id`가 아직 없으므로 FE는 `id`를 optional로 취급**한다 — 있으면 저장하고, 없어도 실패로 처리하지 않는다(필수화는 schema.ts 재생성 후속 티켓에서). 요청마다 새 룸이 발급되고(기존 `PENDING` 세션은 서버가 `ABORTED`로 자동 교체·룸 삭제 — BE PRD 기능 1), 토큰 발행 권한은 마이크로 한정된다(카메라·화면공유·데이터 차단).
-  - 필수 검증은 `livekitToken`·`livekitUrl`·`livekitRoom` 세 필드 — 스키마상 optional이므로 **저장 전에 셋 다 비어 있지 않은 문자열인지 런타임 검증**한다. 하나라도 누락이면 성공으로 취급하지 않고 일반 실패 안내로 처리한다.
+- **선택값 반영 시점**: 선택값은 서버에서 검증되어 세션 레코드에 저장된다. 생성 성공 시 서버가 AI 면접관을 룸에 디스패치하므로 FE 추가 작업은 없고, **실제 질문 반영은 Agent 파이프라인(후속 스토리) 소관**이다. (HBB1-18 당시 분리했던 schema 재생성·에러 코드 연동 후속은 HBB1-289에서 반영됨.)
+- **응답** — 201, envelope `data`: `{ id, livekitToken, livekitUrl, livekitRoom }`. **`id`는 세션 식별자(종료·재연결 등 후속 세션 API의 key)로 필수 취급**한다 — 없으면 성공으로 처리하지 않는다. 요청마다 새 룸이 발급되고(기존 `PENDING` 세션은 서버가 `ABORTED`로 자동 교체·룸 삭제 — BE PRD 기능 1), 토큰 발행 권한은 마이크로 한정된다(카메라·화면공유·데이터 차단).
+  - 필수 검증은 `livekitToken`·`livekitUrl`·`livekitRoom`·`id` 네 필드 — 생성 스키마상 optional이므로 **저장 전에 런타임 검증**한다(문자열 셋은 비어 있지 않은지, `id`는 숫자인지). 하나라도 누락이면 성공으로 취급하지 않고 일반 실패 안내로 처리한다.
 - 기존 `.env.local` 개발 토큰 경로(`fetchLiveKitSession`의 `VITE_LIVEKIT_URL`/`VITE_LIVEKIT_TOKEN`·DEV 가드)는 제거한다 — 개발 환경도 로컬 백엔드에서 토큰을 발급받는다.
 - **요청 상태 처리**: 비멱등 POST이므로 `useMutation`(자동 재시도 없음). 시작 클릭부터 이동까지 **전 과정(발급→접속)을 "면접 준비 중" 모달이 덮어** 이중 제출과 ①~④ 선택 변경을 차단한다 — 진행 중 선택을 바꾸면 화면과 실제 세션 설정(클릭 시점 값)이 달라지기 때문. 성공 시에만 저장·이동(기능 4)으로 진행한다.
 - **취소·이탈 무효화**: 모달의 취소는 어느 단계에서든 시작 흐름을 중단한다(발급 단계 취소로 버려진 토큰·세션은 서버의 `PENDING` 자동 교체가 회수). 요청 대기 중 화면을 떠나면(언마운트) 진행 중 흐름을 무효화한다 — **늦게 도착한 응답이 저장·이동을 실행해 사용자를 `/live`로 끌고 가지 않는다.**
 - **실패 처리**: 버튼 아래 인라인 안내("면접 준비에 실패했어요 — 다시 시도해 주세요" + 원인 메시지)를 표시하고 이동하지 않는다. 재시도는 버튼 재클릭. 장비 점검 상태는 유지된다(재점검 불필요).
-- **에러 처리**: MVP 에러 UI는 일반 실패 안내(인라인 + 재클릭 재시도)로 통일하고, 401 등 인증 실패는 기존 `request()`의 재발급·재로그인 흐름을 따른다. 백엔드 반영 후 유효해지는 비즈니스 코드(BE PRD 에러 코드 표 — interview.md 초안의 `INVALID_RESUME`는 폐기됨): `INVALID_INPUT_VALUE`(400, fieldErrors) · `RESUME_NOT_FOUND`(404) · `RESUME_FORBIDDEN`(403) · `RESUME_ANALYSIS_IN_PROGRESS`·`RESUME_ANALYSIS_FAILED`·`SESSION_ALREADY_IN_PROGRESS`(409) · `SESSION_ROOM_CREATE_FAILED`·`SESSION_TOKEN_ISSUE_FAILED`(500). FE가 분석 완료 이력서만 노출하므로 이력서 계열 코드는 정상 흐름에서 도달하지 않는다 — 코드별 세분 안내(재분석 유도 등)는 연동 확인 후속 티켓에서 다룬다.
+- **에러 처리**: 사용자가 스스로 조치할 수 있는 코드만 **전용 문구로 분기**한다 — `SESSION_ALREADY_IN_PROGRESS`(S003, 409)는 진행 중 세션 안내, `RESUME_ANALYSIS_IN_PROGRESS`(R010)·`RESUME_ANALYSIS_FAILED`(R011, 409)는 이력서 분석 상태 안내. FE가 분석 완료 이력서만 노출하므로 이력서 계열 코드는 목록 조회 후 상태가 바뀌는 레이스(삭제·재분석)에서만 도달한다. 그 외 코드(`INVALID_INPUT_VALUE` 400 · `RESUME_NOT_FOUND` 404 · `RESUME_FORBIDDEN` 403 · `SESSION_TOKEN_ISSUE_FAILED`/`SESSION_ROOM_CREATE_FAILED` 500 등)는 일반 실패 안내에 서버 메시지를 괄호 병기해 처리하고, 401 등 인증 실패는 기존 `request()`의 재발급·재로그인 흐름을 따른다. (BE 스토리 브랜치의 `SESSION_DISPATCH_FAILED` S004 · `SESSION_SUPERSEDED` S005는 develop 머지 전 — errorCodes.ts에 선반영되어 있고 일반 안내로 수렴한다.)
 - 마이크 선호 저장(`saveDevicePreferences`, HBB1-19)은 세션 생성 **성공 후 이동 직전**에 수행한다(실패한 시작 시도가 선호를 덮어쓰지 않게 순서 명시).
 
 ### 실행 조건
@@ -188,7 +187,8 @@
 - 완료 이력서가 없는 유저의 빠른 연습 요청 본문에 `interviewType: "FIVE_MIN"`이 있고 `resumeId` 필드가 없는지 확인
 - 빠른 연습 + 이력서 선택 요청 본문에 `resumeId`가 포함되는지 확인
 - ② 선택값이 `position`으로 전송되는지 확인 — 이력서가 없는 유저도 기본값 `"BACKEND"`가 전송됨
-- 필수 응답 필드(`livekitToken`·`livekitUrl`·`livekitRoom`)가 누락되거나 빈 문자열이면 저장·이동 없이 실패 안내가 표시되는지 확인 — `id` 부재는 실패가 아님
+- 필수 응답 필드(`livekitToken`·`livekitUrl`·`livekitRoom`은 비어 있지 않은 문자열, `id`는 숫자)가 하나라도 누락이면 저장·이동 없이 실패 안내가 표시되는지 확인
+- S003(진행 중 세션)·R010/R011(이력서 분석 상태) 응답 시 코드별 전용 안내가, 그 외 코드는 일반 안내 + 서버 메시지가 표시되는지 확인
 - 인증 실패(401)가 기존 `request()` 재발급·재로그인 흐름으로 처리되는지 확인
 
 ### 성능 요구사항
@@ -197,8 +197,8 @@
 
 ### 인터페이스 요구사항
 
-- 타입: 응답은 schema.ts `SessionTokenResponse` 사용(auth 패턴과 동일), 요청은 `src/api/types.ts` — `InterviewType = "FIVE_MIN" | "THIRTY_MIN"`, `CreateSessionRequest`(확장 제안 형태)
-- 클라이언트: `src/api/client.ts` — `createInterviewSession(body)` = `request("POST", "/api/v1/sessions", { body })` (기존 `fetchLiveKitSession` 제거)
+- 타입: 응답은 생성 스키마 `InterviewSessionCreateResponse`(client.ts가 `CreateSessionResponse`로 재노출), 요청은 `src/api/types.ts` — `InterviewType = "FIVE_MIN" | "THIRTY_MIN"`, `CreateSessionRequest`(생성 요청 타입 `InterviewSessionCreateRequest`와 구조 일치 — 어긋나면 컴파일 에러)
+- 클라이언트: `src/api/client.ts` — `createInterviewSession(body)` = orval 생성 `create` fetcher 위임 + envelope 언래핑 (이력서 도메인과 동일 패턴)
 - 훅: `src/api/hooks.ts` — `useCreateInterviewSession`(useMutation, 기존 `useLiveKitSession` 쿼리 제거)
 
 ### 제약사항
@@ -219,7 +219,7 @@
 
 세션 생성 결과를 면접 화면에 전달하고, 세션 없이 `/live`에 진입하는 경로를 차단한다.
 
-- **저장**: 토큰 발급 성공 시 sessionStorage `hbb.interview.session`에 `{ url, token, room, authSessionId }`를 저장하고 `/live`로 이동한다. `url`·`token`은 LiveKit 접속용, `room`은 응답의 룸 이름(표시·디버깅용), `authSessionId`는 **요청 시작 직전에 캡처한 인증 세션 ID**(`getAuthSnapshot().sessionId`) — 계정 교체 감지용(캡처·재대조 규칙은 아래). 세션 `id`는 응답에 있으면 함께 저장한다(`id?` — 종료·재연결 후속용, 현행 배포 스키마엔 아직 없음). 새로 발급받으면 덮어쓴다.
+- **저장**: 토큰 발급 성공 시 sessionStorage `hbb.interview.session`에 `{ url, token, room, authSessionId, id }`를 저장하고 `/live`로 이동한다. `url`·`token`은 LiveKit 접속용, `room`은 응답의 룸 이름(표시·디버깅용), `authSessionId`는 **요청 시작 직전에 캡처한 인증 세션 ID**(`getAuthSnapshot().sessionId`) — 계정 교체 감지용(캡처·재대조 규칙은 아래). 세션 `id`는 **필수 저장**한다(종료·재연결 등 후속 세션 API의 key). 새로 발급받으면 덮어쓴다.
 - **요청 중 계정 교체 방어**: `authSessionId`는 세션 생성 **요청 시작 직전에 캡처**하고, **응답 도착 후 현재 인증 세션과 캡처값을 재대조**한다 — 다르면 응답(토큰)을 폐기하고 저장·이동하지 않는다. 요청 대기 중 다른 탭에서 계정이 교체되면(A 요청 → B 로그인 → A 토큰 도착) 응답 후 현재 ID로 저장할 경우 B가 A의 토큰으로 `/live` 검증을 통과하기 때문이다(`request()`는 정상 응답의 세션 일치를 검사하지 않는다). 저장하는 `authSessionId`도 응답 후 현재 ID가 아니라 **캡처한 ID**다. (동일 계열 방어: `postLogout`의 `bodyFactory` 소유 세션 확인.)
 - **인증 세션 검증**: `/live` 로드 시 저장값의 `authSessionId`가 **현재 인증 세션과 일치할 때만** 사용한다. 불일치(로그아웃 후 다른 계정 로그인 등)면 저장값을 제거하고 `/setup`으로 리다이렉트한다 — 이전 계정의 유효한 LiveKit 토큰이 다음 사용자에게 넘어가지 않게. 방어를 이중으로: **인증 세션 전이(로그아웃 A→null·계정 교체 A→B) 시에도** 저장값을 제거한다 — 전이 관찰 지점은 기존 `AuthSessionObserver`(App.tsx, 루트 쿼리 캐시 위생 처리와 동일 지점).
 - **저장 실패 시**(시크릿 모드 쿼터 등) 이동하지 않고 세션 생성 실패와 동일한 인라인 안내를 표시한다 — 토큰 없이 `/live`에 가면 접속이 불가능하므로 장치 선호(비차단)와 달리 **차단**이 맞다. 실패 감지는 `saveInterviewSession`의 **boolean 반환값**으로 한다 — 예외를 삼키고 결과를 반환하지 않는 `saveDevicePreferences`와 달리, 호출자(SetupPage)가 `false`를 받으면 이동하지 않는다. 버려진 토큰의 서버 자원 점유는 없다 — 현 API는 토큰 발급뿐이고, 향후 세션 리소스 도입 시에는 준비 타임아웃(`PENDING → ABORTED`, interview.md §3)이 회수한다.
@@ -256,7 +256,7 @@
 
 ### 인터페이스 요구사항
 
-- 저장소: sessionStorage 키 `hbb.interview.session` — `{ url: string, token: string, room: string, authSessionId: string, id?: number }`
+- 저장소: sessionStorage 키 `hbb.interview.session` — `{ url: string, token: string, room: string, authSessionId: string, id: number }`. `id` 없는 저장분(구계약 잔존분)은 손상으로 취급해 로드 시 무효화한다(`/live` 게이트가 `/setup`으로 돌려보냄)
 - 모듈: `src/hooks/interviewSession.ts` — `saveInterviewSession(session): boolean`(성공 여부 반환 — 실패를 삼키는 `devicePreferences` 패턴과 의도적으로 다름) · `loadInterviewSession()`(손상 시 null) · `clearInterviewSession()`, `src/hooks/useLiveKitRoom.ts`(연결 룸 보관·인수 — `stashConnectedRoom`/`discardConnectedRoom`), `src/pages/InterviewPage.tsx`(게이트·접속 교체), `src/App.tsx`(`AuthSessionObserver` 전이 처리에 면접 세션 제거 추가)
 
 ### 제약사항
