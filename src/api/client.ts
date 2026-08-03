@@ -29,7 +29,10 @@ import type {
   NotificationItem,
   Profile,
   ReportDetail,
+  ReportListParams,
+  ReportPage,
   ReportStats,
+  ReportStatus,
   ReportSummary,
   Resume,
   ResumeStatus,
@@ -191,12 +194,147 @@ export const updateResumeParsed = async (
   structuredData: StructuredData,
 ): Promise<ResumeParsedResponse> => (await updateParsed(resumeId, { structuredData })).data ?? {};
 
-export const fetchReports = (): Promise<ReportSummary[]> => delay(fixtures.reports);
+/* ---------- 리포트 (실제 API) ---------- */
 
-export const fetchReportStats = (): Promise<ReportStats> => delay(fixtures.reportStats);
+/** 리포트 API에 면접 유형 필드가 없어 태그 자리를 채우는 임시 목값.
+    태그 필요성 검토 후 백엔드 연동 또는 제거 예정 (결정: 2026-08-03 목값 유지). */
+const MOCK_INTERVIEW_TYPE = "실전 30분";
 
-export const fetchReportDetail = (id: number | string): Promise<ReportDetail> =>
-  delay({ ...fixtures.reportDetail, id: Number(id) || 1 });
+/** 백엔드 리포트 응답 계약 — 매핑 원본. 화면은 이 형태를 직접 쓰지 않는다(UI 모델로 변환). */
+interface WeaknessTagCountRes {
+  tag: string;
+  count: number;
+}
+interface AxisScoresRes {
+  logicScore: number | null;
+  specificityScore: number | null;
+  technicalAccuracyScore: number | null;
+  deliveryScore: number | null; // 음성 분석 도입 전까지 항상 null
+}
+interface ReportSummaryRes {
+  reportId: number;
+  status: ReportStatus;
+  overallScore: number | null;
+  resumeFileName: string;
+  weaknessTagSummary: WeaknessTagCountRes[] | null;
+  createdAt: string;
+  completedAt: string | null;
+}
+interface ReportStatsRes {
+  totalCount: number;
+  avgScore: number | null;
+  bestScore: number | null;
+  monthlyDelta: number | null;
+  trend: { completedAt: string; overallScore: number | null }[];
+  axisAverages: AxisScoresRes;
+  weaknessSegments: WeaknessTagCountRes[];
+}
+interface ReportDetailRes {
+  reportId: number;
+  resumeFileName: string;
+  completedAt: string | null;
+  overallScore: number | null;
+  scores: AxisScoresRes;
+  questionCount: number;
+  summary: string;
+  weaknessTagSummary: WeaknessTagCountRes[] | null;
+  improvementTasks: { title: string; description: string }[] | null;
+  aiDisclaimer: string;
+}
+interface PageRes<T> {
+  content: T[];
+  page: number;
+  size: number;
+  totalElements: number;
+  hasNext: boolean;
+}
+
+/** 추이 축 라벨("6.03") — 월은 패딩 없음, 일은 두 자리 (fixtures 표기 관례 유지) */
+const formatShortDate = (iso: string): string => {
+  const d = new Date(iso);
+  return `${d.getMonth() + 1}.${String(d.getDate()).padStart(2, "0")}`;
+};
+
+/** 파일명 확장자 → UI 뱃지. 백엔드는 PDF만 허용(R002)하지만 표기는 파일명 기준으로 둔다. */
+const extOf = (fileName: string): "PDF" | "DOC" => (/\.docx?$/i.test(fileName) ? "DOC" : "PDF");
+
+/** 축 점수 객체 → UI 튜플. 전달력(delivery)은 null을 유지해 화면이 "음성 분석 예정"으로 처리한다. */
+const toAxisPairs = (s: AxisScoresRes): [string, number | null][] => [
+  ["논리 구성", s.logicScore],
+  ["답변 구체성", s.specificityScore],
+  ["기술 정확도", s.technicalAccuracyScore],
+  ["전달력", s.deliveryScore],
+];
+
+/** 지난달 대비 표시 — 비교 불가(null)면 빈 문자열, 그 외 부호를 붙인다. */
+const formatMonthlyDelta = (delta: number | null): string =>
+  delta === null || delta === undefined ? "" : `지난달 대비 ${delta >= 0 ? "+" : ""}${delta}`;
+
+/** 가장 잦은 약점 태그명 — 빈도 내림차순 첫 항목(없으면 빈 문자열). */
+const topWeaknessTag = (tags: WeaknessTagCountRes[]): string =>
+  tags.length === 0 ? "" : [...tags].sort((a, b) => b.count - a.count)[0].tag;
+
+const toUiReport = (r: ReportSummaryRes): ReportSummary => ({
+  id: r.reportId,
+  status: r.status,
+  date: formatDate(r.completedAt ?? r.createdAt),
+  score: r.overallScore, // 미완성이면 null — 화면이 "생성 중"으로 표시
+  title: r.resumeFileName, // 리포트에 별도 제목이 없어 사용 이력서명을 제목으로 쓴다
+  resumeName: r.resumeFileName,
+  resumeExt: extOf(r.resumeFileName),
+  type: MOCK_INTERVIEW_TYPE,
+  tags: (r.weaknessTagSummary ?? []).map((w) => w.tag),
+});
+
+export const fetchReports = async (params: ReportListParams): Promise<ReportPage> => {
+  const qs = new URLSearchParams();
+  if (params.status) qs.set("status", params.status); // 미지정은 전체(파라미터 생략)
+  qs.set("sort", params.sort);
+  qs.set("order", params.order);
+  qs.set("page", String(params.page));
+  qs.set("size", String(params.size));
+  const page = await request<PageRes<ReportSummaryRes>>("GET", `/api/v1/reports?${qs}`);
+  return {
+    items: page.content.map(toUiReport),
+    page: page.page,
+    size: page.size,
+    totalElements: page.totalElements,
+    hasNext: page.hasNext,
+  };
+};
+
+export const fetchReportStats = async (): Promise<ReportStats> => {
+  const s = await request<ReportStatsRes>("GET", "/api/v1/reports/stats");
+  return {
+    avgScore: s.avgScore,
+    avgDelta: formatMonthlyDelta(s.monthlyDelta),
+    totalCount: s.totalCount,
+    bestScore: s.bestScore,
+    trend: s.trend.map((t) => ({ d: formatShortDate(t.completedAt), s: t.overallScore ?? 0 })),
+    axisAverages: toAxisPairs(s.axisAverages),
+    weaknessSegments: s.weaknessSegments.map((w) => [w.tag, w.count]),
+  };
+};
+
+export const fetchReportDetail = async (id: number | string): Promise<ReportDetail> => {
+  const d = await request<ReportDetailRes>("GET", `/api/v1/reports/${id}`);
+  const weakness = d.weaknessTagSummary ?? [];
+  return {
+    id: d.reportId,
+    date: formatDate(d.completedAt ?? new Date().toISOString()),
+    resumeName: d.resumeFileName,
+    type: MOCK_INTERVIEW_TYPE,
+    score: d.overallScore,
+    summary: d.summary,
+    questionCount: d.questionCount,
+    axes: toAxisPairs(d.scores),
+    weaknesses: weakness.map((w) => [w.tag, w.count, d.questionCount]),
+    weaknessSummary: topWeaknessTag(weakness),
+    tasks: (d.improvementTasks ?? []).map((t) => [t.title, t.description]),
+    aiDisclaimer: d.aiDisclaimer,
+    timeline: [], // 답변별 타임라인 API 전까지 영역만 유지 — 연동하지 않는다
+  };
+};
 
 /* ---------- 면접 세션 (실제 API — orval 생성 fetcher 사용) ---------- */
 

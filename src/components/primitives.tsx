@@ -172,8 +172,11 @@ export function ScoreNum({
   );
 }
 
-/* ---------- 채점 축 바 (Progress, 브랜드 블루 fill) ---------- */
-export function AxisBar({ label, value }: { label: string; value: number }) {
+/* ---------- 채점 축 바 (Progress, 브랜드 블루 fill) ----------
+   value 가 null 이면 아직 평가되지 않은 축(전달력 — 음성 분석 도입 전)으로 보고
+   점수 대신 안내 문구를 표시한다. */
+export function AxisBar({ label, value }: { label: string; value: number | null }) {
+  const pending = value === null;
   return (
     <div>
       <div
@@ -189,15 +192,16 @@ export function AxisBar({ label, value }: { label: string; value: number }) {
         <span style={{ color: "var(--fg-default)" }}>{label}</span>
         <span
           style={{
-            color: "var(--fg-secondary)",
+            color: pending ? "var(--fg-tertiary)" : "var(--fg-secondary)",
             fontVariantNumeric: "tabular-nums",
             fontWeight: 600,
+            fontSize: pending ? 12.5 : 14,
           }}
         >
-          {value}
+          {pending ? "음성 분석 예정" : value}
         </span>
       </div>
-      <Progress value={value} />
+      <Progress value={pending ? 0 : value} />
     </div>
   );
 }

@@ -30,15 +30,41 @@ export interface Resume {
   progress?: number; // 분석 중일 때 진행률 (백엔드 status 기반 프론트 매핑)
 }
 
+/** 리포트 생성 상태 — 백엔드 ReportStatus enum과 동일 (미완성은 점수 없이 "생성 중") */
+export type ReportStatus = "PENDING" | "PROCESSING" | "COMPLETED" | "FAILED";
+
 export interface ReportSummary {
   id: number;
+  status: ReportStatus;
   date: string;
-  score: number;
+  score: number | null; // 미완성(PENDING/PROCESSING/FAILED)은 null → "생성 중" 표시
   title: string;
   resumeName: string;
   resumeExt: "PDF" | "DOC";
-  type: string; // 예: "실전 30분"
+  type: string; // 예: "실전 30분" — 리포트 API에 면접 유형 필드가 없어 현재는 목값
   tags: string[];
+}
+
+/** 리포트 목록 정렬 키·방향 (백엔드 지원 범위). */
+export type ReportSortKey = "createdAt" | "overallScore";
+export type ReportSortOrder = "asc" | "desc";
+
+/** 목록 조회 파라미터 — status 미지정은 전체(필터 없음). */
+export interface ReportListParams {
+  status?: ReportStatus;
+  sort: ReportSortKey;
+  order: ReportSortOrder;
+  page: number;
+  size: number;
+}
+
+/** 목록 페이지 결과 — 백엔드 PageResponse(content·page·size·totalElements·hasNext) 매핑. */
+export interface ReportPage {
+  items: ReportSummary[];
+  page: number;
+  size: number;
+  totalElements: number;
+  hasNext: boolean;
 }
 
 export interface TrendPoint {
@@ -47,16 +73,13 @@ export interface TrendPoint {
 }
 
 export interface ReportStats {
-  avgScore: number;
-  avgDelta: string; // 예: "지난달 대비 +5"
+  avgScore: number | null; // 완료 리포트 0건이면 null
+  avgDelta: string; // 예: "지난달 대비 +5" — 비교 불가(monthlyDelta null)면 빈 문자열
   totalCount: number;
-  bestScore: number;
+  bestScore: number | null;
   trend: TrendPoint[];
-  axisAverages: [string, number][];
+  axisAverages: [string, number | null][]; // 전달력은 음성 분석 도입 전까지 null
   weaknessSegments: [string, number][]; // [이름, 지적 횟수]
-  recentTrend: TrendPoint[]; // 대시보드 "최근 3회 흐름"
-  recentAvg: number;
-  recentDelta: number;
 }
 
 export interface TimelineItem {
@@ -71,14 +94,16 @@ export interface ReportDetail {
   id: number;
   date: string;
   resumeName: string;
-  type: string;
-  score: number;
-  rank: string; // 예: "상위 18% · 안정적"
-  axes: [string, number][];
+  type: string; // 리포트 API에 면접 유형 필드가 없어 현재는 목값
+  score: number | null;
+  summary: string; // 세션 총평
+  questionCount: number;
+  axes: [string, number | null][]; // 전달력은 음성 분석 도입 전까지 null
   weaknesses: [string, number, number][]; // [이름, 지적 횟수, 전체 질문 수]
   weaknessSummary: string; // 가장 잦은 약점 이름
   tasks: [string, string][];
-  timeline: TimelineItem[];
+  aiDisclaimer: string; // AI 분석 한계 안내 — 백엔드 값을 그대로 표시(하드코딩 금지)
+  timeline: TimelineItem[]; // 답변별 타임라인 API 전까지 항상 빈 배열
 }
 
 export interface Profile {

@@ -1,5 +1,6 @@
 /* ============================ 리포트 상세 (/reports/:id · /sample) ============================ */
 import { useParams } from "react-router";
+import { sampleReportDetail } from "../api/fixtures";
 import { useReportDetail } from "../api/hooks";
 import { Badge, Button, Card, Tag } from "../components/ds";
 import { Icon } from "../components/Icon";
@@ -11,7 +12,9 @@ export function ReportDetailPage({ sample = false }: { sample?: boolean }) {
   const nav = useNav();
   const params = useParams();
   const id = sample ? 1 : (params.id ?? 1);
-  const { data: report } = useReportDetail(id);
+  // 공개 예시(/sample)는 인증 API를 부르지 않고 정적 목데이터를 쓴다 (enabled=false)
+  const { data: fetched } = useReportDetail(id, !sample);
+  const report = sample ? sampleReportDetail : fetched;
 
   if (!report)
     return (
@@ -107,7 +110,7 @@ export function ReportDetailPage({ sample = false }: { sample?: boolean }) {
               종합 점수
             </SectionLabel>
             <div style={{ display: "flex", alignItems: "flex-end", gap: 6 }}>
-              <ScoreNum score={report.score} size={88} />
+              <ScoreNum score={report.score ?? 0} size={88} />
               <span
                 style={{
                   fontFamily: "var(--font-sans)",
@@ -124,13 +127,13 @@ export function ReportDetailPage({ sample = false }: { sample?: boolean }) {
             <div
               style={{
                 fontFamily: "var(--font-sans)",
-                fontSize: 14,
+                fontSize: 13,
                 fontWeight: 600,
                 color: "var(--blue-800)",
                 marginTop: 14,
               }}
             >
-              {report.rank}
+              질문 {report.questionCount}개
             </div>
           </Card>
           <Card>
@@ -142,6 +145,27 @@ export function ReportDetailPage({ sample = false }: { sample?: boolean }) {
             </div>
           </Card>
         </div>
+
+        {/* 총평 */}
+        {report.summary && (
+          <Card style={{ marginTop: 20 }}>
+            <SectionLabel style={{ marginBottom: 12 }}>총평</SectionLabel>
+            <p
+              style={{
+                fontFamily: "var(--font-sans)",
+                fontSize: 14.5,
+                fontWeight: 500,
+                lineHeight: 1.7,
+                color: "var(--fg-default)",
+                margin: 0,
+                whiteSpace: "pre-wrap",
+                wordBreak: "keep-all",
+              }}
+            >
+              {report.summary}
+            </p>
+          </Card>
+        )}
 
         {/* 약점 + 과제 */}
         <div
@@ -192,7 +216,7 @@ export function ReportDetailPage({ sample = false }: { sample?: boolean }) {
                   >
                     <div
                       style={{
-                        width: `${(n / total) * 100}%`,
+                        width: `${total ? (n / total) * 100 : 0}%`,
                         height: "100%",
                         borderRadius: "var(--radius-full)",
                         background: "var(--blue-800)",
@@ -452,6 +476,25 @@ export function ReportDetailPage({ sample = false }: { sample?: boolean }) {
             })}
           </div>
         </div>
+
+        {/* AI 분석 한계 안내 — 백엔드가 내려주는 문구를 그대로 표시(하드코딩 금지) */}
+        {report.aiDisclaimer && (
+          <p
+            style={{
+              fontFamily: "var(--font-sans)",
+              fontSize: 12.5,
+              fontWeight: 500,
+              lineHeight: 1.6,
+              color: "var(--fg-tertiary)",
+              marginTop: 28,
+              paddingTop: 16,
+              borderTop: "1px solid var(--border-subtle)",
+              wordBreak: "keep-all",
+            }}
+          >
+            {report.aiDisclaimer}
+          </p>
+        )}
       </div>
     </div>
   );
