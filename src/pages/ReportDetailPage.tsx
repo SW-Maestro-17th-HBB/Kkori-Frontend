@@ -131,7 +131,22 @@ export function ReportDetailPage({ sample = false }: { sample?: boolean }) {
               종합 점수
             </SectionLabel>
             <div style={{ display: "flex", alignItems: "flex-end", gap: 6 }}>
-              <ScoreNum score={report.score ?? 0} size={88} />
+              {/* 상세는 완료 리포트만 조회 가능해 점수가 있지만, null을 0점으로 오인시키지 않도록 방어한다 */}
+              {report.score === null ? (
+                <span
+                  style={{
+                    fontFamily: "var(--font-display)",
+                    fontWeight: 700,
+                    fontSize: 88,
+                    lineHeight: 0.9,
+                    color: "var(--fg-tertiary)",
+                  }}
+                >
+                  –
+                </span>
+              ) : (
+                <ScoreNum score={report.score} size={88} />
+              )}
               <span
                 style={{
                   fontFamily: "var(--font-sans)",
