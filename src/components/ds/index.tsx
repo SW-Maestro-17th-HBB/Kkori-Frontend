@@ -22,15 +22,17 @@ export function Button({
   onClick,
   style,
   children,
+  "aria-label": ariaLabel,
 }: {
-  variant?: "solid" | "assistive" | "outlined" | "text";
-  size?: "sm" | "md" | "lg";
-  fullWidth?: boolean;
-  leadingIcon?: ReactNode;
-  disabled?: boolean;
-  onClick?: MouseEventHandler<HTMLButtonElement>;
-  style?: CSSProperties;
-  children: ReactNode;
+  "variant"?: "solid" | "assistive" | "outlined" | "text";
+  "size"?: "sm" | "md" | "lg";
+  "fullWidth"?: boolean;
+  "leadingIcon"?: ReactNode;
+  "disabled"?: boolean;
+  "onClick"?: MouseEventHandler<HTMLButtonElement>;
+  "style"?: CSSProperties;
+  "children": ReactNode;
+  "aria-label"?: string;
 }) {
   const cls = [
     "wds-btn",
@@ -41,7 +43,14 @@ export function Button({
     .filter(Boolean)
     .join(" ");
   return (
-    <button type="button" className={cls} disabled={disabled} onClick={onClick} style={style}>
+    <button
+      type="button"
+      className={cls}
+      disabled={disabled}
+      onClick={onClick}
+      style={style}
+      aria-label={ariaLabel}
+    >
       {leadingIcon}
       {children}
     </button>
@@ -223,16 +232,22 @@ export function Chip({
   selected,
   onClick,
   children,
+  "aria-expanded": ariaExpanded,
+  "aria-haspopup": ariaHaspopup,
 }: {
-  selected?: boolean;
-  onClick?: MouseEventHandler<HTMLButtonElement>;
-  children: ReactNode;
+  "selected"?: boolean;
+  "onClick"?: MouseEventHandler<HTMLButtonElement>;
+  "children": ReactNode;
+  "aria-expanded"?: boolean;
+  "aria-haspopup"?: boolean | "menu" | "listbox";
 }) {
   return (
     <button
       type="button"
       className={`wds-chip${selected ? " wds-chip--selected" : ""}`}
       onClick={onClick}
+      aria-expanded={ariaExpanded}
+      aria-haspopup={ariaHaspopup}
     >
       {children}
     </button>

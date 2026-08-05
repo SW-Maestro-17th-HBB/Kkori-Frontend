@@ -250,12 +250,20 @@ function WeaknessDonut({ segments }: { segments: [string, number][] }) {
 function SortDropdown({ value, onChange }: { value: string; onChange: (key: string) => void }) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
+  const focusTrigger = () => ref.current?.querySelector<HTMLButtonElement>("button")?.focus();
   useEffect(() => {
     if (!open) return;
+    menuRef.current?.focus(); // 열리면 메뉴로 포커스를 옮긴다(키보드 진입점)
     const onDoc = (e: MouseEvent) => {
       if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
     };
-    const onKey = (e: KeyboardEvent) => e.key === "Escape" && setOpen(false);
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        setOpen(false);
+        focusTrigger(); // Esc 로 닫을 때 트리거로 포커스 복원(포커스 유실 방지)
+      }
+    };
     document.addEventListener("mousedown", onDoc);
     document.addEventListener("keydown", onKey);
     return () => {
@@ -266,13 +274,22 @@ function SortDropdown({ value, onChange }: { value: string; onChange: (key: stri
   const current = SORT_OPTIONS.find((o) => o.key === value) ?? SORT_OPTIONS[0];
   return (
     <div ref={ref} style={{ position: "relative" }}>
-      <Chip selected={open} onClick={() => setOpen((o) => !o)}>
+      <Chip
+        selected={open}
+        onClick={() => setOpen((o) => !o)}
+        aria-expanded={open}
+        aria-haspopup="listbox"
+      >
         정렬: {current.label} <Icon name="chevron-down" size={14} />
       </Chip>
       {open && (
         <div
+          ref={menuRef}
           role="listbox"
+          tabIndex={-1}
+          aria-label="정렬 기준"
           style={{
+            outline: "none",
             position: "absolute",
             top: "calc(100% + 6px)",
             right: 0,
@@ -296,6 +313,7 @@ function SortDropdown({ value, onChange }: { value: string; onChange: (key: stri
                 onClick={() => {
                   onChange(o.key);
                   setOpen(false);
+                  focusTrigger(); // 선택 후 트리거로 포커스 복원(키보드 사용자)
                 }}
                 style={{
                   display: "flex",

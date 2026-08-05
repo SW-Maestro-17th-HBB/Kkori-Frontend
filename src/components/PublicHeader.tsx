@@ -25,9 +25,9 @@ export function PublicHeader() {
           gap: 24,
         }}
       >
-        <button className="linkbtn" onClick={() => nav("landing")} aria-label="홈으로">
+        <Button variant="text" onClick={() => nav("landing")} aria-label="홈으로">
           <Wordmark />
-        </button>
+        </Button>
         <div style={{ flex: 1 }} />
         <Button variant="solid" onClick={() => nav("auth")}>
           로그인
