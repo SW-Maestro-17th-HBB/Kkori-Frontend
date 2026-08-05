@@ -5,7 +5,14 @@ import { useReports, useReportStats } from "../api/hooks";
 import { useReportStatusStream } from "../api/reportStatusStream";
 import { Button, Chip, Tag } from "../components/ds";
 import { Icon } from "../components/Icon";
-import { Display, DocThumb, ScoreNum, SectionLabel, WeakTag } from "../components/primitives";
+import {
+  Display,
+  DocThumb,
+  PendingScore,
+  ScoreNum,
+  SectionLabel,
+  WeakTag,
+} from "../components/primitives";
 import { TopNav } from "../components/TopNav";
 import { reportDetailPath } from "../routes";
 import type { ReportSortKey, ReportSortOrder, ReportStatus, TrendPoint } from "../api/types";
@@ -33,6 +40,16 @@ const STATUS_FILTERS: readonly { label: string; value?: ReportStatus }[] = [
 ];
 
 const PAGE_SIZE = 20;
+
+/** 로딩·에러·빈 상태를 보여주는 표 셀 공통 스타일 */
+const STATE_CELL = {
+  textAlign: "center",
+  padding: "48px 0",
+  color: "var(--fg-tertiary)",
+  fontFamily: "var(--font-sans)",
+  fontSize: 14,
+  fontWeight: 500,
+} as const;
 
 /* 점수 추이 — SVG 라인 + HTML 오버레이 점·숫자
    (preserveAspectRatio="none" 왜곡을 오버레이로 회피) */
@@ -229,23 +246,6 @@ function WeaknessDonut({ segments }: { segments: [string, number][] }) {
   );
 }
 
-/* 미완성 리포트의 점수 자리 — 점수 대신 생성 상태를 표시 (report.md §2) */
-function PendingScore({ status }: { status: ReportStatus }) {
-  const failed = status === "FAILED";
-  return (
-    <span
-      style={{
-        fontFamily: "var(--font-sans)",
-        fontSize: 12.5,
-        fontWeight: 600,
-        color: failed ? "var(--fg-tertiary)" : "var(--blue-800)",
-      }}
-    >
-      {failed ? "생성 실패" : "생성 중"}
-    </span>
-  );
-}
-
 /* 정렬 드롭다운 — Chip 트리거 + 아래로 열리는 옵션 메뉴 (바깥 클릭·Esc로 닫힘) */
 function SortDropdown({ value, onChange }: { value: string; onChange: (key: string) => void }) {
   const [open, setOpen] = useState(false);
@@ -329,7 +329,12 @@ export function ReportListPage() {
   const [status, setStatus] = useState<ReportStatus | undefined>(undefined);
   const [page, setPage] = useState(0);
   const sortOpt = SORT_OPTIONS.find((o) => o.key === sortKey) ?? SORT_OPTIONS[0];
-  const { data: pageData } = useReports({
+  const {
+    data: pageData,
+    isPending,
+    isError,
+    refetch,
+  } = useReports({
     status,
     sort: sortOpt.sort,
     order: sortOpt.order,
@@ -568,75 +573,90 @@ export function ReportListPage() {
             </tr>
           </thead>
           <tbody>
-            {rows.map((r) => (
-              <tr
-                key={r.id}
-                className="hbb-table__row"
-                // 상세는 완료된 리포트만 조회 가능(RP003/RP004) — 미완성 행은 이동시키지 않는다
-                onClick={() => r.status === "COMPLETED" && navigate(reportDetailPath(r.id))}
-                style={{ cursor: r.status === "COMPLETED" ? "pointer" : "default" }}
-              >
-                <td style={{ color: "var(--fg-secondary)" }}>{r.date}</td>
-                <td>
-                  <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                    <DocThumb ext={r.resumeExt} size={26} />
-                    <span style={{ fontWeight: 600, color: "var(--fg-strong)" }}>
-                      {r.resumeName}
-                    </span>
-                  </div>
-                </td>
-                <td>
-                  <Tag style={{ height: 26, fontSize: 12 }}>{r.type}</Tag>
-                </td>
-                <td>
-                  {r.score === null ? (
-                    <PendingScore status={r.status} />
-                  ) : (
-                    <ScoreNum score={r.score} size={22} suffix="/100" />
-                  )}
-                </td>
-                <td>
-                  <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-                    {r.tags.map((t) => (
-                      <WeakTag key={t}>{t}</WeakTag>
-                    ))}
-                  </div>
-                </td>
-                <td style={{ textAlign: "right", color: "var(--fg-tertiary)" }}>
-                  {/* 완료 행만 이동 가능 — chevron 을 키보드 접근 버튼으로(행 클릭은 마우스 편의).
-                      미완성 행은 chevron 을 숨겨 클릭 가능 오해를 없앤다 */}
-                  {r.status === "COMPLETED" && (
-                    <button
-                      className="linkbtn"
-                      aria-label={`${r.resumeName} 리포트 상세 보기`}
-                      onClick={(e) => {
-                        e.stopPropagation(); // 행 onClick 과 중복 이동 방지
-                        navigate(reportDetailPath(r.id));
-                      }}
-                      style={{ display: "inline-flex", color: "var(--fg-tertiary)" }}
-                    >
-                      <Icon name="chevron-right" size={16} />
-                    </button>
-                  )}
+            {isPending ? (
+              <tr>
+                <td colSpan={6} style={STATE_CELL}>
+                  불러오는 중…
                 </td>
               </tr>
-            ))}
-            {pageData && rows.length === 0 && (
+            ) : isError ? (
               <tr>
-                <td
-                  colSpan={6}
-                  style={{
-                    textAlign: "center",
-                    padding: "48px 0",
-                    color: "var(--fg-tertiary)",
-                    fontFamily: "var(--font-sans)",
-                    fontSize: 14,
-                    fontWeight: 500,
-                  }}
-                >
+                <td colSpan={6} style={STATE_CELL}>
+                  <div
+                    style={{
+                      display: "flex",
+                      flexDirection: "column",
+                      alignItems: "center",
+                      gap: 12,
+                    }}
+                  >
+                    리포트를 불러오지 못했어요.
+                    <Button variant="assistive" onClick={() => refetch()}>
+                      다시 시도
+                    </Button>
+                  </div>
+                </td>
+              </tr>
+            ) : rows.length === 0 ? (
+              <tr>
+                <td colSpan={6} style={STATE_CELL}>
                   {status ? "해당 상태의 리포트가 없어요." : "아직 리포트가 없어요."}
                 </td>
               </tr>
+            ) : (
+              rows.map((r) => (
+                <tr
+                  key={r.id}
+                  className="hbb-table__row"
+                  // 상세는 완료된 리포트만 조회 가능(RP003/RP004) — 미완성 행은 이동시키지 않는다
+                  onClick={() => r.status === "COMPLETED" && navigate(reportDetailPath(r.id))}
+                  style={{ cursor: r.status === "COMPLETED" ? "pointer" : "default" }}
+                >
+                  <td style={{ color: "var(--fg-secondary)" }}>{r.date}</td>
+                  <td>
+                    <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                      <DocThumb ext={r.resumeExt} size={26} />
+                      <span style={{ fontWeight: 600, color: "var(--fg-strong)" }}>
+                        {r.resumeName}
+                      </span>
+                    </div>
+                  </td>
+                  <td>
+                    <Tag style={{ height: 26, fontSize: 12 }}>{r.type}</Tag>
+                  </td>
+                  <td>
+                    {r.score === null ? (
+                      <PendingScore status={r.status} />
+                    ) : (
+                      <ScoreNum score={r.score} size={22} suffix="/100" />
+                    )}
+                  </td>
+                  <td>
+                    <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                      {r.tags.map((t) => (
+                        <WeakTag key={t}>{t}</WeakTag>
+                      ))}
+                    </div>
+                  </td>
+                  <td style={{ textAlign: "right", color: "var(--fg-tertiary)" }}>
+                    {/* 완료 행만 이동 가능 — chevron 을 키보드 접근 버튼으로(행 클릭은 마우스 편의).
+                      미완성 행은 chevron 을 숨겨 클릭 가능 오해를 없앤다 */}
+                    {r.status === "COMPLETED" && (
+                      <button
+                        className="linkbtn"
+                        aria-label={`${r.resumeName} 리포트 상세 보기`}
+                        onClick={(e) => {
+                          e.stopPropagation(); // 행 onClick 과 중복 이동 방지
+                          navigate(reportDetailPath(r.id));
+                        }}
+                        style={{ display: "inline-flex", color: "var(--fg-tertiary)" }}
+                      >
+                        <Icon name="chevron-right" size={16} />
+                      </button>
+                    )}
+                  </td>
+                </tr>
+              ))
             )}
           </tbody>
         </table>

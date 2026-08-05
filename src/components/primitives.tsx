@@ -3,6 +3,7 @@
    단일 브랜드 블루(--blue-800) 액센트 · 쿨 뉴트럴 · 헤어라인 · 플랫.
    ============================================================ */
 import type { CSSProperties, ElementType, ReactNode } from "react";
+import type { ReportStatus } from "../api/types";
 import { Badge, Progress, Tag } from "./ds";
 import { Icon } from "./Icon";
 
@@ -126,6 +127,25 @@ export function StatusBadge({
 /* ---------- 약점 태그 (중립 Tag) ---------- */
 export function WeakTag({ children }: { children: ReactNode }) {
   return <Tag style={{ height: 26, fontSize: 12 }}>{children}</Tag>;
+}
+
+/* ---------- 미완성 리포트 점수 자리 표시 (생성 중/실패) — 목록·대시보드 공용 ----------
+   완료 전 리포트는 점수 대신 상태를 보여준다 (report.md §2). width 를 주면 고정폭 레이아웃 유지. */
+export function PendingScore({ status, width }: { status: ReportStatus; width?: number }) {
+  const failed = status === "FAILED";
+  return (
+    <span
+      style={{
+        ...(width !== undefined ? { width, flexShrink: 0 } : null),
+        fontFamily: "var(--font-sans)",
+        fontSize: 12.5,
+        fontWeight: 600,
+        color: failed ? "var(--fg-tertiary)" : "var(--blue-800)",
+      }}
+    >
+      {failed ? "생성 실패" : "생성 중"}
+    </span>
+  );
 }
 
 /* ---------- 점수 (대형 브랜드 블루 숫자) ---------- */

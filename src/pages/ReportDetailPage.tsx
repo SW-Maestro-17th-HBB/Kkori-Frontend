@@ -14,16 +14,50 @@ export function ReportDetailPage({ sample = false }: { sample?: boolean }) {
   const params = useParams();
   const id = sample ? 1 : (params.id ?? 1);
   // 공개 예시(/sample)는 인증 API를 부르지 않고 정적 목데이터를 쓴다 (enabled=false)
-  const { data: fetched } = useReportDetail(id, !sample);
+  const { data: fetched, isError, refetch } = useReportDetail(id, !sample);
   const report = sample ? sampleReportDetail : fetched;
   // 타임라인은 상세와 독립 조회(병렬) — 실패해도 상세는 그대로 뜨고 타임라인 영역만 빈다
   const { data: fetchedTimeline } = useReportTimeline(id, !sample);
   const timeline = sample ? sampleTimeline : (fetchedTimeline ?? []);
 
+  // sample 은 항상 정적 데이터가 있어 이 분기에 오지 않는다 — 실제 조회의 로딩·에러만 처리
   if (!report)
     return (
       <div style={{ background: "var(--bg-canvas)", minHeight: "100vh" }}>
         {sample ? <PublicHeader /> : <TopNav active="report" />}
+        <div
+          style={{ maxWidth: 1040, margin: "0 auto", padding: "80px 40px", textAlign: "center" }}
+        >
+          {isError ? (
+            <div
+              style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 16 }}
+            >
+              <p
+                style={{
+                  fontFamily: "var(--font-sans)",
+                  fontSize: 15,
+                  color: "var(--fg-secondary)",
+                }}
+              >
+                리포트를 불러오지 못했어요.
+              </p>
+              <div style={{ display: "flex", gap: 10 }}>
+                <Button variant="assistive" onClick={() => refetch()}>
+                  다시 시도
+                </Button>
+                <Button variant="outlined" onClick={() => nav("reportList")}>
+                  리포트 목록
+                </Button>
+              </div>
+            </div>
+          ) : (
+            <p
+              style={{ fontFamily: "var(--font-sans)", fontSize: 15, color: "var(--fg-tertiary)" }}
+            >
+              불러오는 중…
+            </p>
+          )}
+        </div>
       </div>
     );
 

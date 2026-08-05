@@ -8,6 +8,7 @@ import { Icon } from "../components/Icon";
 import {
   Display,
   DocThumb,
+  PendingScore,
   ScoreNum,
   Section,
   SectionLabel,
@@ -204,18 +205,7 @@ export function DashboardPage() {
                 }}
               >
                 {r.score === null ? (
-                  <span
-                    style={{
-                      width: 38,
-                      flexShrink: 0,
-                      fontFamily: "var(--font-sans)",
-                      fontSize: 12.5,
-                      fontWeight: 600,
-                      color: r.status === "FAILED" ? "var(--fg-tertiary)" : "var(--blue-800)",
-                    }}
-                  >
-                    {r.status === "FAILED" ? "생성 실패" : "생성 중"}
-                  </span>
+                  <PendingScore status={r.status} width={38} />
                 ) : (
                   <ScoreNum score={r.score} size={38} />
                 )}

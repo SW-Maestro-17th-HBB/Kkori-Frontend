@@ -88,7 +88,7 @@ export const sampleTimeline: TimelineEntry[] = [
   {
     questionNumber: 1,
     isTail: false,
-    parentQuestionNumber: 1,
+    parentQuestionNumber: null, // MAIN 은 부모가 없다(서버 계약과 동일)
     question: "자기소개를 부탁드려요.",
     answer: "안녕하세요, 3년차 백엔드 개발자입니다. 대용량 트래픽 처리 경험이 있습니다.",
     evaluation: {
@@ -102,16 +102,10 @@ export const sampleTimeline: TimelineEntry[] = [
   {
     questionNumber: 2,
     isTail: false,
-    parentQuestionNumber: 2,
+    parentQuestionNumber: null,
     question: "최근 프로젝트의 기술 스택 선택 이유는?",
     answer: "실시간성이 중요해 Redis Streams를 도입했고, 처리량이 3배 개선됐습니다.",
-    evaluation: {
-      logicScore: 88,
-      specificityScore: 84,
-      technicalAccuracyScore: 90,
-      feedback: "기술 정확도가 우수하고 근거가 구체적입니다.",
-      weaknessTags: [],
-    },
+    evaluation: null, // 평가가 없는 방어 케이스 시연 — 상세 화면에서 평가 영역만 숨는다
   },
   {
     questionNumber: 3,
