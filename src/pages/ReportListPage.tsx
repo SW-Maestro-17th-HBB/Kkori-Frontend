@@ -603,7 +603,21 @@ export function ReportListPage() {
                   </div>
                 </td>
                 <td style={{ textAlign: "right", color: "var(--fg-tertiary)" }}>
-                  <Icon name="chevron-right" size={16} />
+                  {/* 완료 행만 이동 가능 — chevron 을 키보드 접근 버튼으로(행 클릭은 마우스 편의).
+                      미완성 행은 chevron 을 숨겨 클릭 가능 오해를 없앤다 */}
+                  {r.status === "COMPLETED" && (
+                    <button
+                      className="linkbtn"
+                      aria-label={`${r.resumeName} 리포트 상세 보기`}
+                      onClick={(e) => {
+                        e.stopPropagation(); // 행 onClick 과 중복 이동 방지
+                        navigate(reportDetailPath(r.id));
+                      }}
+                      style={{ display: "inline-flex", color: "var(--fg-tertiary)" }}
+                    >
+                      <Icon name="chevron-right" size={16} />
+                    </button>
+                  )}
                 </td>
               </tr>
             ))}

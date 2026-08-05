@@ -37,6 +37,7 @@ import type {
   Resume,
   ResumeStatus,
   Subscription,
+  TimelineEntry,
 } from "./types";
 
 const delay = <T>(data: T, ms = 120): Promise<T> =>
@@ -310,7 +311,11 @@ export const fetchReportStats = async (): Promise<ReportStats> => {
     avgDelta: formatMonthlyDelta(s.monthlyDelta),
     totalCount: s.totalCount,
     bestScore: s.bestScore,
-    trend: s.trend.map((t) => ({ d: formatShortDate(t.completedAt), s: t.overallScore ?? 0 })),
+    // 점수 없는 항목은 추이에서 제외한다 — 0으로 치환하면 차트 범위(55~90) 밖 급락으로 오해된다.
+    // (백엔드 trend는 완료 리포트만 담아 실제로는 비어 있지 않지만, 타입상 null을 방어한다)
+    trend: s.trend
+      .filter((t): t is { completedAt: string; overallScore: number } => t.overallScore !== null)
+      .map((t) => ({ d: formatShortDate(t.completedAt), s: t.overallScore })),
     axisAverages: toAxisPairs(s.axisAverages),
     weaknessSegments: s.weaknessSegments.map((w) => [w.tag, w.count]),
   };
@@ -332,8 +337,43 @@ export const fetchReportDetail = async (id: number | string): Promise<ReportDeta
     weaknessSummary: topWeaknessTag(weakness),
     tasks: (d.improvementTasks ?? []).map((t) => [t.title, t.description]),
     aiDisclaimer: d.aiDisclaimer,
-    timeline: [], // 답변별 타임라인 API 전까지 영역만 유지 — 연동하지 않는다
   };
+};
+
+interface TimelineItemRes {
+  questionNumber: number;
+  questionType: string; // MAIN | TAIL
+  parentQuestionNumber: number | null;
+  question: string;
+  answer: string;
+  evaluation: {
+    logicScore: number | null;
+    specificityScore: number | null;
+    technicalAccuracyScore: number | null;
+    feedback: string;
+    weaknessTags: string[] | null;
+  } | null;
+}
+
+/** 질문-답변 타임라인 — 상세와 독립(병렬 호출 가능). COMPLETED 리포트만, 페이지네이션 없음. */
+export const fetchReportTimeline = async (id: number | string): Promise<TimelineEntry[]> => {
+  const data = await request<{ items: TimelineItemRes[] }>("GET", `/api/v1/reports/${id}/timeline`);
+  return data.items.map((it) => ({
+    questionNumber: it.questionNumber,
+    isTail: it.questionType === "TAIL",
+    parentQuestionNumber: it.parentQuestionNumber,
+    question: it.question,
+    answer: it.answer,
+    evaluation: it.evaluation
+      ? {
+          logicScore: it.evaluation.logicScore,
+          specificityScore: it.evaluation.specificityScore,
+          technicalAccuracyScore: it.evaluation.technicalAccuracyScore,
+          feedback: it.evaluation.feedback,
+          weaknessTags: it.evaluation.weaknessTags ?? [],
+        }
+      : null,
+  }));
 };
 
 /* ---------- 면접 세션 (실제 API — orval 생성 fetcher 사용) ---------- */

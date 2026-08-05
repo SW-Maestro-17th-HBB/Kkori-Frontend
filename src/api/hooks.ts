@@ -7,6 +7,7 @@ import {
   fetchReportDetail,
   fetchReports,
   fetchReportStats,
+  fetchReportTimeline,
   fetchResumeParsed,
   fetchResumes,
   fetchSubscription,
@@ -189,6 +190,14 @@ export const useReportDetail = (id: number | string, enabled = true) =>
   useQuery({
     queryKey: ["reports", "detail", String(id)],
     queryFn: () => fetchReportDetail(id),
+    enabled,
+  });
+
+/** 질문-답변 타임라인 — 상세와 독립 조회(병렬). enabled=false 는 /sample 정적 데이터용. */
+export const useReportTimeline = (id: number | string, enabled = true) =>
+  useQuery({
+    queryKey: ["reports", "timeline", String(id)],
+    queryFn: () => fetchReportTimeline(id),
     enabled,
   });
 

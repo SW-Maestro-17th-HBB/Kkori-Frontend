@@ -2,7 +2,7 @@
    목 데이터 — 프로토타입 하드코딩 값 그대로.
    API 연동 시 client.ts의 fetch 구현만 교체하면 됨.
    ============================================================ */
-import type { NotificationItem, Profile, ReportDetail, Subscription } from "./types";
+import type { NotificationItem, Profile, ReportDetail, Subscription, TimelineEntry } from "./types";
 
 export const profile: Profile = {
   name: "홍길동",
@@ -81,27 +81,50 @@ export const sampleReportDetail: ReportDetail = {
   ],
   aiDisclaimer:
     "이 리포트는 AI가 자동 생성한 분석 결과로, 실제 면접 평가와 다를 수 있습니다. 참고용으로 활용해 주세요.",
-  timeline: [
-    {
-      q: "자기소개를 부탁드려요.",
-      score: 80,
-      tail: false,
-      note: "두괄식으로 시작하면 더 좋아요",
-      lines: 2,
-    },
-    {
-      q: "최근 프로젝트의 기술 스택 선택 이유는?",
-      score: 88,
-      tail: false,
-      note: "기술 정확도 우수 · 근거 구체적",
-      lines: 3,
-    },
-    {
-      q: "그 결정에서 가장 어려웠던 점은?",
-      score: 73,
-      tail: true,
-      note: "답변 속도 빠름 · 사례 부족",
-      lines: 2,
-    },
-  ],
 };
+
+/** 공개 예시(/sample) 타임라인 — 상세와 같은 이유로 정적 데이터. TAIL 항목·답변 없음·평가 null 케이스 시연 포함. */
+export const sampleTimeline: TimelineEntry[] = [
+  {
+    questionNumber: 1,
+    isTail: false,
+    parentQuestionNumber: 1,
+    question: "자기소개를 부탁드려요.",
+    answer: "안녕하세요, 3년차 백엔드 개발자입니다. 대용량 트래픽 처리 경험이 있습니다.",
+    evaluation: {
+      logicScore: 80,
+      specificityScore: 75,
+      technicalAccuracyScore: 82,
+      feedback: "두괄식으로 시작하면 더 좋아요. 핵심 강점을 첫 문장에 배치해 보세요.",
+      weaknessTags: ["두괄식 부족"],
+    },
+  },
+  {
+    questionNumber: 2,
+    isTail: false,
+    parentQuestionNumber: 2,
+    question: "최근 프로젝트의 기술 스택 선택 이유는?",
+    answer: "실시간성이 중요해 Redis Streams를 도입했고, 처리량이 3배 개선됐습니다.",
+    evaluation: {
+      logicScore: 88,
+      specificityScore: 84,
+      technicalAccuracyScore: 90,
+      feedback: "기술 정확도가 우수하고 근거가 구체적입니다.",
+      weaknessTags: [],
+    },
+  },
+  {
+    questionNumber: 3,
+    isTail: true,
+    parentQuestionNumber: 2,
+    question: "그 결정에서 가장 어려웠던 점은?",
+    answer: "",
+    evaluation: {
+      logicScore: 70,
+      specificityScore: 62,
+      technicalAccuracyScore: 74,
+      feedback: "답변 속도가 다소 빠르고 사례가 부족합니다.",
+      weaknessTags: ["말 속도 빠름", "근거 부족"],
+    },
+  },
+];

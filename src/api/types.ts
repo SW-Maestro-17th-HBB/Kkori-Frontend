@@ -82,12 +82,22 @@ export interface ReportStats {
   weaknessSegments: [string, number][]; // [이름, 지적 횟수]
 }
 
-export interface TimelineItem {
-  q: string;
-  score: number;
-  tail: boolean;
-  note: string;
-  lines: number;
+export interface TimelineEvaluation {
+  logicScore: number | null;
+  specificityScore: number | null;
+  technicalAccuracyScore: number | null;
+  feedback: string;
+  weaknessTags: string[];
+}
+
+/** 타임라인 항목 — 질문 1개(+답변+평가). 백엔드 GET /reports/{id}/timeline 매핑. */
+export interface TimelineEntry {
+  questionNumber: number;
+  isTail: boolean; // questionType === "TAIL"
+  parentQuestionNumber: number | null;
+  question: string;
+  answer: string; // 빈 문자열이면 "답변 없음"으로 표시
+  evaluation: TimelineEvaluation | null; // null이면 평가 영역만 숨긴다
 }
 
 export interface ReportDetail {
@@ -103,7 +113,7 @@ export interface ReportDetail {
   weaknessSummary: string; // 가장 잦은 약점 이름
   tasks: [string, string][];
   aiDisclaimer: string; // AI 분석 한계 안내 — 백엔드 값을 그대로 표시(하드코딩 금지)
-  timeline: TimelineItem[]; // 답변별 타임라인 API 전까지 항상 빈 배열
+  // 타임라인은 별도 API(GET /reports/{id}/timeline)로 분리 조회한다 (useReportTimeline)
 }
 
 export interface Profile {

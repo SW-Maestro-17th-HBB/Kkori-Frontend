@@ -194,10 +194,14 @@ export function DashboardPage() {
               <button
                 key={r.id}
                 className="linkbtn report-row"
-                // 상세는 완료된 리포트만 조회 가능(RP003/RP004) — 미완성 행은 이동을 막는다
-                disabled={r.status !== "COMPLETED"}
-                onClick={() => navigate(reportDetailPath(r.id))}
-                style={{ borderTop: i ? "1px solid var(--border-subtle)" : "none" }}
+                // 상세는 완료된 리포트만 조회 가능(RP003/RP004) — 미완성 행은 이동만 막는다.
+                // disabled 대신 aria-disabled 로 포커스·낭독(날짜·상태 등)은 유지한다(접근성)
+                aria-disabled={r.status !== "COMPLETED"}
+                onClick={() => r.status === "COMPLETED" && navigate(reportDetailPath(r.id))}
+                style={{
+                  borderTop: i ? "1px solid var(--border-subtle)" : "none",
+                  cursor: r.status === "COMPLETED" ? "pointer" : "default",
+                }}
               >
                 {r.score === null ? (
                   <span

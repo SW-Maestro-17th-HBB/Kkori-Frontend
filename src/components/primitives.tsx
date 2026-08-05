@@ -201,7 +201,12 @@ export function AxisBar({ label, value }: { label: string; value: number | null 
           {pending ? "음성 분석 예정" : value}
         </span>
       </div>
-      <Progress value={pending ? 0 : value} />
+      {value === null ? (
+        // 미평가 축 — progressbar 역할 없이 빈 트랙만 그린다(스크린리더가 "0점"으로 읽지 않게)
+        <div className="wds-progress" aria-hidden="true" />
+      ) : (
+        <Progress value={value} />
+      )}
     </div>
   );
 }
