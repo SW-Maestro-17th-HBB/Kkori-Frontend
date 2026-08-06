@@ -1,7 +1,8 @@
 /* ============================ 랜딩 (hbb.kr) ============================ */
 import { Badge, Button, Card } from "../components/ds";
 import { HbbFooter } from "../components/HbbFooter";
-import { AxisBar, Display, ScoreNum, Wordmark } from "../components/primitives";
+import { AxisBar, Display, ScoreNum } from "../components/primitives";
+import { PublicHeader } from "../components/PublicHeader";
 import { useNav } from "../hooks/useNav";
 
 export function LandingPage() {
@@ -22,32 +23,7 @@ export function LandingPage() {
   ];
   return (
     <div style={{ background: "var(--bg-canvas)" }}>
-      {/* 헤더 */}
-      <header
-        style={{
-          height: 60,
-          background: "var(--bg-surface)",
-          borderBottom: "1px solid var(--border-subtle)",
-        }}
-      >
-        <div
-          style={{
-            maxWidth: 1120,
-            margin: "0 auto",
-            height: "100%",
-            padding: "0 28px",
-            display: "flex",
-            alignItems: "center",
-            gap: 24,
-          }}
-        >
-          <Wordmark />
-          <div style={{ flex: 1 }} />
-          <Button variant="solid" onClick={() => nav("auth")}>
-            로그인
-          </Button>
-        </div>
-      </header>
+      <PublicHeader />
 
       {/* 히어로 — 그래디언트 배너 */}
       <section style={{ maxWidth: 1120, margin: "0 auto", padding: "36px 28px 0" }}>

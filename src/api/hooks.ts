@@ -7,6 +7,7 @@ import {
   fetchReportDetail,
   fetchReports,
   fetchReportStats,
+  fetchReportTimeline,
   fetchResumeParsed,
   fetchResumes,
   fetchSubscription,
@@ -19,8 +20,17 @@ import {
   uploadResume,
 } from "./client";
 import type { StructuredData } from "./client";
+import type { ReportListParams } from "./types";
 import { clearSignupSession, clearTokens, getAuthSnapshot } from "./tokenStore";
 import { useNav } from "../hooks/useNav";
+
+/** 목록 조회 기본값 — 최신순 첫 페이지. 대시보드처럼 파라미터 없이 부를 때 쓰인다. */
+export const DEFAULT_REPORT_PARAMS: ReportListParams = {
+  sort: "createdAt",
+  order: "desc",
+  page: 0,
+  size: 20,
+};
 
 /* ---------- 인증 ---------- */
 
@@ -165,15 +175,30 @@ export const useReanalyzeResume = () => {
   });
 };
 
-export const useReports = () => useQuery({ queryKey: ["reports"], queryFn: fetchReports });
+export const useReports = (params: ReportListParams = DEFAULT_REPORT_PARAMS) =>
+  useQuery({
+    // params 를 키에 실어 정렬·필터·페이지별로 캐시를 분리한다. SSE 무효화(["reports"])는 접두사 매칭이라 모두 갱신.
+    queryKey: ["reports", params],
+    queryFn: () => fetchReports(params),
+  });
 
 export const useReportStats = () =>
   useQuery({ queryKey: ["reports", "stats"], queryFn: fetchReportStats });
 
-export const useReportDetail = (id: number | string) =>
+/** enabled=false 는 공개 예시(/sample)에서 인증 API 호출을 막고 정적 목데이터를 쓰기 위함이다. */
+export const useReportDetail = (id: number | string, enabled = true) =>
   useQuery({
     queryKey: ["reports", "detail", String(id)],
     queryFn: () => fetchReportDetail(id),
+    enabled,
+  });
+
+/** 질문-답변 타임라인 — 상세와 독립 조회(병렬). enabled=false 는 /sample 정적 데이터용. */
+export const useReportTimeline = (id: number | string, enabled = true) =>
+  useQuery({
+    queryKey: ["reports", "timeline", String(id)],
+    queryFn: () => fetchReportTimeline(id),
+    enabled,
   });
 
 /** 면접 세션 생성 — 룸·토큰을 발급하는 비멱등 POST 라 mutation

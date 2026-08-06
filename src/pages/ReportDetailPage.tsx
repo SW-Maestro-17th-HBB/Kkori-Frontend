@@ -1,9 +1,11 @@
 /* ============================ 리포트 상세 (/reports/:id · /sample) ============================ */
 import { useParams } from "react-router";
-import { useReportDetail } from "../api/hooks";
+import { sampleReportDetail, sampleTimeline } from "../api/fixtures";
+import { useReportDetail, useReportTimeline } from "../api/hooks";
 import { Badge, Button, Card, Tag } from "../components/ds";
 import { Icon } from "../components/Icon";
-import { AxisBar, Display, ScoreNum, SectionLabel } from "../components/primitives";
+import { AxisBar, Display, ScoreNum, SectionLabel, WeakTag } from "../components/primitives";
+import { PublicHeader } from "../components/PublicHeader";
 import { TopNav } from "../components/TopNav";
 import { useNav } from "../hooks/useNav";
 
@@ -11,18 +13,57 @@ export function ReportDetailPage({ sample = false }: { sample?: boolean }) {
   const nav = useNav();
   const params = useParams();
   const id = sample ? 1 : (params.id ?? 1);
-  const { data: report } = useReportDetail(id);
+  // 공개 예시(/sample)는 인증 API를 부르지 않고 정적 목데이터를 쓴다 (enabled=false)
+  const { data: fetched, isError, refetch } = useReportDetail(id, !sample);
+  const report = sample ? sampleReportDetail : fetched;
+  // 타임라인은 상세와 독립 조회(병렬) — 실패해도 상세는 그대로 뜨고 타임라인 영역만 빈다
+  const { data: fetchedTimeline } = useReportTimeline(id, !sample);
+  const timeline = sample ? sampleTimeline : (fetchedTimeline ?? []);
 
+  // sample 은 항상 정적 데이터가 있어 이 분기에 오지 않는다 — 실제 조회의 로딩·에러만 처리
   if (!report)
     return (
       <div style={{ background: "var(--bg-canvas)", minHeight: "100vh" }}>
-        {!sample && <TopNav active="report" />}
+        {sample ? <PublicHeader /> : <TopNav active="report" />}
+        <div
+          style={{ maxWidth: 1040, margin: "0 auto", padding: "80px 40px", textAlign: "center" }}
+        >
+          {isError ? (
+            <div
+              style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 16 }}
+            >
+              <p
+                style={{
+                  fontFamily: "var(--font-sans)",
+                  fontSize: 15,
+                  color: "var(--fg-secondary)",
+                }}
+              >
+                리포트를 불러오지 못했어요.
+              </p>
+              <div style={{ display: "flex", gap: 10 }}>
+                <Button variant="assistive" onClick={() => refetch()}>
+                  다시 시도
+                </Button>
+                <Button variant="outlined" onClick={() => nav("reportList")}>
+                  리포트 목록
+                </Button>
+              </div>
+            </div>
+          ) : (
+            <p
+              style={{ fontFamily: "var(--font-sans)", fontSize: 15, color: "var(--fg-tertiary)" }}
+            >
+              불러오는 중…
+            </p>
+          )}
+        </div>
       </div>
     );
 
   return (
     <div style={{ background: "var(--bg-canvas)", minHeight: "100vh" }}>
-      {!sample && <TopNav active="report" />}
+      {sample ? <PublicHeader /> : <TopNav active="report" />}
       <div
         style={{
           maxWidth: 1040,
@@ -31,9 +72,26 @@ export function ReportDetailPage({ sample = false }: { sample?: boolean }) {
         }}
       >
         {sample ? (
-          <Badge variant="brand">
-            <Icon name="eye" size={13} /> 예시 리포트
-          </Badge>
+          <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+            <button
+              className="linkbtn"
+              onClick={() => nav("landing")}
+              style={{
+                fontFamily: "var(--font-sans)",
+                fontSize: 14,
+                fontWeight: 600,
+                color: "var(--fg-secondary)",
+                display: "inline-flex",
+                alignItems: "center",
+                gap: 6,
+              }}
+            >
+              <Icon name="arrow-left" size={16} /> 돌아가기
+            </button>
+            <Badge variant="brand">
+              <Icon name="eye" size={13} /> 예시 리포트
+            </Badge>
+          </div>
         ) : (
           <button
             className="linkbtn"
@@ -107,7 +165,22 @@ export function ReportDetailPage({ sample = false }: { sample?: boolean }) {
               종합 점수
             </SectionLabel>
             <div style={{ display: "flex", alignItems: "flex-end", gap: 6 }}>
-              <ScoreNum score={report.score} size={88} />
+              {/* 상세는 완료 리포트만 조회 가능해 점수가 있지만, null을 0점으로 오인시키지 않도록 방어한다 */}
+              {report.score === null ? (
+                <span
+                  style={{
+                    fontFamily: "var(--font-display)",
+                    fontWeight: 700,
+                    fontSize: 88,
+                    lineHeight: 0.9,
+                    color: "var(--fg-tertiary)",
+                  }}
+                >
+                  –
+                </span>
+              ) : (
+                <ScoreNum score={report.score} size={88} />
+              )}
               <span
                 style={{
                   fontFamily: "var(--font-sans)",
@@ -124,13 +197,13 @@ export function ReportDetailPage({ sample = false }: { sample?: boolean }) {
             <div
               style={{
                 fontFamily: "var(--font-sans)",
-                fontSize: 14,
+                fontSize: 13,
                 fontWeight: 600,
                 color: "var(--blue-800)",
                 marginTop: 14,
               }}
             >
-              {report.rank}
+              질문 {report.questionCount}개
             </div>
           </Card>
           <Card>
@@ -142,6 +215,27 @@ export function ReportDetailPage({ sample = false }: { sample?: boolean }) {
             </div>
           </Card>
         </div>
+
+        {/* 총평 */}
+        {report.summary && (
+          <Card style={{ marginTop: 20 }}>
+            <SectionLabel style={{ marginBottom: 12 }}>총평</SectionLabel>
+            <p
+              style={{
+                fontFamily: "var(--font-sans)",
+                fontSize: 14.5,
+                fontWeight: 500,
+                lineHeight: 1.7,
+                color: "var(--fg-default)",
+                margin: 0,
+                whiteSpace: "pre-wrap",
+                wordBreak: "keep-all",
+              }}
+            >
+              {report.summary}
+            </p>
+          </Card>
+        )}
 
         {/* 약점 + 과제 */}
         <div
@@ -192,7 +286,7 @@ export function ReportDetailPage({ sample = false }: { sample?: boolean }) {
                   >
                     <div
                       style={{
-                        width: `${(n / total) * 100}%`,
+                        width: `${total ? (n / total) * 100 : 0}%`,
                         height: "100%",
                         borderRadius: "var(--radius-full)",
                         background: "var(--blue-800)",
@@ -283,175 +377,249 @@ export function ReportDetailPage({ sample = false }: { sample?: boolean }) {
         {/* 타임라인 */}
         <div style={{ marginTop: 28 }}>
           <SectionLabel style={{ marginBottom: 6 }}>질문 · 답변 타임라인</SectionLabel>
+          {timeline.length === 0 ? (
+            <p
+              style={{
+                fontFamily: "var(--font-sans)",
+                fontSize: 13,
+                fontWeight: 500,
+                color: "var(--fg-tertiary)",
+                margin: "8px 0 0",
+              }}
+            >
+              질문·답변 기록이 아직 없어요.
+            </p>
+          ) : (
+            <>
+              <p
+                style={{
+                  fontFamily: "var(--font-sans)",
+                  fontSize: 13,
+                  fontWeight: 500,
+                  color: "var(--fg-tertiary)",
+                  margin: "0 0 16px",
+                }}
+              >
+                안쪽으로 들여쓰기된 질문은 직전 답변을 파고든{" "}
+                <b style={{ color: "var(--blue-800)", fontWeight: 700 }}>꼬리질문</b>이에요.
+              </p>
+              <div style={{ position: "relative", paddingLeft: 26 }}>
+                <span
+                  style={{
+                    position: "absolute",
+                    left: 7,
+                    top: 6,
+                    bottom: 6,
+                    width: 2,
+                    background: "var(--border-subtle)",
+                  }}
+                />
+                {timeline.map((t) => {
+                  const ev = t.evaluation;
+                  const hasAnswer = t.answer.trim().length > 0;
+                  return (
+                    <div
+                      key={t.questionNumber}
+                      style={{
+                        position: "relative",
+                        marginBottom: 16,
+                        marginLeft: t.isTail ? 34 : 0,
+                      }}
+                    >
+                      {/* 꼬리질문 분기 커넥터 */}
+                      {t.isTail && (
+                        <span
+                          style={{
+                            position: "absolute",
+                            left: -34,
+                            top: -8,
+                            width: 26,
+                            height: 20,
+                            borderLeft: "2px solid var(--blue-800)",
+                            borderBottom: "2px solid var(--blue-800)",
+                            borderBottomLeftRadius: 10,
+                          }}
+                        />
+                      )}
+                      {/* 노드 */}
+                      {t.isTail ? (
+                        <span
+                          style={{
+                            position: "absolute",
+                            left: -15,
+                            top: 5,
+                            width: 11,
+                            height: 11,
+                            borderRadius: "50%",
+                            background: "var(--blue-800)",
+                            boxShadow: "0 0 0 3px var(--bg-brand-subtle)",
+                          }}
+                        />
+                      ) : (
+                        <span
+                          style={{
+                            position: "absolute",
+                            left: -25,
+                            top: 4,
+                            width: 14,
+                            height: 14,
+                            borderRadius: "50%",
+                            background: "var(--bg-surface)",
+                            border: "2px solid var(--blue-800)",
+                          }}
+                        />
+                      )}
+                      <div
+                        style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}
+                      >
+                        {t.isTail ? (
+                          <span
+                            style={{
+                              display: "inline-flex",
+                              alignItems: "center",
+                              gap: 4,
+                              flexShrink: 0,
+                              fontFamily: "var(--font-sans)",
+                              fontSize: 12,
+                              fontWeight: 700,
+                              color: "var(--blue-800)",
+                            }}
+                          >
+                            <Icon name="corner-down-right" size={14} /> 꼬리 Q
+                            {t.parentQuestionNumber ?? t.questionNumber}
+                          </span>
+                        ) : (
+                          <Badge variant="solid">Q{t.questionNumber}</Badge>
+                        )}
+                        <span
+                          style={{
+                            fontFamily: "var(--font-sans)",
+                            fontSize: 14,
+                            fontWeight: 700,
+                            color: "var(--fg-strong)",
+                            wordBreak: "keep-all",
+                          }}
+                        >
+                          {t.question}
+                        </span>
+                      </div>
+                      <Card
+                        style={{
+                          padding: "14px 16px",
+                          ...(t.isTail ? { borderLeft: "3px solid var(--blue-800)" } : {}),
+                        }}
+                      >
+                        <div
+                          style={{
+                            fontFamily: "var(--font-sans)",
+                            fontSize: 11,
+                            fontWeight: 600,
+                            letterSpacing: "0.02em",
+                            color: "var(--fg-tertiary)",
+                            marginBottom: 8,
+                          }}
+                        >
+                          내 답변
+                        </div>
+                        <p
+                          style={{
+                            margin: 0,
+                            fontFamily: "var(--font-sans)",
+                            fontSize: 14,
+                            fontWeight: 500,
+                            lineHeight: 1.6,
+                            color: hasAnswer ? "var(--fg-default)" : "var(--fg-tertiary)",
+                            whiteSpace: "pre-wrap",
+                            wordBreak: "keep-all",
+                          }}
+                        >
+                          {hasAnswer ? t.answer : "답변 없음"}
+                        </p>
+                        {ev && (
+                          <div
+                            style={{
+                              marginTop: 12,
+                              paddingTop: 12,
+                              borderTop: "1px solid var(--border-subtle)",
+                            }}
+                          >
+                            <div
+                              style={{
+                                display: "flex",
+                                alignItems: "flex-start",
+                                gap: 6,
+                                fontFamily: "var(--font-sans)",
+                                fontSize: 13,
+                                fontWeight: 500,
+                                lineHeight: 1.5,
+                                color: "var(--fg-secondary)",
+                              }}
+                            >
+                              <span
+                                style={{
+                                  fontWeight: 700,
+                                  color: "var(--fg-default)",
+                                  flexShrink: 0,
+                                }}
+                              >
+                                평가
+                              </span>
+                              <span style={{ wordBreak: "keep-all" }}>{ev.feedback}</span>
+                            </div>
+                            {ev.weaknessTags.length > 0 && (
+                              <div
+                                style={{ display: "flex", gap: 6, flexWrap: "wrap", marginTop: 10 }}
+                              >
+                                {ev.weaknessTags.map((w) => (
+                                  <WeakTag key={w}>{w}</WeakTag>
+                                ))}
+                              </div>
+                            )}
+                            <div
+                              style={{
+                                display: "flex",
+                                gap: 14,
+                                marginTop: 10,
+                                fontFamily: "var(--font-sans)",
+                                fontSize: 12,
+                                fontWeight: 600,
+                                color: "var(--fg-tertiary)",
+                                fontVariantNumeric: "tabular-nums",
+                              }}
+                            >
+                              <span>논리 {ev.logicScore ?? "-"}</span>
+                              <span>구체성 {ev.specificityScore ?? "-"}</span>
+                              <span>기술 {ev.technicalAccuracyScore ?? "-"}</span>
+                            </div>
+                          </div>
+                        )}
+                      </Card>
+                    </div>
+                  );
+                })}
+              </div>
+            </>
+          )}
+        </div>
+
+        {/* AI 분석 한계 안내 — 백엔드가 내려주는 문구를 그대로 표시(하드코딩 금지) */}
+        {report.aiDisclaimer && (
           <p
             style={{
               fontFamily: "var(--font-sans)",
-              fontSize: 13,
+              fontSize: 12.5,
               fontWeight: 500,
+              lineHeight: 1.6,
               color: "var(--fg-tertiary)",
-              margin: "0 0 16px",
+              marginTop: 28,
+              paddingTop: 16,
+              borderTop: "1px solid var(--border-subtle)",
+              wordBreak: "keep-all",
             }}
           >
-            안쪽으로 들여쓰기된 질문은 직전 답변을 파고든{" "}
-            <b style={{ color: "var(--blue-800)", fontWeight: 700 }}>꼬리질문</b>이에요.
+            {report.aiDisclaimer}
           </p>
-          <div style={{ position: "relative", paddingLeft: 26 }}>
-            <span
-              style={{
-                position: "absolute",
-                left: 7,
-                top: 6,
-                bottom: 6,
-                width: 2,
-                background: "var(--border-subtle)",
-              }}
-            />
-            {report.timeline.map((t, i) => {
-              const mainNo = report.timeline.slice(0, i + 1).filter((x) => !x.tail).length;
-              return (
-                <div
-                  key={i}
-                  style={{ position: "relative", marginBottom: 16, marginLeft: t.tail ? 34 : 0 }}
-                >
-                  {/* 꼬리질문 분기 커넥터 */}
-                  {t.tail && (
-                    <span
-                      style={{
-                        position: "absolute",
-                        left: -34,
-                        top: -8,
-                        width: 26,
-                        height: 20,
-                        borderLeft: "2px solid var(--blue-800)",
-                        borderBottom: "2px solid var(--blue-800)",
-                        borderBottomLeftRadius: 10,
-                      }}
-                    />
-                  )}
-                  {/* 노드 */}
-                  {t.tail ? (
-                    <span
-                      style={{
-                        position: "absolute",
-                        left: -15,
-                        top: 5,
-                        width: 11,
-                        height: 11,
-                        borderRadius: "50%",
-                        background: "var(--blue-800)",
-                        boxShadow: "0 0 0 3px var(--bg-brand-subtle)",
-                      }}
-                    />
-                  ) : (
-                    <span
-                      style={{
-                        position: "absolute",
-                        left: -25,
-                        top: 4,
-                        width: 14,
-                        height: 14,
-                        borderRadius: "50%",
-                        background: "var(--bg-surface)",
-                        border: "2px solid var(--blue-800)",
-                      }}
-                    />
-                  )}
-                  <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
-                    {t.tail ? (
-                      <span
-                        style={{
-                          display: "inline-flex",
-                          alignItems: "center",
-                          gap: 4,
-                          fontFamily: "var(--font-sans)",
-                          fontSize: 12,
-                          fontWeight: 700,
-                          color: "var(--blue-800)",
-                        }}
-                      >
-                        <Icon name="corner-down-right" size={14} /> 꼬리 Q{mainNo}
-                      </span>
-                    ) : (
-                      <Badge variant="solid">Q{mainNo}</Badge>
-                    )}
-                    <span
-                      style={{
-                        fontFamily: "var(--font-sans)",
-                        fontSize: 14,
-                        fontWeight: 700,
-                        color: "var(--fg-strong)",
-                      }}
-                    >
-                      {t.q}
-                    </span>
-                    <span style={{ flex: 1 }} />
-                    <span
-                      style={{
-                        fontFamily: "var(--font-sans)",
-                        fontSize: 13,
-                        fontWeight: 700,
-                        color: "var(--blue-800)",
-                        background: "var(--bg-brand-subtle)",
-                        borderRadius: "var(--radius-8)",
-                        padding: "3px 10px",
-                        fontVariantNumeric: "tabular-nums",
-                      }}
-                    >
-                      {t.score}
-                    </span>
-                  </div>
-                  <Card
-                    style={{
-                      padding: "14px 16px",
-                      ...(t.tail ? { borderLeft: "3px solid var(--blue-800)" } : {}),
-                    }}
-                  >
-                    <div
-                      style={{
-                        fontFamily: "var(--font-sans)",
-                        fontSize: 11,
-                        fontWeight: 600,
-                        letterSpacing: "0.02em",
-                        color: "var(--fg-tertiary)",
-                        marginBottom: 8,
-                      }}
-                    >
-                      내 답변 (요약)
-                    </div>
-                    <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                      {Array.from({ length: t.lines }).map((_, j) => (
-                        <div
-                          key={j}
-                          style={{
-                            height: 8,
-                            borderRadius: 3,
-                            background: "var(--neutral-100)",
-                            width: j === t.lines - 1 ? "55%" : "92%",
-                          }}
-                        />
-                      ))}
-                    </div>
-                    <div
-                      style={{
-                        display: "flex",
-                        alignItems: "center",
-                        gap: 6,
-                        marginTop: 12,
-                        fontFamily: "var(--font-sans)",
-                        fontSize: 13,
-                        fontWeight: 500,
-                        color: "var(--fg-secondary)",
-                      }}
-                    >
-                      <span style={{ fontWeight: 700, color: "var(--fg-default)" }}>평가</span> ·{" "}
-                      {t.note}
-                    </div>
-                  </Card>
-                </div>
-              );
-            })}
-          </div>
-        </div>
+        )}
       </div>
     </div>
   );

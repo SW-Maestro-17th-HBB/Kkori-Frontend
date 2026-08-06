@@ -1,12 +1,14 @@
 /* ============================ 대시보드 (app.hbb.kr) ============================ */
 import { useState } from "react";
 import { useNavigate } from "react-router";
-import { useProfile, useReports, useReportStats, useResumes } from "../api/hooks";
+import { useProfile, useReports, useResumes } from "../api/hooks";
+import { useReportStatusStream } from "../api/reportStatusStream";
 import { Button, Card, Modal } from "../components/ds";
 import { Icon } from "../components/Icon";
 import {
   Display,
   DocThumb,
+  PendingScore,
   ScoreNum,
   Section,
   SectionLabel,
@@ -22,8 +24,9 @@ export function DashboardPage() {
   const navigate = useNavigate();
   const { data: profile } = useProfile();
   const { data: resumes = [] } = useResumes();
-  const { data: reports = [] } = useReports();
-  const { data: stats } = useReportStats();
+  const { data: reportsPage } = useReports();
+  const reports = reportsPage?.items ?? [];
+  useReportStatusStream();
 
   const analyzed = resumes.filter((r) => r.status === "done");
   const [pickOpen, setPickOpen] = useState(false);
@@ -112,90 +115,6 @@ export function DashboardPage() {
               </div>
             </div>
           </div>
-          <div
-            style={{
-              borderTop: "1px solid var(--border-subtle)",
-              background: "var(--bg-subtle)",
-              padding: "20px 24px",
-            }}
-          >
-            <div
-              style={{
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "space-between",
-                marginBottom: 16,
-              }}
-            >
-              <SectionLabel>최근 3회 흐름</SectionLabel>
-              <span
-                style={{
-                  fontFamily: "var(--font-sans)",
-                  fontSize: 13,
-                  fontWeight: 500,
-                  color: "var(--fg-secondary)",
-                }}
-              >
-                평균{" "}
-                <b style={{ color: "var(--fg-strong)", fontWeight: 700 }}>
-                  {stats?.recentAvg ?? "-"}점
-                </b>{" "}
-                · 지난주 대비{" "}
-                <b style={{ color: "var(--blue-800)", fontWeight: 700 }}>
-                  +{stats?.recentDelta ?? "-"}
-                </b>
-              </span>
-            </div>
-            <div style={{ display: "flex", alignItems: "flex-end", gap: 16, height: 76 }}>
-              {(stats?.recentTrend ?? []).map((x, i, arr) => {
-                const last = i === arr.length - 1;
-                return (
-                  <div
-                    key={x.d}
-                    style={{
-                      flex: 1,
-                      display: "flex",
-                      flexDirection: "column",
-                      alignItems: "center",
-                      gap: 6,
-                      height: "100%",
-                      justifyContent: "flex-end",
-                    }}
-                  >
-                    <span
-                      style={{
-                        fontFamily: "var(--font-sans)",
-                        fontSize: 13,
-                        fontWeight: 700,
-                        color: last ? "var(--blue-800)" : "var(--fg-tertiary)",
-                        fontVariantNumeric: "tabular-nums",
-                      }}
-                    >
-                      {x.s}
-                    </span>
-                    <div
-                      style={{
-                        width: "100%",
-                        height: (x.s - 60) * 1.8 + 12,
-                        borderRadius: 4,
-                        background: last ? "var(--blue-800)" : "var(--neutral-200)",
-                      }}
-                    />
-                    <span
-                      style={{
-                        fontFamily: "var(--font-sans)",
-                        fontSize: 11,
-                        fontWeight: 500,
-                        color: "var(--fg-tertiary)",
-                      }}
-                    >
-                      {x.d}
-                    </span>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
         </div>
 
         {/* 내 이력서 */}
@@ -276,10 +195,20 @@ export function DashboardPage() {
               <button
                 key={r.id}
                 className="linkbtn report-row"
-                onClick={() => navigate(reportDetailPath(r.id))}
-                style={{ borderTop: i ? "1px solid var(--border-subtle)" : "none" }}
+                // 상세는 완료된 리포트만 조회 가능(RP003/RP004) — 미완성 행은 이동만 막는다.
+                // disabled 대신 aria-disabled 로 포커스·낭독(날짜·상태 등)은 유지한다(접근성)
+                aria-disabled={r.status !== "COMPLETED"}
+                onClick={() => r.status === "COMPLETED" && navigate(reportDetailPath(r.id))}
+                style={{
+                  borderTop: i ? "1px solid var(--border-subtle)" : "none",
+                  cursor: r.status === "COMPLETED" ? "pointer" : "default",
+                }}
               >
-                <ScoreNum score={r.score} size={38} />
+                {r.score === null ? (
+                  <PendingScore status={r.status} width={38} />
+                ) : (
+                  <ScoreNum score={r.score} size={38} />
+                )}
                 <div
                   style={{
                     width: 96,
