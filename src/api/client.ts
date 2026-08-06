@@ -11,7 +11,7 @@ import {
   updateParsed,
   upload,
 } from "./generated/resume/resume";
-import { create as createSessionApi } from "./generated/session/session";
+import { create as createSessionApi, end as endSessionApi } from "./generated/session/session";
 import type {
   InterviewSessionCreateResponse,
   ResumeParsedResponse as ResumeParsedResponseModel,
@@ -207,3 +207,10 @@ export type CreateSessionResponse = InterviewSessionCreateResponse;
 export const createInterviewSession = async (
   body: CreateSessionRequest,
 ): Promise<CreateSessionResponse> => (await createSessionApi(body)).data ?? {};
+
+/** 면접 세션 종료 — 202는 "수리"일 뿐이고 실제 종료는 LiveKit 룸 종료(ROOM_DELETED)가 알린다.
+    멱등 — 이미 종료된 세션에 재호출해도 202 no-op이며, 룸이 안 닫힐 때의 재호출은
+    잔존 룸 삭제를 재시도하는 설계된 복구 경로다 (BE PRD 기능 2). */
+export const endInterviewSession = async (sessionId: number): Promise<void> => {
+  await endSessionApi(sessionId);
+};

@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   createInterviewSession,
   deleteResume,
+  endInterviewSession,
   fetchNotifications,
   fetchProfile,
   fetchReportDetail,
@@ -179,3 +180,7 @@ export const useReportDetail = (id: number | string) =>
 /** 면접 세션 생성 — 룸·토큰을 발급하는 비멱등 POST 라 mutation
     (자동 재시도 없음, isPending 으로 이중 제출 방지) */
 export const useCreateInterviewSession = () => useMutation({ mutationFn: createInterviewSession });
+
+/** 면접 세션 종료 — 멱등 202 수리 응답. 재호출이 안전한 복구 경로라 화면의
+    명시 재시도 버튼으로 재실행한다 (자동 재시도는 두지 않음) */
+export const useEndInterviewSession = () => useMutation({ mutationFn: endInterviewSession });
