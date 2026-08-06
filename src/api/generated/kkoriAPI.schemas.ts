@@ -82,6 +82,12 @@ export interface ApiResponseInterviewSessionCreateResponse {
   error?: ErrorResponse;
 }
 
+export interface ApiResponseVoid {
+  success?: boolean;
+  data?: unknown;
+  error?: ErrorResponse;
+}
+
 export type ResumeUploadResponseAnalysisStatus =
   (typeof ResumeUploadResponseAnalysisStatus)[keyof typeof ResumeUploadResponseAnalysisStatus];
 
@@ -177,12 +183,6 @@ export interface ReissueRequest {
 export interface LogoutRequest {
   /** @minLength 1 */
   refreshToken: string;
-}
-
-export interface ApiResponseVoid {
-  success?: boolean;
-  data?: unknown;
-  error?: ErrorResponse;
 }
 
 export interface KakaoLoginRequest {
@@ -320,6 +320,118 @@ export interface ApiResponsePageResponseResumeSummaryResponse {
   error?: ErrorResponse;
 }
 
+export type ReportSummaryResponseStatus =
+  (typeof ReportSummaryResponseStatus)[keyof typeof ReportSummaryResponseStatus];
+
+export const ReportSummaryResponseStatus = {
+  PENDING: "PENDING",
+  PROCESSING: "PROCESSING",
+  COMPLETED: "COMPLETED",
+  FAILED: "FAILED",
+} as const;
+
+export interface WeaknessTagCount {
+  tag?: string;
+  count?: number;
+}
+
+export interface ReportSummaryResponse {
+  reportId?: number;
+  status?: ReportSummaryResponseStatus;
+  overallScore?: number;
+  resumeFileName?: string;
+  weaknessTagSummary?: WeaknessTagCount[];
+  createdAt?: string;
+  completedAt?: string;
+}
+
+export interface PageResponseReportSummaryResponse {
+  content?: ReportSummaryResponse[];
+  page?: number;
+  size?: number;
+  totalElements?: number;
+  hasNext?: boolean;
+}
+
+export interface ApiResponsePageResponseReportSummaryResponse {
+  success?: boolean;
+  data?: PageResponseReportSummaryResponse;
+  error?: ErrorResponse;
+}
+
+export interface Scores {
+  logicScore?: number;
+  specificityScore?: number;
+  technicalAccuracyScore?: number;
+  deliveryScore?: number;
+}
+
+export interface ImprovementTask {
+  title?: string;
+  description?: string;
+}
+
+export interface ReportDetailResponse {
+  reportId?: number;
+  resumeFileName?: string;
+  completedAt?: string;
+  overallScore?: number;
+  scores?: Scores;
+  questionCount?: number;
+  summary?: string;
+  weaknessTagSummary?: WeaknessTagCount[];
+  improvementTasks?: ImprovementTask[];
+  aiDisclaimer?: string;
+}
+
+export interface ApiResponseReportDetailResponse {
+  success?: boolean;
+  data?: ReportDetailResponse;
+  error?: ErrorResponse;
+}
+
+export interface ReportStatusResponse {
+  reportId?: number;
+  status?: string;
+  failedReason?: string;
+  createdAt?: string;
+  completedAt?: string;
+}
+
+export interface ApiResponseReportStatusResponse {
+  success?: boolean;
+  data?: ReportStatusResponse;
+  error?: ErrorResponse;
+}
+
+export interface TrendPoint {
+  completedAt?: string;
+  overallScore?: number;
+}
+
+export interface AxisAverages {
+  logicScore?: number;
+  specificityScore?: number;
+  technicalAccuracyScore?: number;
+  deliveryScore?: number;
+}
+
+export interface ReportStatsResponse {
+  totalCount?: number;
+  avgScore?: number;
+  bestScore?: number;
+  monthlyDelta?: number;
+  trend?: TrendPoint[];
+  axisAverages?: AxisAverages;
+  weaknessSegments?: WeaknessTagCount[];
+}
+
+export interface ApiResponseReportStatsResponse {
+  success?: boolean;
+  data?: ReportStatsResponse;
+  error?: ErrorResponse;
+}
+
 export type CatalogItemType = (typeof CatalogItemType)[keyof typeof CatalogItemType];
 
 export const CatalogItemType = {
@@ -381,3 +493,35 @@ export type UploadBody = {
   /** 업로드할 PDF 파일 */
   file?: Blob;
 };
+
+export type GetList1Params = {
+  /**
+   * 생성 상태 필터 (PENDING/PROCESSING/COMPLETED/FAILED)
+   */
+  status?: GetList1Status;
+  /**
+   * 정렬 키: createdAt(기본) 또는 overallScore
+   */
+  sort?: string;
+  /**
+   * 정렬 방향: desc(기본) 또는 asc
+   */
+  order?: string;
+  /**
+   * 페이지 번호 (기본 0)
+   */
+  page?: number;
+  /**
+   * 페이지 크기 (기본 20)
+   */
+  size?: number;
+};
+
+export type GetList1Status = (typeof GetList1Status)[keyof typeof GetList1Status];
+
+export const GetList1Status = {
+  PENDING: "PENDING",
+  PROCESSING: "PROCESSING",
+  COMPLETED: "COMPLETED",
+  FAILED: "FAILED",
+} as const;

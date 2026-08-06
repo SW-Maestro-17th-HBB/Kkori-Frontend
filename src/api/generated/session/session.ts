@@ -15,6 +15,7 @@ import type {
 
 import type {
   ApiResponseInterviewSessionCreateResponse,
+  ApiResponseVoid,
   InterviewSessionCreateRequest,
 } from "../kkoriAPI.schemas.ts";
 
@@ -100,4 +101,72 @@ export const useCreate = <TError = ApiResponseInterviewSessionCreateResponse, TC
   TContext
 > => {
   return useMutation(getCreateMutationOptions(options), queryClient);
+};
+/**
+ * 세션 종료 요청을 수리한다 — 세션 상태와 무관하게 종료(terminal) 수렴이 보장된다.
+ * 응답 202는 수리(accepted)의 의미이며 **종료는 비동기로 확정된다**: 진행 중(ACTIVE) 면접은
+ * 면접관 에이전트가 클로징 발화 후 룸을 삭제하는 시점에 끝나므로, 클라이언트는 응답이 아니라
+ * 룸 종료(DisconnectReason=ROOM_DELETED)로 종료를 감지해야 한다. PENDING은 룸 관측으로
+ * 에이전트 유무를 확인해 처리하고(면접 진행 중이면 정상 종료 유도), 에이전트 소실 상태는
+ * 즉시 종료 처리되며, 이미 종료된 세션에 대한 재호출은 멱등 no-op이다.
+ * @summary 면접 세션 종료
+ */
+export const end = (sessionId: number, signal?: AbortSignal) => {
+  return customInstance<ApiResponseVoid>({
+    url: `/api/v1/sessions/${sessionId}/end`,
+    method: "POST",
+    signal,
+  });
+};
+
+export const getEndMutationOptions = <TError = ApiResponseVoid, TContext = unknown>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof end>>,
+    TError,
+    { sessionId: number },
+    TContext
+  >;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof end>>,
+  TError,
+  { sessionId: number },
+  TContext
+> => {
+  const mutationKey = ["end"];
+  const { mutation: mutationOptions } = options
+    ? options.mutation && "mutationKey" in options.mutation && options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey } };
+
+  const mutationFn: MutationFunction<Awaited<ReturnType<typeof end>>, { sessionId: number }> = (
+    props,
+  ) => {
+    const { sessionId } = props ?? {};
+
+    return end(sessionId);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type EndMutationResult = NonNullable<Awaited<ReturnType<typeof end>>>;
+
+export type EndMutationError = ApiResponseVoid;
+
+/**
+ * @summary 면접 세션 종료
+ */
+export const useEnd = <TError = ApiResponseVoid, TContext = unknown>(
+  options?: {
+    mutation?: UseMutationOptions<
+      Awaited<ReturnType<typeof end>>,
+      TError,
+      { sessionId: number },
+      TContext
+    >;
+  },
+  queryClient?: QueryClient,
+): UseMutationResult<Awaited<ReturnType<typeof end>>, TError, { sessionId: number }, TContext> => {
+  return useMutation(getEndMutationOptions(options), queryClient);
 };
