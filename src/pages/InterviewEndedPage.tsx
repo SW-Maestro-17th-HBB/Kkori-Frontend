@@ -37,8 +37,8 @@ export function InterviewEndedPage() {
           width: 64,
           height: 64,
           borderRadius: "50%",
-          background: "rgba(255,255,255,.08)",
-          border: "1px solid rgba(255,255,255,.18)",
+          background: "var(--bg-inverse-subtle)",
+          border: "1px solid var(--border-inverse-strong)",
           display: "flex",
           alignItems: "center",
           justifyContent: "center",
@@ -54,7 +54,7 @@ export function InterviewEndedPage() {
           fontSize: 24,
           fontWeight: 700,
           letterSpacing: "-0.01em",
-          color: "#f2f3f4",
+          color: "var(--fg-inverse)",
         }}
       >
         면접이 끝났어요
@@ -66,7 +66,8 @@ export function InterviewEndedPage() {
           fontSize: 14.5,
           fontWeight: 500,
           lineHeight: 1.6,
-          color: "rgba(255,255,255,.6)",
+          color: "var(--fg-inverse)",
+          opacity: 0.7,
           textAlign: "center",
         }}
       >
