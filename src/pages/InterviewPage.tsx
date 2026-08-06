@@ -1,12 +1,17 @@
 /* ============================ 면접 진행 (/live) — 다크 풀스크린 ============================ */
 import { useEffect, useState } from "react";
 import { Navigate } from "react-router";
+import { ERROR_CODES } from "../api/errorCodes";
+import { useEndInterviewSession } from "../api/hooks";
+import { ApiError } from "../api/request";
+import { Button, Modal } from "../components/ds";
 import { Icon } from "../components/Icon";
 import { clearInterviewSession, loadInterviewSession } from "../hooks/interviewSession";
 import { useAuthSessionId } from "../hooks/useAuthStatus";
 import { useNav } from "../hooks/useNav";
 import {
   ConnectionState,
+  DisconnectReason,
   discardConnectedRoom,
   useLiveKitRoom,
   useRemoteAudio,
@@ -27,6 +32,17 @@ const CONNECTION_DOT: Record<ConnectionState, string> = {
   [ConnectionState.Connected]: "var(--green-600)",
   [ConnectionState.Reconnecting]: "var(--blue-400)",
   [ConnectionState.SignalReconnecting]: "var(--blue-400)",
+};
+
+/** 종료 요청 실패 안내 — S008 은 종료 의도가 이미 기록된 상태라(서버 fallback 이
+    최대 180초 내 룸 종료를 보장) 기다려도 안전하고, 재시도는 면접관 클로징 발화
+    기회를 되살리는 선택지다. 그 외 코드는 공통 재시도 안내 + 서버 메시지 병기. */
+const endFailureNotice = (err: unknown): string => {
+  if (err instanceof ApiError && err.code === ERROR_CODES.SESSION_END_SIGNAL_FAILED) {
+    return "종료 처리가 지연되고 있어요. 잠시 기다리면 자동으로 마무리돼요 — 다시 시도할 수도 있어요.";
+  }
+  const detail = err instanceof Error ? ` (${err.message})` : "";
+  return `면접 종료 요청에 실패했어요 — 다시 시도해 주세요.${detail}`;
 };
 
 export function InterviewPage() {
@@ -51,6 +67,7 @@ export function InterviewPage() {
   const {
     room,
     connectionState,
+    disconnectReason,
     connectError,
     micEnabled,
     toggleMicrophone,
@@ -58,6 +75,25 @@ export function InterviewPage() {
     startAudio,
   } = useLiveKitRoom(gateOk ? stored : undefined);
   const remoteAudioRef = useRemoteAudio(room);
+
+  const endSession = useEndInterviewSession();
+  const [confirmEndOpen, setConfirmEndOpen] = useState(false);
+  // 202 는 "수리"일 뿐 — 실제 종료(룸 삭제)까지는 마무리 중 상태로 재클릭을 막는다.
+  // 면접관 클로징 발화가 이어지므로 여기서 disconnect 하지 않는다 (연결·마이크 발행 유지)
+  const wrappingUp = endSession.isPending || endSession.isSuccess;
+
+  // "면접 종료"의 단일 수렴점 — 버튼 종료·시간 만료 자연 종료·서버 fallback 삭제가
+  // 전부 ROOM_DELETED 로 도착한다 (경로 분기 없음). 그 외 사유의 해제는 기존
+  // "연결 끊김" 표시로 남는다 (재연결 UX 는 후속 INTERRUPTED 스토리).
+  useEffect(() => {
+    if (disconnectReason !== DisconnectReason.ROOM_DELETED) return;
+    clearInterviewSession(); // 삭제된 룸의 토큰 — /live 재진입이 setup 으로 가게 정리
+    nav("interviewEnded", { replace: true, state: { ended: true } });
+  }, [disconnectReason, nav]);
+
+  const requestEnd = () => {
+    if (stored) endSession.mutate(stored.id);
+  };
 
   const statusLabel = connectError ? "접속 실패" : CONNECTION_LABEL[connectionState];
   const statusDot = connectError ? "var(--red-600)" : CONNECTION_DOT[connectionState];
@@ -92,27 +128,9 @@ export function InterviewPage() {
           zIndex: 6,
         }}
       >
-        <span
-          style={{
-            display: "inline-flex",
-            alignItems: "center",
-            gap: 8,
-            height: 32,
-            padding: "0 14px",
-            borderRadius: "var(--radius-full)",
-            background: "rgba(255,255,255,.08)",
-            border: "1px solid rgba(255,255,255,.18)",
-            color: "#e6e8ea",
-            fontFamily: "var(--font-sans)",
-            fontSize: 13,
-            fontWeight: 600,
-          }}
-        >
-          <span
-            style={{ width: 8, height: 8, borderRadius: "50%", background: "var(--red-600)" }}
-          />{" "}
-          04:12 남음
-        </span>
+        {/* 좌측 자리 유지용 — 타이머 표시는 제거됨(남은 시간의 원천이 서버에 없어
+            어림값 표기가 오정보였다). 자연 만료는 ROOM_DELETED 수렴으로 처리된다 */}
+        <span aria-hidden style={{ width: 1 }} />
         <span
           role="status"
           style={{
@@ -146,8 +164,12 @@ export function InterviewPage() {
               <Icon name="audio-lines" size={16} /> 소리 켜기
             </button>
           )}
-          <button className="dark-btn" onClick={() => nav("reportDetail")}>
-            면접 종료
+          <button
+            className="dark-btn"
+            disabled={wrappingUp}
+            onClick={() => setConfirmEndOpen(true)}
+          >
+            {wrappingUp ? "면접 마무리 중…" : "면접 종료"}
           </button>
         </div>
       </div>
@@ -289,6 +311,25 @@ export function InterviewPage() {
           zIndex: 6,
         }}
       >
+        {/* 종료 요청 실패 안내 — 명시 재시도 버튼(멱등 재호출이 설계된 복구 경로) */}
+        {endSession.isError && !wrappingUp && (
+          <span
+            role="alert"
+            style={{
+              color: "var(--fg-inverse)",
+              fontFamily: "var(--font-sans)",
+              fontSize: 12,
+              display: "inline-flex",
+              alignItems: "center",
+              gap: 10,
+            }}
+          >
+            {endFailureNotice(endSession.error)}
+            <button className="dark-btn" style={{ height: 28 }} onClick={requestEnd}>
+              다시 시도
+            </button>
+          </span>
+        )}
         {/* 권한 거부 등 발행 실패의 최소 피드백 — 차단 오버레이는 후속 과제(PR #25 논의) */}
         {micFailed && (
           <span
@@ -331,6 +372,43 @@ export function InterviewPage() {
           </button>
         </div>
       </div>
+
+      {/* 종료 확인 — 확인 즉시 /end 를 보내고 모달을 닫는다. 이후 클로징 발화가
+          이어지므로 연결은 유지되고, 실제 전환은 ROOM_DELETED 가 만든다 */}
+      <Modal
+        open={confirmEndOpen}
+        onClose={() => setConfirmEndOpen(false)}
+        title="면접을 종료할까요?"
+        actions={[
+          <Button key="continue" variant="assistive" onClick={() => setConfirmEndOpen(false)}>
+            계속하기
+          </Button>,
+          <Button
+            key="end"
+            variant="solid"
+            onClick={() => {
+              setConfirmEndOpen(false);
+              requestEnd();
+            }}
+          >
+            종료하기
+          </Button>,
+        ]}
+      >
+        <p
+          style={{
+            margin: 0,
+            fontFamily: "var(--font-sans)",
+            fontSize: 14,
+            fontWeight: 500,
+            lineHeight: 1.6,
+            color: "var(--fg-secondary)",
+          }}
+        >
+          지금 종료하면 면접관이 마무리 인사를 한 뒤 면접이 끝나요. 종료한 면접은 다시 이어서 진행할
+          수 없어요.
+        </p>
+      </Modal>
     </div>
   );
 }

@@ -2,7 +2,7 @@
    livekit-client 는 FakeRoom 목, 접속 세션은 setup 핸드오프 저장값으로 주입한다. */
 import { act, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { Route, Routes } from "react-router";
 import type { Room } from "livekit-client";
 import { saveInterviewSession, type InterviewSessionRecord } from "../hooks/interviewSession";
@@ -40,11 +40,12 @@ const seedSession = (over: Partial<InterviewSessionRecord> = {}) => {
   });
 };
 
-/** /setup 리다이렉트를 관찰할 수 있게 라우트 테이블로 렌더한다 */
+/** /setup 리다이렉트·/live/ended 전환을 관찰할 수 있게 라우트 테이블로 렌더한다 */
 const renderLive = () =>
   renderWithProviders(
     <Routes>
       <Route path="/live" element={<InterviewPage />} />
+      <Route path="/live/ended" element={<div data-testid="ended-screen" />} />
       <Route path="/setup" element={<div data-testid="setup-screen" />} />
     </Routes>,
     { route: "/live" },
@@ -210,5 +211,155 @@ describe("InterviewPage — LiveKit 룸 접속", () => {
       connectedRoom()!.emit("trackUnsubscribed", track);
     });
     expect(container.querySelectorAll("audio")).toHaveLength(0);
+  });
+});
+
+/* ---------- 면접 종료 (HBB1-294) — 정책 원천: docs/requirements/session/interview-end.md ---------- */
+
+const envelope = (data: unknown, status = 202) =>
+  new Response(JSON.stringify({ success: true, data }), {
+    status,
+    headers: { "Content-Type": "application/json" },
+  });
+
+const errorEnvelope = (code: string, message: string, status: number) =>
+  new Response(JSON.stringify({ success: false, data: null, error: { code, message } }), {
+    status,
+    headers: { "Content-Type": "application/json" },
+  });
+
+const ROOM_DELETED = 5;
+const SERVER_SHUTDOWN = 3;
+
+/** 종료 확인 모달을 거쳐 /end 요청까지 진행한다 */
+const clickEndAndConfirm = async () => {
+  await userEvent.click(screen.getByRole("button", { name: "면접 종료" }));
+  await screen.findByText("면접을 종료할까요?");
+  await userEvent.click(screen.getByRole("button", { name: "종료하기" }));
+};
+
+describe("InterviewPage — 면접 종료", () => {
+  beforeEach(() => {
+    discardConnectedRoom();
+    FakeRoom.reset();
+    sessionStorage.clear();
+    localStorage.clear();
+    seedSession();
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it("종료 확인 시 /end 를 호출하고, 즉시 disconnect 하지 않은 채 마무리 중 상태가 된다", async () => {
+    const fetchMock = vi.fn().mockImplementation(async () => envelope(null));
+    vi.stubGlobal("fetch", fetchMock);
+    renderLive();
+    await screen.findByText("연결됨");
+
+    // StrictMode 이중 마운트의 cleanup disconnect 는 접속 확립 과정의 잡음 —
+    // "종료 요청이 disconnect 를 유발하지 않는다"는 이후의 증가분으로 판정한다
+    const disconnectsBeforeEnd = vi.mocked(connectedRoom()!.disconnect).mock.calls.length;
+    await clickEndAndConfirm();
+
+    await waitFor(() => {
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+    });
+    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(url).toContain("/api/v1/sessions/34/end");
+    expect(init.method).toBe("POST");
+
+    // 202 는 수리일 뿐 — 클로징 발화가 이어지므로 연결을 끊지 않고 대기한다
+    expect(await screen.findByRole("button", { name: "면접 마무리 중…" })).toBeDisabled();
+    expect(vi.mocked(connectedRoom()!.disconnect).mock.calls.length).toBe(disconnectsBeforeEnd);
+    expect(screen.queryByTestId("ended-screen")).toBeNull();
+    expect(screen.getByText("연결됨")).toBeInTheDocument();
+    expect(sessionStorage.getItem(SESSION_KEY)).not.toBeNull();
+  });
+
+  it("계속하기로 닫으면 /end 를 호출하지 않는다", async () => {
+    const fetchMock = vi.fn().mockImplementation(async () => envelope(null));
+    vi.stubGlobal("fetch", fetchMock);
+    renderLive();
+    await screen.findByText("연결됨");
+
+    await userEvent.click(screen.getByRole("button", { name: "면접 종료" }));
+    await screen.findByText("면접을 종료할까요?");
+    await userEvent.click(screen.getByRole("button", { name: "계속하기" }));
+
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(screen.getByRole("button", { name: "면접 종료" })).toBeEnabled();
+  });
+
+  it("ROOM_DELETED 해제는 저장값을 지우고 완료 화면으로 전환한다 (버튼 종료 경로)", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockImplementation(async () => envelope(null)),
+    );
+    renderLive();
+    await screen.findByText("연결됨");
+    await clickEndAndConfirm();
+    await screen.findByRole("button", { name: "면접 마무리 중…" });
+
+    act(() => {
+      connectedRoom()!.emitDisconnected(ROOM_DELETED);
+    });
+    expect(await screen.findByTestId("ended-screen")).toBeInTheDocument();
+    expect(sessionStorage.getItem(SESSION_KEY)).toBeNull();
+  });
+
+  it("/end 없이 도착한 ROOM_DELETED(시간 만료 자연 종료)도 동일하게 전환한다", async () => {
+    renderLive();
+    await screen.findByText("연결됨");
+
+    act(() => {
+      connectedRoom()!.emitDisconnected(ROOM_DELETED);
+    });
+    expect(await screen.findByTestId("ended-screen")).toBeInTheDocument();
+    expect(sessionStorage.getItem(SESSION_KEY)).toBeNull();
+  });
+
+  it("그 외 사유의 해제는 전환하지 않고 기존 '연결 끊김' 표시를 유지한다", async () => {
+    renderLive();
+    await screen.findByText("연결됨");
+
+    act(() => {
+      connectedRoom()!.emitDisconnected(SERVER_SHUTDOWN);
+    });
+    expect(await screen.findByText("연결 끊김")).toBeInTheDocument();
+    expect(screen.queryByTestId("ended-screen")).toBeNull();
+    expect(sessionStorage.getItem(SESSION_KEY)).not.toBeNull();
+  });
+
+  it("S008 실패는 지연 안내 + 재시도를 제공하고, 재시도의 202(멱등)로 마무리 중에 복귀한다", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockImplementationOnce(async () =>
+        errorEnvelope("S008", "종료 요청 처리에 실패했습니다.", 500),
+      )
+      .mockImplementation(async () => envelope(null));
+    vi.stubGlobal("fetch", fetchMock);
+    renderLive();
+    await screen.findByText("연결됨");
+
+    const disconnectsBeforeEnd = vi.mocked(connectedRoom()!.disconnect).mock.calls.length;
+    await clickEndAndConfirm();
+    // 종료 의도는 이미 기록됨 — 기다려도 안전하다는 지연 안내 + 명시 재시도
+    expect(await screen.findByRole("alert")).toHaveTextContent("종료 처리가 지연되고 있어요");
+    expect(screen.getByRole("button", { name: "면접 종료" })).toBeEnabled();
+
+    // 재호출은 잔존 룸 삭제를 재시도하는 설계된 복구 경로 — 202 no-op 로 수리된다
+    await userEvent.click(screen.getByRole("button", { name: "다시 시도" }));
+    await waitFor(() => {
+      expect(fetchMock).toHaveBeenCalledTimes(2);
+    });
+    expect(await screen.findByRole("button", { name: "면접 마무리 중…" })).toBeDisabled();
+    expect(screen.queryByRole("alert")).toBeNull();
+    expect(vi.mocked(connectedRoom()!.disconnect).mock.calls.length).toBe(disconnectsBeforeEnd);
+
+    act(() => {
+      connectedRoom()!.emitDisconnected(ROOM_DELETED);
+    });
+    expect(await screen.findByTestId("ended-screen")).toBeInTheDocument();
   });
 });
