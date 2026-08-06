@@ -269,8 +269,15 @@ export class FakeRoom {
       this.setState("connected");
     });
     this.disconnect = vi.fn(async () => {
-      this.setState("disconnected");
+      // 실제 SDK 처럼 수동 해제도 Disconnected(CLIENT_INITIATED) 를 발화한다
+      this.emitDisconnected(1);
     });
+  }
+
+  /** 서버측 해제 흉내 — reason 은 DisconnectReason 값 (ROOM_DELETED = 5) */
+  emitDisconnected(reason: number) {
+    this.setState("disconnected");
+    this.emit("disconnected", reason);
   }
 
   setState(next: string) {
@@ -319,6 +326,7 @@ export const createLiveKitMock = () => ({
   createAudioAnalyser: FakeMedia.createAudioAnalyser,
   RoomEvent: {
     ConnectionStateChanged: "connectionStateChanged",
+    Disconnected: "disconnected",
     LocalTrackPublished: "localTrackPublished",
     LocalTrackUnpublished: "localTrackUnpublished",
     TrackMuted: "trackMuted",
@@ -326,6 +334,23 @@ export const createLiveKitMock = () => ({
     TrackSubscribed: "trackSubscribed",
     TrackUnsubscribed: "trackUnsubscribed",
     AudioPlaybackStatusChanged: "audioPlaybackChanged",
+  },
+  // 실제 SDK(@livekit/protocol) 의 숫자 값과 동일하게 유지할 것
+  DisconnectReason: {
+    UNKNOWN_REASON: 0,
+    CLIENT_INITIATED: 1,
+    DUPLICATE_IDENTITY: 2,
+    SERVER_SHUTDOWN: 3,
+    PARTICIPANT_REMOVED: 4,
+    ROOM_DELETED: 5,
+    STATE_MISMATCH: 6,
+    JOIN_FAILURE: 7,
+    MIGRATION: 8,
+    SIGNAL_CLOSE: 9,
+    ROOM_CLOSED: 10,
+    USER_UNAVAILABLE: 11,
+    USER_REJECTED: 12,
+    SIP_TRUNK_FAILURE: 13,
   },
   TrackEvent: {
     Ended: "ended",

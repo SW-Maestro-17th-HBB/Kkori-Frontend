@@ -55,6 +55,13 @@ export const ERROR_CODES = {
   SESSION_DISPATCH_FAILED: "S004",
   /** 409 — 다른 세션 생성 요청이 이 요청을 대체했습니다. 최신 세션을 사용해 주세요. */
   SESSION_SUPERSEDED: "S005",
+  /** 404 — 면접 세션을 찾을 수 없습니다. */
+  SESSION_NOT_FOUND: "S006",
+  /** 403 — 해당 면접 세션에 대한 권한이 없습니다. */
+  SESSION_FORBIDDEN: "S007",
+  /** 500 — 종료 요청 처리에 실패했습니다. 잠시 후 다시 시도해 주세요.
+      (종료 의도는 이미 기록됨 — 서버 fallback이 최대 180초 내 룸 종료를 보장한다) */
+  SESSION_END_SIGNAL_FAILED: "S008",
 
   // ---------- 인증 (A) ----------
   /** 400 — 카카오 인가 코드가 누락되었거나 형식이 올바르지 않습니다. */

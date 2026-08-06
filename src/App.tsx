@@ -13,6 +13,7 @@ import { ConsentPage } from "./pages/ConsentPage";
 import { DashboardPage } from "./pages/DashboardPage";
 import { ResumePage } from "./pages/ResumePage";
 import { SetupPage } from "./pages/SetupPage";
+import { InterviewEndedPage } from "./pages/InterviewEndedPage";
 import { ReportListPage } from "./pages/ReportListPage";
 import { ReportDetailPage } from "./pages/ReportDetailPage";
 import { MyPage } from "./pages/MyPage";
@@ -200,6 +201,7 @@ export default function App() {
               </InterviewChunkErrorBoundary>
             }
           />
+          <Route path={ROUTES.interviewEnded} element={<InterviewEndedPage />} />
           <Route path={ROUTES.reportList} element={<ReportListPage />} />
           <Route path={REPORT_DETAIL_PATTERN} element={<ReportDetailPage />} />
           <Route path={ROUTES.mypage} element={<MyPage />} />

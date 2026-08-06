@@ -51,6 +51,31 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  "/api/v1/sessions/{sessionId}/end": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * 면접 세션 종료
+     * @description 세션 종료 요청을 수리한다 — 세션 상태와 무관하게 종료(terminal) 수렴이 보장된다.
+     *     응답 202는 수리(accepted)의 의미이며 **종료는 비동기로 확정된다**: 진행 중(ACTIVE) 면접은
+     *     면접관 에이전트가 클로징 발화 후 룸을 삭제하는 시점에 끝나므로, 클라이언트는 응답이 아니라
+     *     룸 종료(DisconnectReason=ROOM_DELETED)로 종료를 감지해야 한다. PENDING은 룸 관측으로
+     *     에이전트 유무를 확인해 처리하고(면접 진행 중이면 정상 종료 유도), 에이전트 소실 상태는
+     *     즉시 종료 처리되며, 이미 종료된 세션에 대한 재호출은 멱등 no-op이다.
+     */
+    post: operations["end"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   "/api/v1/resumes": {
     parameters: {
       query?: never;
@@ -270,6 +295,32 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  "/sse/v1/reports": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * 리포트 생성 상태 SSE 구독
+     * @description 인증된 사용자 본인 리포트의 생성 상태 변경만 실시간으로 구독한다 (text/event-stream).
+     *     이벤트 타입: REPORT_GENERATION_STATUS_CHANGED / REPORT_GENERATION_COMPLETED / REPORT_GENERATION_FAILED,
+     *     data는 단일 스키마 {reportId, status, message}.
+     *     PENDING은 push되지 않는다 — 이벤트는 PROCESSING부터 흐르고, PENDING은 REST 동기화로 인지한다.
+     *     연결이 끊긴 동안의 이벤트는 재전송되지 않으므로 재연결 시 REST 조회로 상태를 동기화해야 한다.
+     *     주의: 브라우저 표준 EventSource는 Authorization 헤더를 지원하지 않으므로
+     *     fetch 기반 SSE 클라이언트(예: @microsoft/fetch-event-source)를 사용해야 한다.
+     */
+    get: operations["subscribe_1"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   "/api/v1/user/consents": {
     parameters: {
       query?: never;
@@ -283,6 +334,95 @@ export interface paths {
      *     이력이 없는 항목도 agreed=false, version·updatedAt=null로 포함된다.
      */
     get: operations["getMyConsents"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/v1/reports": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * 리포트 목록 조회
+     * @description 본인 리포트 목록을 조회한다. 항목은 스냅샷 기반이라 조인이 없고,
+     *     생성 중(PENDING/PROCESSING)·실패(FAILED) 리포트도 노출된다(미완성 리포트의 점수·태그 요약은 null).
+     *     정렬: createdAt(기본, 내림차순) 또는 overallScore — 점수 정렬에서 null(미완성)은 방향과 무관하게 항상 뒤,
+     *     동점은 생성 시각·id 순서로 고정된다.
+     */
+    get: operations["getList_1"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/v1/reports/{reportId}": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * 리포트 상세 조회
+     * @description 완성(COMPLETED)된 리포트의 상세를 조회한다 — 총평, 축별 점수(전달력 미평가 시 null),
+     *     종합 점수, 질문 수, 약점 태그 요약, 개선 과제(답변별 과제를 질문 순서대로 수집),
+     *     AI 분석 한계 안내 문구. 답변별 피드백은 타임라인 API가 담당한다.
+     */
+    get: operations["getDetail"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/v1/reports/{reportId}/status": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * 리포트 생성 상태 조회
+     * @description 리포트의 현재 생성 상태를 조회한다 — SSE 유실·재연결 시 동기화용.
+     *     모든 상태에서 조회 가능하며, failedReason은 FAILED일 때만 값이 있다.
+     */
+    get: operations["getStatus"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/v1/reports/stats": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * 리포트 통계 조회
+     * @description 본인의 완료(COMPLETED) 리포트 전체를 집계한 통계를 반환한다 — KPI(완료 수·평균·최고점),
+     *     지난달 대비 변화(Asia/Seoul 월 경계, 어느 한쪽이 없으면 null), 점수 추이(완료 시각 오름차순
+     *     최대 12개), 축별 평균(전달력은 평가된 리포트만 모수), 약점 태그 분포(빈도 내림차순 전체).
+     *     완료 리포트가 없으면 totalCount 0에 수치는 null, 배열은 빈 배열이다.
+     */
+    get: operations["getStats"];
     put?: never;
     post?: never;
     delete?: never;
@@ -390,6 +530,11 @@ export interface components {
       livekitUrl?: string;
       livekitRoom?: string;
     };
+    ApiResponseVoid: {
+      success?: boolean;
+      data?: unknown;
+      error?: components["schemas"]["ErrorResponse"];
+    };
     ApiResponseResumeUploadResponse: {
       success?: boolean;
       data?: components["schemas"]["ResumeUploadResponse"];
@@ -463,11 +608,6 @@ export interface components {
     };
     LogoutRequest: {
       refreshToken: string;
-    };
-    ApiResponseVoid: {
-      success?: boolean;
-      data?: unknown;
-      error?: components["schemas"]["ErrorResponse"];
     };
     KakaoLoginRequest: {
       code?: string;
@@ -586,6 +726,124 @@ export interface components {
       createdAt?: string;
       /** Format: int64 */
       fileSize?: number;
+    };
+    ApiResponsePageResponseReportSummaryResponse: {
+      success?: boolean;
+      data?: components["schemas"]["PageResponseReportSummaryResponse"];
+      error?: components["schemas"]["ErrorResponse"];
+    };
+    PageResponseReportSummaryResponse: {
+      content?: components["schemas"]["ReportSummaryResponse"][];
+      /** Format: int32 */
+      page?: number;
+      /** Format: int32 */
+      size?: number;
+      /** Format: int64 */
+      totalElements?: number;
+      hasNext?: boolean;
+    };
+    ReportSummaryResponse: {
+      /** Format: int64 */
+      reportId?: number;
+      /** @enum {string} */
+      status?: "PENDING" | "PROCESSING" | "COMPLETED" | "FAILED";
+      /** Format: int32 */
+      overallScore?: number;
+      resumeFileName?: string;
+      weaknessTagSummary?: components["schemas"]["WeaknessTagCount"][];
+      /** Format: date-time */
+      createdAt?: string;
+      /** Format: date-time */
+      completedAt?: string;
+    };
+    WeaknessTagCount: {
+      tag?: string;
+      /** Format: int32 */
+      count?: number;
+    };
+    ApiResponseReportDetailResponse: {
+      success?: boolean;
+      data?: components["schemas"]["ReportDetailResponse"];
+      error?: components["schemas"]["ErrorResponse"];
+    };
+    ImprovementTask: {
+      title?: string;
+      description?: string;
+    };
+    ReportDetailResponse: {
+      /** Format: int64 */
+      reportId?: number;
+      resumeFileName?: string;
+      /** Format: date-time */
+      completedAt?: string;
+      /** Format: int32 */
+      overallScore?: number;
+      scores?: components["schemas"]["Scores"];
+      /** Format: int32 */
+      questionCount?: number;
+      summary?: string;
+      weaknessTagSummary?: components["schemas"]["WeaknessTagCount"][];
+      improvementTasks?: components["schemas"]["ImprovementTask"][];
+      aiDisclaimer?: string;
+    };
+    Scores: {
+      /** Format: int32 */
+      logicScore?: number;
+      /** Format: int32 */
+      specificityScore?: number;
+      /** Format: int32 */
+      technicalAccuracyScore?: number;
+      /** Format: int32 */
+      deliveryScore?: number;
+    };
+    ApiResponseReportStatusResponse: {
+      success?: boolean;
+      data?: components["schemas"]["ReportStatusResponse"];
+      error?: components["schemas"]["ErrorResponse"];
+    };
+    ReportStatusResponse: {
+      /** Format: int64 */
+      reportId?: number;
+      status?: string;
+      failedReason?: string;
+      /** Format: date-time */
+      createdAt?: string;
+      /** Format: date-time */
+      completedAt?: string;
+    };
+    ApiResponseReportStatsResponse: {
+      success?: boolean;
+      data?: components["schemas"]["ReportStatsResponse"];
+      error?: components["schemas"]["ErrorResponse"];
+    };
+    AxisAverages: {
+      /** Format: int32 */
+      logicScore?: number;
+      /** Format: int32 */
+      specificityScore?: number;
+      /** Format: int32 */
+      technicalAccuracyScore?: number;
+      /** Format: int32 */
+      deliveryScore?: number;
+    };
+    ReportStatsResponse: {
+      /** Format: int64 */
+      totalCount?: number;
+      /** Format: int32 */
+      avgScore?: number;
+      /** Format: int32 */
+      bestScore?: number;
+      /** Format: int32 */
+      monthlyDelta?: number;
+      trend?: components["schemas"]["TrendPoint"][];
+      axisAverages?: components["schemas"]["AxisAverages"];
+      weaknessSegments?: components["schemas"]["WeaknessTagCount"][];
+    };
+    TrendPoint: {
+      /** Format: date-time */
+      completedAt?: string;
+      /** Format: int32 */
+      overallScore?: number;
     };
     ApiResponseConsentCatalogResponse: {
       success?: boolean;
@@ -712,6 +970,56 @@ export interface operations {
         };
         content: {
           "*/*": components["schemas"]["ApiResponseInterviewSessionCreateResponse"];
+        };
+      };
+    };
+  };
+  end: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        /** @description 종료할 세션 id */
+        sessionId: number;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description 종료 요청 수리 — 실제 종료는 비동기 확정 */
+      202: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "*/*": components["schemas"]["ApiResponseVoid"];
+        };
+      };
+      /** @description 타인의 세션(S007) */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "*/*": components["schemas"]["ApiResponseVoid"];
+        };
+      };
+      /** @description 세션 없음(S006) */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "*/*": components["schemas"]["ApiResponseVoid"];
+        };
+      };
+      /** @description 종료 처리의 LiveKit 왕복 실패(S008) — 재시도 가능, 종료는 자동 수렴 */
+      500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "*/*": components["schemas"]["ApiResponseVoid"];
         };
       };
     };
@@ -1173,6 +1481,26 @@ export interface operations {
       };
     };
   };
+  subscribe_1: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "text/event-stream": components["schemas"]["SseEmitter"];
+        };
+      };
+    };
+  };
   getMyConsents: {
     parameters: {
       query?: never;
@@ -1189,6 +1517,157 @@ export interface operations {
         };
         content: {
           "*/*": components["schemas"]["ApiResponseUserConsentsResponse"];
+        };
+      };
+    };
+  };
+  getList_1: {
+    parameters: {
+      query?: {
+        /** @description 생성 상태 필터 (PENDING/PROCESSING/COMPLETED/FAILED) */
+        status?: "PENDING" | "PROCESSING" | "COMPLETED" | "FAILED";
+        /** @description 정렬 키: createdAt(기본) 또는 overallScore */
+        sort?: string;
+        /** @description 정렬 방향: desc(기본) 또는 asc */
+        order?: string;
+        /** @description 페이지 번호 (기본 0) */
+        page?: number;
+        /** @description 페이지 크기 (기본 20) */
+        size?: number;
+      };
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description 조회 성공 */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "*/*": components["schemas"]["ApiResponsePageResponseReportSummaryResponse"];
+        };
+      };
+      /** @description 잘못된 status·sort·order·페이지 값(C002) */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "*/*": components["schemas"]["ApiResponsePageResponseReportSummaryResponse"];
+        };
+      };
+    };
+  };
+  getDetail: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        /** @description 리포트 ID */
+        reportId: number;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description 조회 성공 */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "*/*": components["schemas"]["ApiResponseReportDetailResponse"];
+        };
+      };
+      /** @description 타인의 리포트(RP002) */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "*/*": components["schemas"]["ApiResponseReportDetailResponse"];
+        };
+      };
+      /** @description 리포트 없음(RP001) */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "*/*": components["schemas"]["ApiResponseReportDetailResponse"];
+        };
+      };
+      /** @description 생성 진행 중(RP003)·생성 실패 상태(RP004 — 재생성 필요) */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "*/*": components["schemas"]["ApiResponseReportDetailResponse"];
+        };
+      };
+    };
+  };
+  getStatus: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        /** @description 리포트 ID */
+        reportId: number;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description 조회 성공 */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "*/*": components["schemas"]["ApiResponseReportStatusResponse"];
+        };
+      };
+      /** @description 타인의 리포트(RP002) */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "*/*": components["schemas"]["ApiResponseReportStatusResponse"];
+        };
+      };
+      /** @description 리포트 없음(RP001) */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "*/*": components["schemas"]["ApiResponseReportStatusResponse"];
+        };
+      };
+    };
+  };
+  getStats: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description 조회 성공 */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "*/*": components["schemas"]["ApiResponseReportStatsResponse"];
         };
       };
     };
