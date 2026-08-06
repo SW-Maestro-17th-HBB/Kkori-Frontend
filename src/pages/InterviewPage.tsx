@@ -380,12 +380,18 @@ export function InterviewPage() {
         onClose={() => setConfirmEndOpen(false)}
         title="면접을 종료할까요?"
         actions={[
-          <Button key="continue" variant="assistive" onClick={() => setConfirmEndOpen(false)}>
+          <Button
+            key="continue"
+            variant="assistive"
+            fullWidth
+            onClick={() => setConfirmEndOpen(false)}
+          >
             계속하기
           </Button>,
           <Button
             key="end"
             variant="solid"
+            fullWidth
             onClick={() => {
               setConfirmEndOpen(false);
               requestEnd();
