@@ -331,6 +331,41 @@ describe("InterviewPage — 면접 종료", () => {
     expect(sessionStorage.getItem(SESSION_KEY)).not.toBeNull();
   });
 
+  it("이미 연결이 끊긴 상태의 종료는 202 수리만으로 완료 화면에 수렴한다", async () => {
+    // ROOM_DELETED 를 더 받을 수 없는 상태 — 202(서버 terminal 수렴 보장)가 근거다
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockImplementation(async () => envelope(null)),
+    );
+    renderLive();
+    await screen.findByText("연결됨");
+    act(() => {
+      connectedRoom()!.emitDisconnected(SERVER_SHUTDOWN);
+    });
+    await screen.findByText("연결 끊김");
+
+    await clickEndAndConfirm();
+    expect(await screen.findByTestId("ended-screen")).toBeInTheDocument();
+    expect(sessionStorage.getItem(SESSION_KEY)).toBeNull();
+  });
+
+  it("마무리 중 다른 사유로 연결을 잃어도 영구 잠금 없이 완료 화면에 수렴한다", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockImplementation(async () => envelope(null)),
+    );
+    renderLive();
+    await screen.findByText("연결됨");
+    await clickEndAndConfirm();
+    await screen.findByRole("button", { name: "면접 마무리 중…" });
+
+    act(() => {
+      connectedRoom()!.emitDisconnected(SERVER_SHUTDOWN); // 클로징 발화 중 연결 상실
+    });
+    expect(await screen.findByTestId("ended-screen")).toBeInTheDocument();
+    expect(sessionStorage.getItem(SESSION_KEY)).toBeNull();
+  });
+
   it("S008 실패는 지연 안내 + 재시도를 제공하고, 재시도의 202(멱등)로 마무리 중에 복귀한다", async () => {
     const fetchMock = vi
       .fn()

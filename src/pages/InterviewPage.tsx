@@ -83,13 +83,19 @@ export function InterviewPage() {
   const wrappingUp = endSession.isPending || endSession.isSuccess;
 
   // "면접 종료"의 단일 수렴점 — 버튼 종료·시간 만료 자연 종료·서버 fallback 삭제가
-  // 전부 ROOM_DELETED 로 도착한다 (경로 분기 없음). 그 외 사유의 해제는 기존
-  // "연결 끊김" 표시로 남는다 (재연결 UX 는 후속 INTERRUPTED 스토리).
+  // 전부 ROOM_DELETED 로 도착한다 (경로 분기 없음). /end 수리 전의 그 외 사유 해제는
+  // 기존 "연결 끊김" 표시로 남는다 (재연결 UX 는 후속 INTERRUPTED 스토리).
   useEffect(() => {
-    if (disconnectReason !== DisconnectReason.ROOM_DELETED) return;
-    clearInterviewSession(); // 삭제된 룸의 토큰 — /live 재진입이 setup 으로 가게 정리
+    const roomDeleted = disconnectReason === DisconnectReason.ROOM_DELETED;
+    // /end 가 수리(202)된 뒤 연결이 없으면 — 이미 끊긴 상태에서 종료했거나 마무리 중
+    // 연결을 잃었거나 — ROOM_DELETED 는 더 도착할 수 없다. 202 가 서버의 terminal
+    // 수렴(fallback 포함)을 보장하므로 종료로 간주해 영구 "마무리 중" 잠금을 막는다.
+    const endedWhileUnreachable =
+      endSession.isSuccess && connectionState === ConnectionState.Disconnected;
+    if (!roomDeleted && !endedWhileUnreachable) return;
+    clearInterviewSession(); // 죽은 룸의 토큰 — /live 재진입이 setup 으로 가게 정리
     nav("interviewEnded", { replace: true, state: { ended: true } });
-  }, [disconnectReason, nav]);
+  }, [disconnectReason, endSession.isSuccess, connectionState, nav]);
 
   const requestEnd = () => {
     if (stored) endSession.mutate(stored.id);
