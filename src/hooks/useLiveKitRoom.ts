@@ -4,12 +4,12 @@
    상태는 effect 동기화 대신 useSyncExternalStore 로 Room 이벤트를 구독한다.
    ============================================================ */
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
-import { ConnectionState, Room, RoomEvent, Track } from "livekit-client";
+import { ConnectionState, DisconnectReason, Room, RoomEvent, Track } from "livekit-client";
 import type { RemoteTrack } from "livekit-client";
 import type { LiveKitSession } from "../api/types";
 import { clearDevicePreferences, loadDevicePreferences } from "./devicePreferences";
 
-export { ConnectionState };
+export { ConnectionState, DisconnectReason };
 
 /* ---------- setup → /live 접속 핸드오프 ---------- */
 // setup 이 접속을 확립한 Room 을 /live 의 훅이 인수한다. 라우트 전환을 넘어
@@ -58,6 +58,10 @@ export interface LiveKitRoomState {
   room: Room;
   /** 연결 상태 (livekit ConnectionState — disconnected/connecting/connected/reconnecting…) */
   connectionState: ConnectionState;
+  /** 마지막 연결 해제 사유 — ROOM_DELETED 가 "면접 종료"의 단일 수렴점
+      (버튼 종료·시간 만료·서버 fallback 삭제가 전부 이 신호로 수렴한다).
+      해제 이벤트 전에는 null, 사유 없는 해제는 UNKNOWN_REASON */
+  disconnectReason: DisconnectReason | null;
   /** 접속 실패 사유 — 연결 시도 자체가 거부됐을 때만 (재연결 실패는 connectionState 로 관찰) */
   connectError: string | null;
   /** 내 마이크 발행 여부 */
@@ -149,6 +153,19 @@ export function useLiveKitRoom(session: LiveKitSession | undefined): LiveKitRoom
     };
   }, [room, session]);
 
+  // 해제 사유 — Room 이 속성으로 노출하지 않아 Disconnected 이벤트 인자를 상태로 보존한다.
+  // 언마운트 cleanup 의 disconnect 가 뒤늦게 발화해도 setState 는 no-op 이라 무해하다.
+  const [disconnectReason, setDisconnectReason] = useState<DisconnectReason | null>(null);
+  useEffect(() => {
+    const handleDisconnected = (reason?: DisconnectReason) => {
+      setDisconnectReason(reason ?? DisconnectReason.UNKNOWN_REASON);
+    };
+    room.on(RoomEvent.Disconnected, handleDisconnected);
+    return () => {
+      room.off(RoomEvent.Disconnected, handleDisconnected);
+    };
+  }, [room]);
+
   const connectError =
     connectFailure !== null && connectFailure.session === session ? connectFailure.message : null;
 
@@ -224,6 +241,7 @@ export function useLiveKitRoom(session: LiveKitSession | undefined): LiveKitRoom
   return {
     room,
     connectionState,
+    disconnectReason,
     connectError,
     micEnabled,
     toggleMicrophone,
