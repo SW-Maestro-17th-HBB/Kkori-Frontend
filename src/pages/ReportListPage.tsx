@@ -1,10 +1,12 @@
 /* ============================ 리포트 목록 (/reports) ============================ */
 import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router";
-import { useReports, useReportStats } from "../api/hooks";
+import { useRegenerateReport, useReports, useReportStats } from "../api/hooks";
 import { useReportStatusStream } from "../api/reportStatusStream";
+import { errorMessage } from "../api/request";
 import { Button, Chip, Tag } from "../components/ds";
 import { Icon } from "../components/Icon";
+import { NoticeToast, type ToastTone } from "../components/NoticeToast";
 import {
   Display,
   DocThumb,
@@ -363,6 +365,29 @@ export function ReportListPage() {
   const { data: stats } = useReportStats();
   useReportStatusStream();
 
+  /** 재생성 결과 안내 — 자동으로 사라지지 않고 사용자가 닫는다 */
+  const [toast, setToast] = useState<{
+    title: string;
+    description?: string;
+    tone: ToastTone;
+  } | null>(null);
+  const regenerate = useRegenerateReport();
+
+  // 실패한 리포트의 유일한 복구 수단 (PRD §1) — 성공하면 PENDING 으로 돌아가고,
+  // 목록 재조회(훅의 onSettled)가 "생성 중" 표시로 바꾼다.
+  const onRegenerate = (reportId: number) => {
+    regenerate.mutate(reportId, {
+      onSuccess: () =>
+        setToast({
+          title: "재생성을 요청했어요",
+          description: "분석이 끝나면 목록에 점수가 표시돼요.",
+          tone: "success",
+        }),
+      // 409(RP003/RP005)는 그 사이 상태가 바뀌었다는 뜻 — 문구로 알리고 목록은 이미 재동기화된다
+      onError: (e) => setToast({ title: errorMessage(e), tone: "error" }),
+    });
+  };
+
   // 정렬·필터를 바꾸면 첫 페이지로 돌아간다 (뒤쪽 페이지에 머물러 빈 결과가 뜨지 않게)
   const changeSort = (key: string) => {
     setSortKey(key);
@@ -658,8 +683,9 @@ export function ReportListPage() {
                   </td>
                   <td style={{ textAlign: "right", color: "var(--fg-tertiary)" }}>
                     {/* 완료 행만 이동 가능 — chevron 을 키보드 접근 버튼으로(행 클릭은 마우스 편의).
-                      미완성 행은 chevron 을 숨겨 클릭 가능 오해를 없앤다 */}
-                    {r.status === "COMPLETED" && (
+                      미완성 행은 chevron 을 숨겨 클릭 가능 오해를 없앤다.
+                      실패 행은 대신 재생성 버튼을 둔다 — 상세로 갈 수 없어 복구 진입점이 여기뿐이다 */}
+                    {r.status === "COMPLETED" ? (
                       <button
                         className="linkbtn"
                         aria-label={`${r.resumeName} 리포트 상세 보기`}
@@ -671,7 +697,19 @@ export function ReportListPage() {
                       >
                         <Icon name="chevron-right" size={16} />
                       </button>
-                    )}
+                    ) : r.status === "FAILED" ? (
+                      <Button
+                        variant="assistive"
+                        size="sm"
+                        leadingIcon={<Icon name="rotate-cw" size={14} />}
+                        // 같은 행의 요청 중에만 잠근다 — 다른 실패 행은 그대로 누를 수 있다
+                        disabled={regenerate.isPending && regenerate.variables === r.id}
+                        aria-label={`${r.resumeName} 리포트 재생성`}
+                        onClick={() => onRegenerate(r.id)}
+                      >
+                        재생성
+                      </Button>
+                    ) : null}
                   </td>
                 </tr>
               ))
@@ -714,6 +752,15 @@ export function ReportListPage() {
           </div>
         )}
       </div>
+
+      {toast && (
+        <NoticeToast
+          tone={toast.tone}
+          title={toast.title}
+          description={toast.description}
+          onClose={() => setToast(null)}
+        />
+      )}
     </div>
   );
 }
