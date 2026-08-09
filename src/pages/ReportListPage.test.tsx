@@ -60,7 +60,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   fetchReportStatsMock.mockResolvedValue(EMPTY_STATS);
   fetchReportsMock.mockResolvedValue(pageOf([report()]));
-  regenerateReportMock.mockResolvedValue({ id: 7, status: "PENDING" });
+  regenerateReportMock.mockResolvedValue({ reportId: 7, status: "PENDING" });
 });
 
 describe("ReportListPage 재생성", () => {
@@ -113,9 +113,9 @@ describe("ReportListPage 재생성", () => {
         report({ id: 2, resumeName: "실패B.pdf" }),
       ]),
     );
-    let resolve: (v: { id: number; status: "PENDING" }) => void = () => {};
+    let resolve: (v: { reportId: number; status: "PENDING" }) => void = () => {};
     regenerateReportMock.mockReturnValue(
-      new Promise<{ id: number; status: "PENDING" }>((r) => {
+      new Promise<{ reportId: number; status: "PENDING" }>((r) => {
         resolve = r;
       }),
     );
@@ -125,6 +125,6 @@ describe("ReportListPage 재생성", () => {
 
     await waitFor(async () => expect(await regenerateButton("실패A.pdf")).toBeDisabled());
     expect(await regenerateButton("실패B.pdf")).toBeEnabled();
-    resolve({ id: 1, status: "PENDING" });
+    resolve({ reportId: 1, status: "PENDING" });
   });
 });

@@ -145,6 +145,27 @@ export interface ApiResponseResumeReanalyzeResponse {
   error?: ErrorResponse;
 }
 
+export type ReportRegenerateResponseStatus =
+  (typeof ReportRegenerateResponseStatus)[keyof typeof ReportRegenerateResponseStatus];
+
+export const ReportRegenerateResponseStatus = {
+  PENDING: "PENDING",
+  PROCESSING: "PROCESSING",
+  COMPLETED: "COMPLETED",
+  FAILED: "FAILED",
+} as const;
+
+export interface ReportRegenerateResponse {
+  reportId?: number;
+  status?: ReportRegenerateResponseStatus;
+}
+
+export interface ApiResponseReportRegenerateResponse {
+  success?: boolean;
+  data?: ReportRegenerateResponse;
+  error?: ErrorResponse;
+}
+
 export type ConsentItemType = (typeof ConsentItemType)[keyof typeof ConsentItemType];
 
 export const ConsentItemType = {
@@ -387,6 +408,33 @@ export interface ReportDetailResponse {
 export interface ApiResponseReportDetailResponse {
   success?: boolean;
   data?: ReportDetailResponse;
+  error?: ErrorResponse;
+}
+
+export interface Evaluation {
+  logicScore?: number;
+  specificityScore?: number;
+  technicalAccuracyScore?: number;
+  feedback?: string;
+  weaknessTags?: string[];
+}
+
+export interface Item {
+  questionNumber?: number;
+  questionType?: string;
+  parentQuestionNumber?: number;
+  question?: string;
+  answer?: string;
+  evaluation?: Evaluation;
+}
+
+export interface ReportTimelineResponse {
+  items?: Item[];
+}
+
+export interface ApiResponseReportTimelineResponse {
+  success?: boolean;
+  data?: ReportTimelineResponse;
   error?: ErrorResponse;
 }
 

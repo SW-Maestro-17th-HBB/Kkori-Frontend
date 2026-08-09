@@ -5,15 +5,18 @@
  * AI 면접 준비 서비스 Kkori 백엔드 API 문서
  * OpenAPI spec version: v0.0.1
  */
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import type {
   DataTag,
   DefinedInitialDataOptions,
   DefinedUseQueryResult,
+  MutationFunction,
   QueryClient,
   QueryFunction,
   QueryKey,
   UndefinedInitialDataOptions,
+  UseMutationOptions,
+  UseMutationResult,
   UseQueryOptions,
   UseQueryResult,
 } from "@tanstack/react-query";
@@ -21,8 +24,10 @@ import type {
 import type {
   ApiResponsePageResponseReportSummaryResponse,
   ApiResponseReportDetailResponse,
+  ApiResponseReportRegenerateResponse,
   ApiResponseReportStatsResponse,
   ApiResponseReportStatusResponse,
+  ApiResponseReportTimelineResponse,
   GetList1Params,
   SseEmitter,
 } from "../kkoriAPI.schemas.ts";
@@ -44,6 +49,81 @@ const withQueryKey = <T extends object, K>(query: T, queryKey: K): T & { queryKe
   return result;
 };
 
+/**
+ * 생성 실패(FAILED)한 리포트의 재생성을 요청한다. 이전 런의 텍스트 산출물을 초기화하고
+ * PENDING으로 되돌린 뒤 생성 요청을 재발행한다 — Worker가 텍스트 분석만 다시 수행하며,
+ * 이전 런의 음성 결과(deliveryScore)는 보존·재사용된다. PENDING 복귀는 SSE로 push되지
+ * 않으므로 이 응답이 유일한 통지다. 같은 리포트에 동시 요청 시 한 건만 처리된다.
+ * @summary 리포트 재생성
+ */
+export const regenerate = (reportId: number, signal?: AbortSignal) => {
+  return customInstance<ApiResponseReportRegenerateResponse>({
+    url: `/api/v1/reports/${reportId}/retry`,
+    method: "POST",
+    signal,
+  });
+};
+
+export const getRegenerateMutationOptions = <
+  TError = ApiResponseReportRegenerateResponse,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof regenerate>>,
+    TError,
+    { reportId: number },
+    TContext
+  >;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof regenerate>>,
+  TError,
+  { reportId: number },
+  TContext
+> => {
+  const mutationKey = ["regenerate"];
+  const { mutation: mutationOptions } = options
+    ? options.mutation && "mutationKey" in options.mutation && options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey } };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof regenerate>>,
+    { reportId: number }
+  > = (props) => {
+    const { reportId } = props ?? {};
+
+    return regenerate(reportId);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type RegenerateMutationResult = NonNullable<Awaited<ReturnType<typeof regenerate>>>;
+
+export type RegenerateMutationError = ApiResponseReportRegenerateResponse;
+
+/**
+ * @summary 리포트 재생성
+ */
+export const useRegenerate = <TError = ApiResponseReportRegenerateResponse, TContext = unknown>(
+  options?: {
+    mutation?: UseMutationOptions<
+      Awaited<ReturnType<typeof regenerate>>,
+      TError,
+      { reportId: number },
+      TContext
+    >;
+  },
+  queryClient?: QueryClient,
+): UseMutationResult<
+  Awaited<ReturnType<typeof regenerate>>,
+  TError,
+  { reportId: number },
+  TContext
+> => {
+  return useMutation(getRegenerateMutationOptions(options), queryClient);
+};
 /**
  * 인증된 사용자 본인 리포트의 생성 상태 변경만 실시간으로 구독한다 (text/event-stream).
  * 이벤트 타입: REPORT_GENERATION_STATUS_CHANGED / REPORT_GENERATION_COMPLETED / REPORT_GENERATION_FAILED,
@@ -361,6 +441,123 @@ export function useGetDetail<
   queryClient?: QueryClient,
 ): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
   const queryOptions = getGetDetailQueryOptions(reportId, options);
+
+  const query = useQuery(queryOptions, queryClient) as UseQueryResult<TData, TError> & {
+    queryKey: DataTag<QueryKey, TData, TError>;
+  };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+/**
+ * 완성(COMPLETED)된 리포트의 질문-답변 흐름을 질문 단위로 조회한다 — 질문·답변 텍스트와
+ * 답변별 평가(축별 점수·피드백·약점 태그)를 결합해 발화 시각 오름차순으로 반환한다.
+ * questionType(MAIN/TAIL)·parentQuestionNumber는 대본 값 그대로 전달된다(꼬리 소속 표시용).
+ * 페이지네이션 없음 — 한 세션의 전체 흐름을 한 번에 반환한다.
+ * @summary 질문-답변 타임라인 조회
+ */
+export const getTimeline = (reportId: number, signal?: AbortSignal) => {
+  return customInstance<ApiResponseReportTimelineResponse>({
+    url: `/api/v1/reports/${reportId}/timeline`,
+    method: "GET",
+    signal,
+  });
+};
+
+export const getGetTimelineQueryKey = (reportId: number) => {
+  return [`/api/v1/reports/${reportId}/timeline`] as const;
+};
+
+export const getGetTimelineQueryOptions = <
+  TData = Awaited<ReturnType<typeof getTimeline>>,
+  TError = ApiResponseReportTimelineResponse,
+>(
+  reportId: number,
+  options?: {
+    query?: Partial<UseQueryOptions<Awaited<ReturnType<typeof getTimeline>>, TError, TData>>;
+  },
+) => {
+  const { query: queryOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getGetTimelineQueryKey(reportId);
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof getTimeline>>> = ({ signal }) =>
+    getTimeline(reportId, signal);
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: reportId !== null && reportId !== undefined,
+    ...queryOptions,
+  } as UseQueryOptions<Awaited<ReturnType<typeof getTimeline>>, TError, TData> & {
+    queryKey: DataTag<QueryKey, TData, TError>;
+  };
+};
+
+export type GetTimelineQueryResult = NonNullable<Awaited<ReturnType<typeof getTimeline>>>;
+export type GetTimelineQueryError = ApiResponseReportTimelineResponse;
+
+export function useGetTimeline<
+  TData = Awaited<ReturnType<typeof getTimeline>>,
+  TError = ApiResponseReportTimelineResponse,
+>(
+  reportId: number,
+  options: {
+    query: Partial<UseQueryOptions<Awaited<ReturnType<typeof getTimeline>>, TError, TData>> &
+      Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof getTimeline>>,
+          TError,
+          Awaited<ReturnType<typeof getTimeline>>
+        >,
+        "initialData"
+      >;
+  },
+  queryClient?: QueryClient,
+): DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+export function useGetTimeline<
+  TData = Awaited<ReturnType<typeof getTimeline>>,
+  TError = ApiResponseReportTimelineResponse,
+>(
+  reportId: number,
+  options?: {
+    query?: Partial<UseQueryOptions<Awaited<ReturnType<typeof getTimeline>>, TError, TData>> &
+      Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof getTimeline>>,
+          TError,
+          Awaited<ReturnType<typeof getTimeline>>
+        >,
+        "initialData"
+      >;
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+export function useGetTimeline<
+  TData = Awaited<ReturnType<typeof getTimeline>>,
+  TError = ApiResponseReportTimelineResponse,
+>(
+  reportId: number,
+  options?: {
+    query?: Partial<UseQueryOptions<Awaited<ReturnType<typeof getTimeline>>, TError, TData>>;
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+/**
+ * @summary 질문-답변 타임라인 조회
+ */
+
+export function useGetTimeline<
+  TData = Awaited<ReturnType<typeof getTimeline>>,
+  TError = ApiResponseReportTimelineResponse,
+>(
+  reportId: number,
+  options?: {
+    query?: Partial<UseQueryOptions<Awaited<ReturnType<typeof getTimeline>>, TError, TData>>;
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+  const queryOptions = getGetTimelineQueryOptions(reportId, options);
 
   const query = useQuery(queryOptions, queryClient) as UseQueryResult<TData, TError> & {
     queryKey: DataTag<QueryKey, TData, TError>;

@@ -11,9 +11,11 @@ import {
   updateParsed,
   upload,
 } from "./generated/resume/resume";
+import { regenerate as regenerateApi } from "./generated/report/report";
 import { create as createSessionApi, end as endSessionApi } from "./generated/session/session";
 import type {
   InterviewSessionCreateResponse,
+  ReportRegenerateResponse as ReportRegenerateResponseModel,
   ResumeParsedResponse as ResumeParsedResponseModel,
   ResumeReanalyzeResponse as ResumeReanalyzeResponseModel,
   ResumeSummaryResponse,
@@ -376,21 +378,15 @@ export const fetchReportTimeline = async (id: number | string): Promise<Timeline
   }));
 };
 
-/** 재생성 응답 — 상태가 PENDING 으로 되돌아갔다는 통지 (PRD §1). */
-interface ReportRegenerateRes {
-  reportId: number;
-  status: ReportStatus;
-}
+export type ReportRegenerateResponse = ReportRegenerateResponseModel;
 
-/** FAILED 리포트 재생성 (바디 없음) — 이전 런의 텍스트 산출물을 지우고 PENDING 으로 되돌린다.
-    PENDING 은 SSE 로 push 되지 않으므로(PRD §5) 이 응답이 복귀 사실의 유일한 통지다 —
-    화면은 목록 재조회로 반영한다. FAILED 가 아니면 409(RP003 진행 중 / RP005 완료됨). */
+/** FAILED 리포트 재생성 (바디 없음, orval 생성 fetcher 사용) — 이전 런의 텍스트 산출물을
+    지우고 PENDING 으로 되돌린다. PENDING 은 SSE 로 push 되지 않으므로(PRD §5) 이 응답이
+    복귀 사실의 유일한 통지지만, 화면은 목록 재조회로 반영하므로 payload 를 쓰지 않는다.
+    FAILED 가 아니면 409(RP003 진행 중 / RP005 완료됨). */
 export const regenerateReport = async (
-  id: number,
-): Promise<{ id: number; status: ReportStatus }> => {
-  const r = await request<ReportRegenerateRes>("POST", `/api/v1/reports/${id}/retry`);
-  return { id: r.reportId, status: r.status };
-};
+  reportId: number,
+): Promise<ReportRegenerateResponse | undefined> => (await regenerateApi(reportId)).data;
 
 /* ---------- 면접 세션 (실제 API — orval 생성 fetcher 사용) ---------- */
 
