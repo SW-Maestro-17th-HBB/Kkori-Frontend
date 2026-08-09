@@ -56,6 +56,19 @@ const EMPTY_STATS: ReportStats = {
 const regenerateButton = (resumeName: string) =>
   screen.findByRole("button", { name: `${resumeName} 리포트 재생성` });
 
+/** 응답을 붙잡아 두는 재생성 목 — 요청 중(pending) 상태의 화면을 관찰하려고 쓴다.
+    호출마다 별도 Promise 를 주고, resolveAll() 로 한꺼번에 풀어 테스트를 정리한다. */
+const deferredRegenerate = () => {
+  const resolvers: (() => void)[] = [];
+  regenerateReportMock.mockImplementation(
+    (reportId: number) =>
+      new Promise((resolve) => {
+        resolvers.push(() => resolve({ reportId, status: "PENDING" }));
+      }),
+  );
+  return { resolveAll: () => resolvers.forEach((r) => r()) };
+};
+
 beforeEach(() => {
   vi.clearAllMocks();
   fetchReportStatsMock.mockResolvedValue(EMPTY_STATS);
@@ -113,18 +126,33 @@ describe("ReportListPage 재생성", () => {
         report({ id: 2, resumeName: "실패B.pdf" }),
       ]),
     );
-    let resolve: (v: { reportId: number; status: "PENDING" }) => void = () => {};
-    regenerateReportMock.mockReturnValue(
-      new Promise<{ reportId: number; status: "PENDING" }>((r) => {
-        resolve = r;
-      }),
-    );
+    const pending = deferredRegenerate();
     const user = userEvent.setup();
     renderWithProviders(<ReportListPage />, { route: "/reports" });
     await user.click(await regenerateButton("실패A.pdf"));
 
     await waitFor(async () => expect(await regenerateButton("실패A.pdf")).toBeDisabled());
     expect(await regenerateButton("실패B.pdf")).toBeEnabled();
-    resolve({ reportId: 1, status: "PENDING" });
+    pending.resolveAll();
+  });
+
+  it("다른 행을 눌러도 먼저 요청한 행의 잠금이 풀리지 않는다 (중복 제출 방지)", async () => {
+    fetchReportsMock.mockResolvedValue(
+      pageOf([
+        report({ id: 1, resumeName: "실패A.pdf" }),
+        report({ id: 2, resumeName: "실패B.pdf" }),
+      ]),
+    );
+    const pending = deferredRegenerate();
+    const user = userEvent.setup();
+    renderWithProviders(<ReportListPage />, { route: "/reports" });
+    await user.click(await regenerateButton("실패A.pdf"));
+    await user.click(await regenerateButton("실패B.pdf"));
+
+    // 훅의 isPending·variables 로 판정하면 마지막 호출(B)만 남아 A 가 다시 눌리는 상태가 된다
+    expect(await regenerateButton("실패A.pdf")).toBeDisabled();
+    expect(await regenerateButton("실패B.pdf")).toBeDisabled();
+    expect(regenerateReportMock).toHaveBeenCalledTimes(2);
+    pending.resolveAll();
   });
 });

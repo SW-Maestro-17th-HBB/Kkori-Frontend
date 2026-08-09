@@ -372,10 +372,15 @@ export function ReportListPage() {
     tone: ToastTone;
   } | null>(null);
   const regenerate = useRegenerateReport();
+  /** 요청 중인 리포트 id 집합 — 훅의 isPending·variables 는 mutation 인스턴스가 하나라
+      마지막 호출만 반영한다(A 요청 중 B 를 누르면 A 의 잠금이 풀린다). 행별로 직접 추적한다. */
+  const [regeneratingIds, setRegeneratingIds] = useState<ReadonlySet<number>>(new Set());
 
   // 실패한 리포트의 유일한 복구 수단 (PRD §1) — 성공하면 PENDING 으로 돌아가고,
   // 목록 재조회(훅의 onSettled)가 "생성 중" 표시로 바꾼다.
   const onRegenerate = (reportId: number) => {
+    if (regeneratingIds.has(reportId)) return; // 같은 행의 중복 제출 차단
+    setRegeneratingIds((prev) => new Set(prev).add(reportId));
     regenerate.mutate(reportId, {
       onSuccess: () =>
         setToast({
@@ -385,6 +390,12 @@ export function ReportListPage() {
         }),
       // 409(RP003/RP005)는 그 사이 상태가 바뀌었다는 뜻 — 문구로 알리고 목록은 이미 재동기화된다
       onError: (e) => setToast({ title: errorMessage(e), tone: "error" }),
+      onSettled: () =>
+        setRegeneratingIds((prev) => {
+          const next = new Set(prev);
+          next.delete(reportId);
+          return next;
+        }),
     });
   };
 
@@ -703,7 +714,7 @@ export function ReportListPage() {
                         size="sm"
                         leadingIcon={<Icon name="rotate-cw" size={14} />}
                         // 같은 행의 요청 중에만 잠근다 — 다른 실패 행은 그대로 누를 수 있다
-                        disabled={regenerate.isPending && regenerate.variables === r.id}
+                        disabled={regeneratingIds.has(r.id)}
                         aria-label={`${r.resumeName} 리포트 재생성`}
                         onClick={() => onRegenerate(r.id)}
                       >

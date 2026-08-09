@@ -42,11 +42,12 @@ export function NoticeToast({
           display: "flex",
           alignItems: description ? "flex-start" : "center",
           gap: 10,
-          maxWidth: 480,
+          // 좁은 화면에서 480 고정폭이 화면을 넘지 않게 — width 를 주지 않아 짧은 문구는 내용만큼만 차지한다
+          maxWidth: "min(480px, calc(100vw - 32px))",
           background: "var(--bg-surface)",
           border: "1px solid var(--border-subtle)",
           borderRadius: "var(--radius-12)",
-          boxShadow: "0 8px 24px rgba(0, 0, 0, 0.12)",
+          boxShadow: "var(--shadow-pop)",
           padding: "12px 16px",
           fontFamily: "var(--font-sans)",
         }}
@@ -66,7 +67,8 @@ export function NoticeToast({
         >
           <Icon name={badge.icon} size={15} />
         </span>
-        <div style={{ wordBreak: "keep-all", lineHeight: 1.5 }}>
+        {/* keep-all 은 한국어 어절만 지켜주므로, 공백 없는 긴 토큰(URL 등)은 anywhere 로 강제 줄바꿈 */}
+        <div style={{ wordBreak: "keep-all", overflowWrap: "anywhere", lineHeight: 1.5 }}>
           <div style={{ fontSize: 14, fontWeight: 600, color: "var(--fg-strong)" }}>{title}</div>
           {description && (
             <div
