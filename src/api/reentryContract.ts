@@ -8,5 +8,7 @@
     소진 후에는 수동 "다시 연결"만 남는다 */
 export const REENTRY_ATTEMPT_DELAYS_MS: readonly number[] = [0, 4_000, 10_000];
 
-/** "이미 종료된 세션" 재입장 거부 코드 — BE 미확정 placeholder */
+/** "이미 종료된 세션" 재입장 거부 코드 — BE 미확정 placeholder.
+    TODO(HBB1-308): BE 재연결 PRD 확정 시 실코드로 교체하고 errorCodes.ts 로 승격할 것.
+    미교체 상태로 배포되면 종료된 세션의 거부가 네트워크 실패 안내로 오인된다 */
 export const REENTRY_SESSION_ENDED_CODE = "S0XX";
