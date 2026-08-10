@@ -66,6 +66,8 @@ ROOM_DELETED ──▶ 기존 종료 경로 그대로 — 재입장을 시도하
 - 자동 시도 소진 후 수동 버튼만 남고, 수동 클릭이 새 토큰 발급부터 다시 시도하는지 확인
 - 재입장 성공 시 저장값 갱신이 접속 성공 후에 일어나고(id·authSessionId 보존), micIntent가 켜짐이면 자동 재발행되는지 확인
 - 연결 해제로 SDK 발행 상태가 꺼진 것이 micIntent·저장값에 기록되지 않는지 확인
+- 재입장 성공 후 이전 disconnectReason이 남아 있어도 재입장이 다시 발화하지 않는지 확인
+- 토큰 A에서 마이크를 복원한 뒤 토큰 B 재입장에서도 복원이 다시 1회 실행되는지 확인
 - 오버레이의 "면접 종료"가 기존 /end 경로(202 + 연결 없음 수렴)로 완료 화면에 도달하는지 확인
 
 ## 새로고침 복원
@@ -103,7 +105,7 @@ ROOM_DELETED ──▶ 기존 종료 경로 그대로 — 재입장을 시도하
 - 재입장 오케스트레이션: 단일 진행·타이머 취소·세대 기준 늦은 응답 폐기를 전용 훅으로 캡슐화(페이지는 상태만 소비)
 - 세션 저장값: `src/hooks/interviewSession.ts` — 마이크 의도(micIntent) 필드 추가(하위호환 — 없으면 꺼짐)
 - 연결 없는 종료 수렴: `src/pages/InterviewPage.tsx` — 기존 202(isSuccess) 한정 조건을 S008 에러까지 확장 (HBB1-294 문서의 해당 절은 본 문서가 갱신)
-- LiveKit: `src/hooks/useLiveKitRoom.ts` — 세션 교체 시 기존 Room 재사용·재접속(기존 구조). 재입장 성공 후 이전 `disconnectReason` 잔존이 오버레이·수렴 판정을 오염하지 않도록 트리거는 현재 `connectionState` 기준으로 판정
+- LiveKit: `src/hooks/useLiveKitRoom.ts` — 세션 교체 시 기존 Room 재사용·재접속(기존 구조). 재입장 성공 후 이전 `disconnectReason` 잔존이 판정을 오염하지 않도록 트리거는 다음 조건식으로 고정한다 — `connectionState === Disconnected && (connectError !== null || (disconnectReason !== null && disconnectReason !== ROOM_DELETED))`. 최초 마운트(사유 null·접속 전)는 자연 제외되고, 오버레이 표시는 이 트리거와 시도 진행 메타데이터에서 파생한다. 마이크 복원은 토글 재사용이 아닌 명시적 켜기 API로, 토큰(시도 세대)당 1회 가드
 - 종료 화면: `src/pages/InterviewEndedPage.tsx` — 이동 state `reason` 확장, 부제 분기
 
 ## 제약사항·범위 외
