@@ -211,26 +211,29 @@ export function InterviewPage() {
         {/* 좌측 자리 유지용 — 타이머 표시는 제거됨(남은 시간의 원천이 서버에 없어
             어림값 표기가 오정보였다). 자연 만료는 ROOM_DELETED 수렴으로 처리된다 */}
         <span aria-hidden style={{ width: 1 }} />
-        <span
-          role="status"
-          style={{
-            display: "inline-flex",
-            alignItems: "center",
-            gap: 8,
-            height: 32,
-            padding: "0 14px",
-            borderRadius: "var(--radius-full)",
-            background: "var(--bg-inverse-subtle)",
-            border: "1px solid var(--border-inverse-strong)",
-            color: "var(--fg-inverse)",
-            fontFamily: "var(--font-sans)",
-            fontSize: 13,
-            fontWeight: 600,
-          }}
-        >
-          <span style={{ width: 8, height: 8, borderRadius: "50%", background: statusDot }} />{" "}
-          {statusLabel}
-        </span>
+        {/* 재입장 오버레이가 연결 상태를 대신 전한다 — 뒤에 비치는 상태 필은 중복이라 숨긴다 */}
+        {!overlayActive && (
+          <span
+            role="status"
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              gap: 8,
+              height: 32,
+              padding: "0 14px",
+              borderRadius: "var(--radius-full)",
+              background: "var(--bg-inverse-subtle)",
+              border: "1px solid var(--border-inverse-strong)",
+              color: "var(--fg-inverse)",
+              fontFamily: "var(--font-sans)",
+              fontSize: 13,
+              fontWeight: 600,
+            }}
+          >
+            <span style={{ width: 8, height: 8, borderRadius: "50%", background: statusDot }} />{" "}
+            {statusLabel}
+          </span>
+        )}
         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
           {/* 자동재생 정책으로 원격 오디오가 막힌 경우 — 사용자 제스처로 재개 */}
           {connectionState === ConnectionState.Connected && !canPlayAudio && (

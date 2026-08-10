@@ -153,10 +153,11 @@ describe("InterviewPage — LiveKit 룸 접속", () => {
     expect(connectedRoom()!.connect).toHaveBeenCalledWith("wss://test.example", "jwt-token");
   });
 
-  it("접속이 거부되면 '접속 실패' 상태를 보여준다", async () => {
+  it("접속이 거부되면 재연결 오버레이가 상태를 대신 전한다 (상태 필은 숨김)", async () => {
     FakeRoom.connectBehavior = "fail";
     renderLive();
-    expect(await screen.findByText("접속 실패")).toBeInTheDocument();
+    expect(await screen.findByTestId("reconnect-overlay")).toBeInTheDocument();
+    expect(screen.queryByText("접속 실패")).toBeNull();
   });
 
   it("자동재생이 막히면 '소리 켜기'가 나타나고, 실패 시 유지되다 재클릭 성공 시 사라진다", async () => {
