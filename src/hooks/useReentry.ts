@@ -53,31 +53,43 @@ export function useReentry({
   const [requesting, setRequesting] = useState(false);
 
   // 시도가 유효한 국면인지 — 발급 응답 도착 시점에 참조한다 (늦은 응답 폐기의 기준).
-  // 일시 중단·영구 중단·이미 재접속(triggered 해제) 전부 이 값 하나로 걸러진다.
+  // armed 만으로는 "복구 후 재끊김"으로 재무장한 새 국면과 이전 국면을 구분하지 못하므로,
+  // 국면 전환마다 세대를 올려 요청이 속한 국면과 대조한다 (PRD: 시도 세대 기준 폐기)
   const armed = triggered && !suspended && !halted && sessionId !== null;
   const armedRef = useRef(false);
+  const generationRef = useRef(0);
   // 단일 진행 — 발급 요청이 날아가 있는 동안 새 시도를 막는 동기 가드
   const busyRef = useRef(false);
   const onIssuedRef = useRef(onIssued);
   const onDeniedRef = useRef(onDenied);
   useEffect(() => {
+    if (armedRef.current !== armed) generationRef.current += 1; // 국면 전환 = 세대 교체
     armedRef.current = armed;
     onIssuedRef.current = onIssued;
     onDeniedRef.current = onDenied;
   });
+  // 언마운트 후 도착하는 응답도 무효화한다
+  useEffect(
+    () => () => {
+      generationRef.current += 1;
+      armedRef.current = false;
+    },
+    [],
+  );
 
   const mutateReenter = reenter.mutateAsync;
   const runAttempt = useCallback(() => {
     if (busyRef.current || sessionId === null) return;
+    const generation = generationRef.current; // 요청이 속한 국면 — 응답 도착 시 대조한다
     busyRef.current = true;
     setRequesting(true);
     mutateReenter(sessionId)
       .then(
         (issued) => {
-          if (armedRef.current) onIssuedRef.current(issued);
+          if (armedRef.current && generationRef.current === generation) onIssuedRef.current(issued);
         },
         (err: unknown) => {
-          if (!armedRef.current) return; // 중단된 국면의 늦은 실패 — 폐기
+          if (!armedRef.current || generationRef.current !== generation) return; // 이전 국면의 늦은 실패 — 폐기
           if (isApiError(err) && err.code === REENTRY_SESSION_ENDED_CODE) onDeniedRef.current();
           // 그 외 실패(네트워크 등)는 시도 1회 소모 — 다음 예약은 스케줄 effect 가 잡는다
         },
