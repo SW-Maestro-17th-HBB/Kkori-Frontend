@@ -76,6 +76,11 @@ export function isApiError(e: unknown): e is ApiError {
   return e instanceof ApiError;
 }
 
+/** 사용자에게 보여줄 실패 문구 — 백엔드 message 는 그대로 쓴다(코드별 안내가 이미 담겨 있음).
+    ApiError 가 아닌 실패(예상 밖 예외)만 일반 문구로 덮는다. */
+export const errorMessage = (e: unknown): string =>
+  isApiError(e) ? e.message : "요청에 실패했습니다. 잠시 후 다시 시도해 주세요.";
+
 /** 비어 있으면 same-origin — 로컬 개발은 vite.config.ts 의 프록시(/api, /sse → 8080)를 탄다.
     SSE(resumeStatusStream)도 같은 원천을 쓴다 */
 export const API_BASE_URL: string = import.meta.env.VITE_API_BASE_URL ?? "";

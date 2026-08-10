@@ -17,6 +17,7 @@ import {
   postLogout,
   postSignup,
   reanalyzeResume,
+  regenerateReport,
   updateResumeParsed,
   uploadResume,
 } from "./client";
@@ -193,6 +194,17 @@ export const useReportDetail = (id: number | string, enabled = true) =>
     queryFn: () => fetchReportDetail(id),
     enabled,
   });
+
+/** 리포트 재생성 — FAILED 리포트를 PENDING 으로 되돌린다 (자동 재시도 없음, 비멱등 POST).
+    성공·실패 모두 목록을 재조회한다: 성공한 PENDING 복귀는 SSE 로 오지 않아 다른 갱신
+    경로가 없고, 409(RP003/RP005)는 서버 상태가 화면보다 앞서 있다는 뜻이라 재동기화가 답이다. */
+export const useRegenerateReport = () => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (reportId: number) => regenerateReport(reportId),
+    onSettled: () => queryClient.invalidateQueries({ queryKey: ["reports"] }),
+  });
+};
 
 /** 질문-답변 타임라인 — 상세와 독립 조회(병렬). enabled=false 는 /sample 정적 데이터용. */
 export const useReportTimeline = (id: number | string, enabled = true) =>
