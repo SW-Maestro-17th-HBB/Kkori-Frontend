@@ -7,7 +7,7 @@ import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "
 import { ConnectionState, DisconnectReason, Room, RoomEvent, Track } from "livekit-client";
 import type { RemoteTrack } from "livekit-client";
 import type { LiveKitSession } from "../api/types";
-import { clearDevicePreferences, loadDevicePreferences } from "./devicePreferences";
+import { clearDevicePreference, loadDevicePreferences } from "./devicePreferences";
 
 export { ConnectionState, DisconnectReason };
 
@@ -221,7 +221,7 @@ export function useLiveKitRoom(session: LiveKitSession | undefined): LiveKitRoom
         const deviceGone = name === "NotFoundError" || name === "OverconstrainedError";
         if (!enable || appliedMicId === null || !deviceGone || micFallbackRef.current) throw err;
         micFallbackRef.current = true;
-        clearDevicePreferences();
+        clearDevicePreference("micId");
         await room.localParticipant.setMicrophoneEnabled(true, { deviceId: "default" });
       }
     },

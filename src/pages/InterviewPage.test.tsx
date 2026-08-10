@@ -12,7 +12,7 @@ import { ApiError } from "../api/request";
 import { saveInterviewSession, type InterviewSessionRecord } from "../hooks/interviewSession";
 import { discardConnectedRoom, stashConnectedRoom } from "../hooks/useLiveKitRoom";
 import { renderWithProviders } from "../test/render";
-import { FakeRoom, makeFakeAudioTrack } from "../test/livekitMock";
+import { FakeMedia, FakeRoom, makeFakeAudioTrack } from "../test/livekitMock";
 import { InterviewPage } from "./InterviewPage";
 
 vi.mock("livekit-client", async () => (await import("../test/livekitMock")).createLiveKitMock());
@@ -773,5 +773,115 @@ describe("InterviewPage — 마이크 복원", () => {
     await waitFor(() => {
       expect(enableCalls()).toBeGreaterThan(restoredOnA);
     });
+  });
+});
+
+/* ---------- 카메라 self-view (HBB1-20) — 룸에 publish 하지 않는 로컬 트랙 ---------- */
+
+describe("InterviewPage — 카메라 self-view", () => {
+  beforeEach(() => {
+    discardConnectedRoom();
+    FakeRoom.reset();
+    FakeMedia.reset();
+    sessionStorage.clear();
+    localStorage.clear();
+    seedSession();
+  });
+
+  it("camIntent 꺼짐이면 placeholder 만 표시하고 카메라를 획득하지 않는다", async () => {
+    renderLive();
+    await screen.findByText("연결됨");
+    expect(screen.queryByLabelText("내 카메라 화면")).toBeNull();
+    expect(FakeMedia.createLocalTracks).not.toHaveBeenCalled();
+  });
+
+  it("camIntent 켜짐 세션은 마운트 시 self-view 를 자동으로 켠다 (접속과 무관한 로컬 트랙)", async () => {
+    seedSession({ camIntent: true });
+    renderLive();
+    expect(await screen.findByLabelText("내 카메라 화면")).toBeInTheDocument();
+    const track = FakeMedia.tracks.at(-1)!;
+    expect(track.attach).toHaveBeenCalled();
+    expect(track.kind).toBe("video");
+  });
+
+  it("카메라 토글 성공이 표시·저장값(camIntent)에 반영되고, 끄기는 트랙을 정지한다", async () => {
+    renderLive();
+    await screen.findByText("연결됨");
+    const camera = screen.getByRole("button", { name: "카메라" });
+    expect(camera).toHaveAttribute("aria-pressed", "false");
+
+    await userEvent.click(camera);
+    expect(await screen.findByLabelText("내 카메라 화면")).toBeInTheDocument();
+    expect(camera).toHaveAttribute("aria-pressed", "true");
+    expect(JSON.parse(sessionStorage.getItem(SESSION_KEY)!).camIntent).toBe(true);
+
+    const track = FakeMedia.tracks.at(-1)!;
+    await userEvent.click(camera);
+    await waitFor(() => {
+      expect(screen.queryByLabelText("내 카메라 화면")).toBeNull();
+    });
+    expect(camera).toHaveAttribute("aria-pressed", "false");
+    expect(track.stop).toHaveBeenCalled();
+    expect(JSON.parse(sessionStorage.getItem(SESSION_KEY)!).camIntent).toBe(false);
+  });
+
+  it("카메라 켜기 실패 시 안내 문구를 보여주고 placeholder 를 유지한다 (음성 진행)", async () => {
+    FakeMedia.trackBehavior = "denied";
+    renderLive();
+    await screen.findByText("연결됨");
+
+    const camera = screen.getByRole("button", { name: "카메라" });
+    await userEvent.click(camera);
+    expect(await screen.findByRole("alert")).toHaveTextContent("카메라를 켤 수 없어요");
+    expect(camera).toHaveAttribute("aria-pressed", "false");
+    expect(screen.queryByLabelText("내 카메라 화면")).toBeNull();
+
+    FakeMedia.trackBehavior = "ok";
+    await userEvent.click(camera);
+    await waitFor(() => {
+      expect(screen.queryByRole("alert")).toBeNull();
+    });
+    expect(await screen.findByLabelText("내 카메라 화면")).toBeInTheDocument();
+  });
+
+  it("재입장 토큰 갱신 후에도 꺼둔 카메라가 저장값에 유지된다 (발급 시점 값으로 미회귀)", async () => {
+    seedSession({ camIntent: true });
+    reenterMock.mockResolvedValue(reenterResponse("jwt-token-B"));
+    renderLive();
+    await screen.findByText("연결됨");
+    await screen.findByLabelText("내 카메라 화면");
+
+    await userEvent.click(screen.getByRole("button", { name: "카메라" })); // 끄기
+    await waitFor(() => {
+      expect(JSON.parse(sessionStorage.getItem(SESSION_KEY)!).camIntent).toBe(false);
+    });
+
+    const room = connectedRoom()!;
+    act(() => {
+      room.emitDisconnected(SERVER_SHUTDOWN);
+    });
+    await waitFor(() => {
+      expect(vi.mocked(room.connect)).toHaveBeenLastCalledWith("wss://re.example", "jwt-token-B");
+    });
+    await screen.findByText("연결됨");
+    // 접속 성공 시 저장값 갱신이 activeSession 에 남은 발급 시점 camIntent 로 되돌리지 않는다
+    await waitFor(() => {
+      expect(JSON.parse(sessionStorage.getItem(SESSION_KEY)!).camIntent).toBe(false);
+    });
+    expect(screen.queryByLabelText("내 카메라 화면")).toBeNull();
+  });
+
+  it("재연결 국면(오버레이)에도 self-view 는 유지된다", async () => {
+    seedSession({ camIntent: true });
+    renderLive();
+    await screen.findByText("연결됨");
+    await screen.findByLabelText("내 카메라 화면");
+
+    act(() => {
+      connectedRoom()!.emitDisconnected(SERVER_SHUTDOWN);
+    });
+    await screen.findByTestId("reconnect-overlay");
+    expect(screen.getByLabelText("내 카메라 화면")).toBeInTheDocument();
+    expect(FakeMedia.tracks.at(-1)!.stopped).toBe(false);
   });
 });

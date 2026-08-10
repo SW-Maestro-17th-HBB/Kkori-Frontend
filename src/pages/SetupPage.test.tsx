@@ -356,13 +356,35 @@ describe("SetupPage — 장비 점검", () => {
       authSessionId: "sess-A",
       id: 34,
       micIntent: false, // 발급 시점의 의도 기본값 — /live 의 토글·복원만 갱신한다
+      camIntent: true, // 점검에서 카메라를 확보했으므로 /live self-view 는 켜짐으로 시작
     });
     expect(JSON.parse(sessionStorage.getItem("hbb.interview.devicePrefs")!)).toEqual({
       micId: "mic-default",
+      cameraId: "cam-default",
     });
     // 이동 전에 이 화면에서 LiveKit 접속을 확립한다 (핸드오프용 룸)
     const room = FakeRoom.instances.at(-1)!;
     expect(room.connect).toHaveBeenCalledWith("wss://lk.example", "lk-token");
+  });
+
+  it("카메라 없이(음성 진행) 시작하면 camIntent 꺼짐으로 저장하고 cameraId 를 남기지 않는다", async () => {
+    seedLogin();
+    stubSessionFetch();
+    FakeMedia.acquireResults = ["in-use", "ok"]; // 결합 실패(카메라 점유) → 마이크 단독 성공
+    renderSetupPage();
+    await startCheck();
+    await speakIntoMic();
+    await userEvent.click(screen.getByRole("button", { name: "면접 시작" }));
+
+    await waitFor(() => {
+      expect(screen.getByTestId("location")).toHaveTextContent("/live");
+    });
+    expect(JSON.parse(sessionStorage.getItem("hbb.interview.session")!)).toMatchObject({
+      camIntent: false, // /live 가 예상 밖 카메라 점등 없이 placeholder 로 시작한다
+    });
+    expect(JSON.parse(sessionStorage.getItem("hbb.interview.devicePrefs")!)).toEqual({
+      micId: "mic-default",
+    });
   });
 });
 

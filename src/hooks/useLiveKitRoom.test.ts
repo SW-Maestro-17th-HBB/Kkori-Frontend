@@ -212,7 +212,7 @@ describe("useLiveKitRoom — 장치 핸드오프", () => {
   });
 
   it("저장된 마이크가 제거된 경우 저장값을 지우고 기본 장치로 1회 재시도한다", async () => {
-    sessionStorage.setItem(STORAGE_KEY, JSON.stringify({ micId: "mic-gone" }));
+    sessionStorage.setItem(STORAGE_KEY, JSON.stringify({ micId: "mic-gone", cameraId: "cam-usb" }));
     FakeRoom.micResults = ["notfound"]; // 첫 켜기만 실패 — 재시도는 성공
     const { result } = await renderConnected();
 
@@ -223,7 +223,8 @@ describe("useLiveKitRoom — 장치 핸드오프", () => {
     // 재시도는 스테일 캡처 기본값 대신 기본 장치를 명시적으로 전달해야 한다
     expect(setMic.mock.calls[1]).toEqual([true, { deviceId: "default" }]);
     expect(result.current.micEnabled).toBe(true);
-    expect(sessionStorage.getItem(STORAGE_KEY)).toBeNull();
+    // micId 만 제거된다 — 카메라 선호(self-view)는 마이크 fallback 과 무관하게 보존
+    expect(JSON.parse(sessionStorage.getItem(STORAGE_KEY)!)).toEqual({ cameraId: "cam-usb" });
   });
 
   it("기본 장치 재시도까지 실패하면 오류를 그대로 던진다", async () => {

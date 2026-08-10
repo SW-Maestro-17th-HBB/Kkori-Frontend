@@ -22,15 +22,21 @@ export interface InterviewSessionRecord {
       SDK 발행이 꺼진 것은 기록하지 않는다. 재입장·새로고침 복원의 원천.
       필드가 없는 구레코드는 꺼짐으로 취급한다 (예상 밖 자동 발행 방지) */
   micIntent?: boolean;
+  /** 카메라 의도 상태 — setup 에서 카메라를 확보했으면 켜짐으로 시작하고, 이후
+      성공한 사용자 토글 때만 갱신한다. 카메라는 룸에 publish 하지 않는 로컬
+      self-view 전용이라 재입장·새로고침 복원도 접속과 무관하게 이 값을 따른다.
+      필드가 없는 구레코드는 꺼짐으로 취급한다 (예상 밖 카메라 점등 방지) */
+  camIntent?: boolean;
 }
 
 export function saveInterviewSession(session: InterviewSessionRecord): boolean {
   try {
     const { url, token, room, authSessionId, id } = session;
     const micIntent = session.micIntent === true;
+    const camIntent = session.camIntent === true;
     sessionStorage.setItem(
       STORAGE_KEY,
-      JSON.stringify({ url, token, room, authSessionId, id, micIntent }),
+      JSON.stringify({ url, token, room, authSessionId, id, micIntent, camIntent }),
     );
     return true;
   } catch {
@@ -46,13 +52,24 @@ export function loadInterviewSession(): InterviewSessionRecord | null {
     if (!raw) return null;
     const parsed: unknown = JSON.parse(raw);
     if (typeof parsed !== "object" || parsed === null) return null;
-    const { url, token, room, authSessionId, id, micIntent } = parsed as Record<string, unknown>;
+    const { url, token, room, authSessionId, id, micIntent, camIntent } = parsed as Record<
+      string,
+      unknown
+    >;
     if (!isFilled(url) || !isFilled(token) || !isFilled(room) || !isFilled(authSessionId)) {
       return null;
     }
     // id 없는 레코드는 구계약 저장분 — 무효 처리해 setup 재진입으로 유도한다
     if (typeof id !== "number") return null;
-    return { url, token, room, authSessionId, id, micIntent: micIntent === true };
+    return {
+      url,
+      token,
+      room,
+      authSessionId,
+      id,
+      micIntent: micIntent === true,
+      camIntent: camIntent === true,
+    };
   } catch {
     return null;
   }
@@ -62,6 +79,12 @@ export function loadInterviewSession(): InterviewSessionRecord | null {
 export function updateStoredMicIntent(micIntent: boolean) {
   const record = loadInterviewSession();
   if (record) saveInterviewSession({ ...record, micIntent });
+}
+
+/** 저장된 레코드의 camIntent 만 갱신 — 성공한 카메라 토글 시점에 호출 (레코드 없으면 no-op) */
+export function updateStoredCamIntent(camIntent: boolean) {
+  const record = loadInterviewSession();
+  if (record) saveInterviewSession({ ...record, camIntent });
 }
 
 export function clearInterviewSession() {
