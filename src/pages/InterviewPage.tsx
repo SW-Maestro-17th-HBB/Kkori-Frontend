@@ -26,22 +26,6 @@ import {
 } from "../hooks/useLiveKitRoom";
 import { ROUTES } from "../routes";
 
-const CONNECTION_LABEL: Record<ConnectionState, string> = {
-  [ConnectionState.Disconnected]: "연결 끊김",
-  [ConnectionState.Connecting]: "연결 중…",
-  [ConnectionState.Connected]: "연결됨",
-  [ConnectionState.Reconnecting]: "재연결 중…",
-  [ConnectionState.SignalReconnecting]: "재연결 중…",
-};
-
-const CONNECTION_DOT: Record<ConnectionState, string> = {
-  [ConnectionState.Disconnected]: "var(--red-600)",
-  [ConnectionState.Connecting]: "var(--blue-400)",
-  [ConnectionState.Connected]: "var(--green-600)",
-  [ConnectionState.Reconnecting]: "var(--blue-400)",
-  [ConnectionState.SignalReconnecting]: "var(--blue-400)",
-};
-
 /** 종료 요청 실패 안내 — S008(종료 신호 발신 실패)은 종료 의도가 이미 기록된 상태라
     실패로 다루지 않고 즉시 수렴한다(endConfirmed). 여기 도달하는 것은 그 외 코드뿐 —
     공통 재시도 안내 + 서버 메시지 병기. */
@@ -213,9 +197,6 @@ export function InterviewPage() {
     if (overlayActive) overlayTitleRef.current?.focus();
   }, [overlayActive]);
 
-  const statusLabel = connectError ? "접속 실패" : CONNECTION_LABEL[connectionState];
-  const statusDot = connectError ? "var(--red-600)" : CONNECTION_DOT[connectionState];
-
   // 세션 없이는 면접 화면이 성립하지 않는다 — 설정 화면으로 돌려보낸다 (히스토리 미기록)
   if (!gateOk) return <Navigate to={ROUTES.setup} replace />;
 
@@ -247,32 +228,10 @@ export function InterviewPage() {
           zIndex: 6,
         }}
       >
-        {/* 좌측 자리 유지용 — 타이머 표시는 제거됨(남은 시간의 원천이 서버에 없어
-            어림값 표기가 오정보였다). 자연 만료는 ROOM_DELETED 수렴으로 처리된다 */}
+        {/* 좌측 자리 유지용 — 타이머·연결 상태 필은 제거됨(타이머는 서버에 남은 시간
+            원천이 없어 오정보였고, 상태 필은 정상 시 불필요·이상 시 재연결 오버레이가
+            대신 전한다). 자연 만료는 ROOM_DELETED 수렴으로 처리된다 */}
         <span aria-hidden style={{ width: 1 }} />
-        {/* 재입장 오버레이가 연결 상태를 대신 전한다 — 뒤에 비치는 상태 필은 중복이라 숨긴다 */}
-        {!overlayActive && (
-          <span
-            role="status"
-            style={{
-              display: "inline-flex",
-              alignItems: "center",
-              gap: 8,
-              height: 32,
-              padding: "0 14px",
-              borderRadius: "var(--radius-full)",
-              background: "var(--bg-inverse-subtle)",
-              border: "1px solid var(--border-inverse-strong)",
-              color: "var(--fg-inverse)",
-              fontFamily: "var(--font-sans)",
-              fontSize: 13,
-              fontWeight: 600,
-            }}
-          >
-            <span style={{ width: 8, height: 8, borderRadius: "50%", background: statusDot }} />{" "}
-            {statusLabel}
-          </span>
-        )}
         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
           {/* 자동재생 정책으로 원격 오디오가 막힌 경우 — 사용자 제스처로 재개 */}
           {connectionState === ConnectionState.Connected && !canPlayAudio && (
