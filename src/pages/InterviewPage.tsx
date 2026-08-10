@@ -305,8 +305,9 @@ export function InterviewPage() {
           position: "absolute",
           top: 76,
           left: 22,
-          width: 168,
-          height: 108,
+          // 16:9 — 웹캠 원본 비율과 일치시켜 cover 크롭을 줄인다 (자세 확인 용도)
+          width: 240,
+          height: 135,
           borderRadius: "var(--radius-12)",
           border: "1px solid rgba(255,255,255,.18)",
           background: "var(--neutral-925)",
