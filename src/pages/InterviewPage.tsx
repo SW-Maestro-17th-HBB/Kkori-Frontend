@@ -40,13 +40,10 @@ const CONNECTION_DOT: Record<ConnectionState, string> = {
   [ConnectionState.SignalReconnecting]: "var(--blue-400)",
 };
 
-/** 종료 요청 실패 안내 — S008 은 종료 의도가 이미 기록된 상태라(서버 fallback 이
-    최대 180초 내 룸 종료를 보장) 기다려도 안전하고, 재시도는 면접관 클로징 발화
-    기회를 되살리는 선택지다. 그 외 코드는 공통 재시도 안내 + 서버 메시지 병기. */
+/** 종료 요청 실패 안내 — S008(종료 신호 발신 실패)은 종료 의도가 이미 기록된 상태라
+    실패로 다루지 않고 즉시 수렴한다(endConfirmed). 여기 도달하는 것은 그 외 코드뿐 —
+    공통 재시도 안내 + 서버 메시지 병기. */
 const endFailureNotice = (err: unknown): string => {
-  if (err instanceof ApiError && err.code === ERROR_CODES.SESSION_END_SIGNAL_FAILED) {
-    return "종료 처리가 지연되고 있어요. 잠시 기다리면 자동으로 마무리되고, 지금 다시 시도할 수도 있어요.";
-  }
   const detail = err instanceof Error ? ` (${err.message})` : "";
   return `면접 종료 요청에 실패했어요. 다시 시도해 주세요.${detail}`;
 };
@@ -94,29 +91,25 @@ export function InterviewPage() {
 
   const endSession = useEndInterviewSession();
   const [confirmEndOpen, setConfirmEndOpen] = useState(false);
-  // 202 는 "수리"일 뿐 — 실제 종료(룸 삭제)까지는 마무리 중 상태로 재클릭을 막는다.
-  // 면접관 클로징 발화가 이어지므로 여기서 disconnect 하지 않는다 (연결·마이크 발행 유지)
+  // 요청 수리까지 재클릭을 막는다 — 확정되면 아래 effect 가 즉시 완료 화면으로 보낸다
   const wrappingUp = endSession.isPending || endSession.isSuccess;
 
-  // 종료 확정 — 202(수리)와 S008(종료 의도 기록됨 + fallback 이 최대 180초 내 룸 종료
-  // 보장)은 서버의 terminal 수렴이 확정된 상태다. 연결 없는 종료 수렴과 재입장 중단의
-  // 공통 근거 (HBB1-294 의 202 한정 조건을 재연결 PRD 가 S008 로 확장)
+  // 종료 확정 — 202(수리)와 S008(종료 의도 기록됨)은 서버의 terminal 수렴(fallback 이
+  // 최대 180초 내 룸 종료 보장)이 확정된 상태다. 즉시 종료 전환과 재입장 중단의 공통 근거
   const endConfirmed =
     endSession.isSuccess ||
     (endSession.error instanceof ApiError &&
       endSession.error.code === ERROR_CODES.SESSION_END_SIGNAL_FAILED);
 
-  // "면접 종료"의 단일 수렴점 — 버튼 종료·시간 만료 자연 종료·서버 fallback 삭제가
-  // 전부 ROOM_DELETED 로 도착한다 (경로 분기 없음).
+  // 완료 화면 전환 — 버튼 종료는 종료 확정(202·S008) 즉시 전환한다 (클로징 발화를
+  // 기다리지 않는 즉시 종료 UX — 2026-08-10 제품 결정, 연결 유무 무관). ROOM_DELETED 는
+  // 시간 만료 자연 종료·서버 fallback 삭제 경로의 수렴점으로 유지된다.
   useEffect(() => {
     const roomDeleted = disconnectReason === DisconnectReason.ROOM_DELETED;
-    // 종료 확정 뒤 연결이 없으면 ROOM_DELETED 는 더 도착할 수 없다 — 종료로 간주해
-    // 영구 "마무리 중" 잠금과 재입장 오버레이 잔류를 막는다.
-    const endedWhileUnreachable = endConfirmed && connectionState === ConnectionState.Disconnected;
-    if (!roomDeleted && !endedWhileUnreachable) return;
+    if (!roomDeleted && !endConfirmed) return;
     clearInterviewSession(); // 죽은 룸의 토큰 — /live 재진입이 setup 으로 가게 정리
     nav("interviewEnded", { replace: true, state: { ended: true } });
-  }, [disconnectReason, endConfirmed, connectionState, nav]);
+  }, [disconnectReason, endConfirmed, nav]);
 
   const requestEnd = () => {
     if (activeSession) endSession.mutate(activeSession.id);
@@ -252,7 +245,7 @@ export function InterviewPage() {
             disabled={wrappingUp}
             onClick={() => setConfirmEndOpen(true)}
           >
-            {wrappingUp ? "면접 마무리 중…" : "면접 종료"}
+            {wrappingUp ? "종료 중…" : "면접 종료"}
           </button>
         </div>
       </div>
@@ -575,15 +568,14 @@ export function InterviewPage() {
                 disabled={wrappingUp}
                 onClick={() => setConfirmEndOpen(true)}
               >
-                {wrappingUp ? "면접 마무리 중…" : "면접 종료"}
+                {wrappingUp ? "종료 중…" : "면접 종료"}
               </button>
             </div>
           </div>
         </div>
       )}
 
-      {/* 종료 확인 — 확인 즉시 /end 를 보내고 모달을 닫는다. 이후 클로징 발화가
-          이어지므로 연결은 유지되고, 실제 전환은 ROOM_DELETED 가 만든다 */}
+      {/* 종료 확인 — 확정 시 /end 를 보내고, 수리(202·S008)되면 즉시 완료 화면으로 전환한다 */}
       <Modal
         open={confirmEndOpen}
         onClose={() => setConfirmEndOpen(false)}
@@ -620,8 +612,7 @@ export function InterviewPage() {
             color: "var(--fg-secondary)",
           }}
         >
-          지금 종료하면 면접관이 마무리 인사를 한 뒤 면접이 끝나요. 종료한 면접은 다시 이어서 진행할
-          수 없어요.
+          종료한 면접은 다시 이어서 진행할 수 없어요.
         </p>
       </Modal>
     </div>

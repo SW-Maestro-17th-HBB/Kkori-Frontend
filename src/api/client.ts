@@ -398,7 +398,8 @@ export const createInterviewSession = async (
   body: CreateSessionRequest,
 ): Promise<CreateSessionResponse> => (await createSessionApi(body)).data ?? {};
 
-/** 면접 세션 종료 — 202는 "수리"일 뿐이고 실제 종료는 LiveKit 룸 종료(ROOM_DELETED)가 알린다.
+/** 면접 세션 종료 — 202는 "수리"이고 서버측 룸 소멸은 이후 비동기로 일어난다
+    (fallback 최대 180초 보장). 화면은 202를 종료 확정으로 보고 즉시 전환한다(즉시 종료 UX).
     멱등 — 이미 종료된 세션에 재호출해도 202 no-op이며, 룸이 안 닫힐 때의 재호출은
     잔존 룸 삭제를 재시도하는 설계된 복구 경로다 (BE PRD 기능 2). */
 export const endInterviewSession = async (sessionId: number): Promise<void> => {

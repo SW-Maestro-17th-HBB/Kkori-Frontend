@@ -58,8 +58,8 @@ export interface LiveKitRoomState {
   room: Room;
   /** 연결 상태 (livekit ConnectionState — disconnected/connecting/connected/reconnecting…) */
   connectionState: ConnectionState;
-  /** 마지막 연결 해제 사유 — ROOM_DELETED 가 "면접 종료"의 단일 수렴점
-      (버튼 종료·시간 만료·서버 fallback 삭제가 전부 이 신호로 수렴한다).
+  /** 마지막 연결 해제 사유 — ROOM_DELETED 는 자연 종료(시간 만료·서버 fallback 삭제)의
+      수렴점이다 (버튼 종료는 202 확정 즉시 전환 — 즉시 종료 UX).
       해제 이벤트 전에는 null, 사유 없는 해제는 UNKNOWN_REASON */
   disconnectReason: DisconnectReason | null;
   /** 접속 실패 사유 — 연결 시도 자체가 거부됐을 때만 (재연결 실패는 connectionState 로 관찰) */
