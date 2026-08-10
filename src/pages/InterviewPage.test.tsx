@@ -529,7 +529,7 @@ describe("InterviewPage — 재연결·재입장", () => {
       expect(reenterMock).toHaveBeenCalledTimes(3);
     });
     expect(
-      await within(overlay).findByText(/연결하지 못했어요 — 네트워크를 확인한 뒤/),
+      await within(overlay).findByText(/연결하지 못했어요\. 네트워크를 확인한 뒤/),
     ).toBeInTheDocument();
 
     reenterMock.mockResolvedValue(reenterResponse("jwt-token-3"));

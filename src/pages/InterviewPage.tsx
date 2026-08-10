@@ -45,10 +45,10 @@ const CONNECTION_DOT: Record<ConnectionState, string> = {
     기회를 되살리는 선택지다. 그 외 코드는 공통 재시도 안내 + 서버 메시지 병기. */
 const endFailureNotice = (err: unknown): string => {
   if (err instanceof ApiError && err.code === ERROR_CODES.SESSION_END_SIGNAL_FAILED) {
-    return "종료 처리가 지연되고 있어요. 잠시 기다리면 자동으로 마무리돼요 — 다시 시도할 수도 있어요.";
+    return "종료 처리가 지연되고 있어요. 잠시 기다리면 자동으로 마무리되고, 지금 다시 시도할 수도 있어요.";
   }
   const detail = err instanceof Error ? ` (${err.message})` : "";
-  return `면접 종료 요청에 실패했어요 — 다시 시도해 주세요.${detail}`;
+  return `면접 종료 요청에 실패했어요. 다시 시도해 주세요.${detail}`;
 };
 
 export function InterviewPage() {
@@ -423,7 +423,7 @@ export function InterviewPage() {
               gap: 6,
             }}
           >
-            <Icon name="mic-off" size={13} /> 마이크를 켤 수 없어요 — 브라우저 마이크 권한을 확인해
+            <Icon name="mic-off" size={13} /> 마이크를 켤 수 없어요. 브라우저 마이크 권한을 확인해
             주세요
           </span>
         )}
@@ -527,7 +527,7 @@ export function InterviewPage() {
               {reentry.requesting || reentryConnecting
                 ? "다시 연결하는 중…"
                 : reentry.exhausted
-                  ? "연결하지 못했어요 — 네트워크를 확인한 뒤 다시 시도해 주세요"
+                  ? "연결하지 못했어요. 네트워크를 확인한 뒤 다시 시도해 주세요"
                   : "다시 연결하는 중…"}
             </p>
             <p
