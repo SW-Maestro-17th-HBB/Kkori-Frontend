@@ -19,6 +19,7 @@ import {
   reanalyzeResume,
   reenterInterviewSession,
   regenerateReport,
+  updateProfileName,
   updateResumeParsed,
   uploadResume,
 } from "./client";
@@ -115,6 +116,15 @@ export const useLogout = () => {
 };
 
 export const useProfile = () => useQuery({ queryKey: ["profile"], queryFn: fetchProfile });
+
+/** 이름 수정 — PATCH 응답이 수정 결과 전체이므로 재조회 없이 캐시를 직접 교체한다 */
+export const useUpdateProfileName = () => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: updateProfileName,
+    onSuccess: (profile) => queryClient.setQueryData(["profile"], profile),
+  });
+};
 
 export const useSubscription = () =>
   useQuery({ queryKey: ["subscription"], queryFn: fetchSubscription });

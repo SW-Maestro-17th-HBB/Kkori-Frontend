@@ -29,7 +29,11 @@ const errorEnvelope = (code: string, status: number) =>
 
 const tokenPair = (at: string, rt: string) => envelope({ accessToken: at, refreshToken: rt });
 
-/** URL 별 순차 응답 스텁 — 프로필·알림은 fixture 목이라 fetch 에는 인증 API 만 잡힌다 */
+/** 내 정보(GET /api/v1/user) 성공 응답 — 아바타 버튼 이름(홍길동) 렌더에 필요 */
+const userInfo = () =>
+  envelope({ id: 1, email: "hong@example.com", name: "홍길동", createdAt: "2026-05-10T00:00:00Z" });
+
+/** URL 별 순차 응답 스텁 — 알림은 fixture 목이라 fetch 에는 인증·프로필 API 만 잡힌다 */
 function stubApi({
   logout = [],
   reissue = [],
@@ -47,6 +51,7 @@ function stubApi({
   const mock = vi.fn<(input: RequestInfo | URL, init?: RequestInit) => Promise<Response>>(
     (input) => {
       const url = String(input);
+      if (url.endsWith("/api/v1/user")) return Promise.resolve(userInfo());
       if (url.endsWith("/api/v1/auth/logout")) return next(logout, li++, url);
       if (url.endsWith("/api/v1/auth/reissue")) return next(reissue, ri++, url);
       return Promise.reject(new Error(`unexpected fetch: ${url}`));
@@ -170,6 +175,7 @@ describe("TopNav — 로그아웃", () => {
     let releaseLogout: (() => void) | null = null;
     const mock = vi.fn<(input: RequestInfo | URL, init?: RequestInit) => Promise<Response>>(
       (input) => {
+        if (String(input).endsWith("/api/v1/user")) return Promise.resolve(userInfo());
         if (String(input).endsWith("/api/v1/auth/logout")) {
           return new Promise<Response>((resolve) => {
             releaseLogout = () => resolve(envelope(null));
@@ -194,9 +200,12 @@ describe("TopNav — 로그아웃", () => {
 
   it("로그아웃 진행 중에는 버튼이 잠기고 진행 문구를 보여준다", async () => {
     await setTokens("at-1", "rt-1");
-    // 응답이 오지 않는 상태 유지 — pending UI 관찰
+    // 로그아웃 응답이 오지 않는 상태 유지 — pending UI 관찰 (프로필은 즉시 성공)
     const mock = vi.fn<(input: RequestInfo | URL, init?: RequestInit) => Promise<Response>>(
-      () => new Promise<Response>(() => {}),
+      (input) =>
+        String(input).endsWith("/api/v1/user")
+          ? Promise.resolve(userInfo())
+          : new Promise<Response>(() => {}),
     );
     vi.stubGlobal("fetch", mock);
     const user = userEvent.setup();
@@ -212,15 +221,17 @@ describe("TopNav — 로그아웃", () => {
   it("서버 응답이 없으면 시간 초과 후 로컬 로그아웃을 완료한다", async () => {
     await setTokens("at-1", "rt-1");
     let aborted = false;
-    // 영원히 응답하지 않지만 abort 신호에는 반응하는 fetch — 타임아웃 동작 검증
+    // 로그아웃만 영원히 응답하지 않되 abort 신호에는 반응하는 fetch — 타임아웃 동작 검증
     const mock = vi.fn<(input: RequestInfo | URL, init?: RequestInit) => Promise<Response>>(
-      (_input, init) =>
-        new Promise<Response>((_resolve, reject) => {
-          init?.signal?.addEventListener("abort", () => {
-            aborted = true;
-            reject(new DOMException("Aborted", "AbortError"));
-          });
-        }),
+      (input, init) =>
+        String(input).endsWith("/api/v1/user")
+          ? Promise.resolve(userInfo())
+          : new Promise<Response>((_resolve, reject) => {
+              init?.signal?.addEventListener("abort", () => {
+                aborted = true;
+                reject(new DOMException("Aborted", "AbortError"));
+              });
+            }),
     );
     vi.stubGlobal("fetch", mock);
     LOGOUT_TIMEOUT.ms = 30; // seam — 상한을 줄여 실타이머로 검증
@@ -239,7 +250,7 @@ describe("TopNav — 로그아웃", () => {
     }
   });
 
-  it("RT 가 없으면 API 호출 없이 로컬 정리만 하고 랜딩으로 이동한다", async () => {
+  it("RT 가 없으면 인증 API 호출 없이 로컬 정리만 하고 랜딩으로 이동한다", async () => {
     const mock = stubApi();
     const user = userEvent.setup();
     renderTopNav();
@@ -247,6 +258,8 @@ describe("TopNav — 로그아웃", () => {
     await clickLogout(user);
 
     expect(await screen.findByText(/랜딩-도착/)).toBeInTheDocument();
-    expect(mock).not.toHaveBeenCalled();
+    // 프로필 조회(GET /api/v1/user)는 렌더에 필요해 발생한다 — 인증 API 만 없어야 한다
+    expect(callsTo(mock, "/api/v1/auth/logout")).toHaveLength(0);
+    expect(callsTo(mock, "/api/v1/auth/reissue")).toHaveLength(0);
   });
 });

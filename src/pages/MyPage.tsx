@@ -1,6 +1,6 @@
 /* ============================ 마이페이지 (/account) ============================ */
 import { Fragment, useRef, useState } from "react";
-import { useProfile, useSubscription } from "../api/hooks";
+import { useProfile, useSubscription, useUpdateProfileName } from "../api/hooks";
 import {
   Avatar,
   Badge,
@@ -43,10 +43,13 @@ export function MyPage({ tab }: { tab?: TabId }) {
   const toastTimer = useRef<ReturnType<typeof setTimeout>>();
   const [delOpen, setDelOpen] = useState(false);
   const [editing, setEditing] = useState(false);
-  const [savedName, setSavedName] = useState<string | null>(null);
   const [form, setForm] = useState({ name: "" });
-  // 저장된 로컬 수정값이 있으면 프로필 이름보다 우선 (목 데이터라 서버 반영 없음)
-  const displayName = savedName ?? profile?.name ?? "";
+  const displayName = profile?.name ?? "";
+  const updateName = useUpdateProfileName();
+  const trimmedName = form.name.trim();
+  // 코드 포인트 기준 1~100자 — 백엔드 계약(PATCH /api/v1/user)과 동일 기준으로 선검증
+  const nameLength = [...trimmedName].length;
+  const nameValid = nameLength >= 1 && nameLength <= 100;
 
   const showToast = (msg: string, tone: "default" | "success") => {
     setToast({ msg, tone });
@@ -277,14 +280,28 @@ export function MyPage({ tab }: { tab?: TabId }) {
                 <div style={{ display: "flex", gap: 8, marginTop: 22 }}>
                   <Button
                     variant="solid"
-                    onClick={() => {
-                      setSavedName(form.name);
-                      setEditing(false);
-                    }}
+                    disabled={!nameValid || updateName.isPending}
+                    onClick={() =>
+                      updateName.mutate(trimmedName, {
+                        onSuccess: () => {
+                          setEditing(false);
+                          showToast("프로필을 저장했어요", "success");
+                        },
+                        onError: () =>
+                          showToast(
+                            "이름을 저장하지 못했어요. 잠시 후 다시 시도해 주세요",
+                            "default",
+                          ),
+                      })
+                    }
                   >
-                    저장하기
+                    {updateName.isPending ? "저장 중…" : "저장하기"}
                   </Button>
-                  <Button variant="assistive" onClick={() => setEditing(false)}>
+                  <Button
+                    variant="assistive"
+                    disabled={updateName.isPending}
+                    onClick={() => setEditing(false)}
+                  >
                     취소
                   </Button>
                 </div>

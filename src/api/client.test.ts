@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { toUiResume, toUiStatus } from "./client";
+import { toUiProfile, toUiResume, toUiStatus } from "./client";
 import type { ResumeSummary } from "./client";
 
 const NOW = new Date("2026-06-03T12:00:00Z");
@@ -52,5 +52,36 @@ describe("toUiResume", () => {
   it("1주일 이상 지난 업로드는 상대시각 대신 날짜를 보여준다", () => {
     const old = toUiResume(summary({ createdAt: "2026-05-01T12:00:00Z" }), NOW);
     expect(old.meta).toBe("2.4MB · 2026.05.01");
+  });
+});
+
+describe("toUiProfile", () => {
+  it("내 정보 응답을 UI 모델로 매핑한다 (가입일 포맷·이니셜·카카오 연결 고정)", () => {
+    expect(
+      toUiProfile({
+        id: 1,
+        name: "김개발",
+        email: "dev@kkori.ai",
+        createdAt: "2026-05-10T09:00:00Z",
+      }),
+    ).toEqual({
+      name: "김개발",
+      email: "dev@kkori.ai",
+      initials: "김",
+      joinedAt: "2026.05.10",
+      kakaoLinked: true,
+    });
+  });
+
+  it("카카오 미제공(null·누락) 필드는 대체값으로 채운다 (BE: email·name null 가능)", () => {
+    expect(toUiProfile({})).toEqual({
+      name: "사용자",
+      email: "",
+      initials: "사",
+      joinedAt: "",
+      kakaoLinked: true,
+    });
+    // 공백뿐인 이름도 미제공으로 취급한다
+    expect(toUiProfile({ name: "  " }).name).toBe("사용자");
   });
 });

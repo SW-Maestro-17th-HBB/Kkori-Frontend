@@ -15,11 +15,17 @@ import { SetupPage } from "./SetupPage";
 
 vi.mock("livekit-client", async () => (await import("../test/livekitMock")).createLiveKitMock());
 
-// 이력서 목록만 케이스별로 제어한다 — 나머지 client 모듈은 원본 유지
-const { fetchResumesMock } = vi.hoisted(() => ({ fetchResumesMock: vi.fn() }));
+// 이력서 목록·프로필만 목으로 제어한다 — 나머지 client 모듈은 원본 유지.
+// 프로필 목이 없으면 TopNav 의 GET /api/v1/user 가 세션 발급용 fetch 스텁을 소비해
+// 응답 순서를 어긋나게 한다 (세션 스텁은 URL 무관 순차 응답)
+const { fetchResumesMock, fetchProfileMock } = vi.hoisted(() => ({
+  fetchResumesMock: vi.fn(),
+  fetchProfileMock: vi.fn(),
+}));
 vi.mock("../api/client", async (importOriginal) => ({
   ...(await importOriginal<typeof import("../api/client")>()),
   fetchResumes: fetchResumesMock,
+  fetchProfile: fetchProfileMock,
 }));
 
 /** useNav 이동 결과 확인용 — 현재 경로를 노출한다 */
@@ -111,6 +117,14 @@ beforeEach(() => {
   localStorage.clear();
   fetchResumesMock.mockReset();
   fetchResumesMock.mockResolvedValue(fixtures.resumes);
+  fetchProfileMock.mockReset();
+  fetchProfileMock.mockResolvedValue({
+    name: "홍길동",
+    email: "hong@example.com",
+    initials: "홍",
+    joinedAt: "2026.05.10",
+    kakaoLinked: true,
+  });
 });
 
 afterEach(() => {
