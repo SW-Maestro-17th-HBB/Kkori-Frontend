@@ -355,6 +355,7 @@ describe("SetupPage — 장비 점검", () => {
       room: "room-1",
       authSessionId: "sess-A",
       id: 34,
+      micIntent: false, // 발급 시점의 의도 기본값 — /live 의 토글·복원만 갱신한다
     });
     expect(JSON.parse(sessionStorage.getItem("hbb.interview.devicePrefs")!)).toEqual({
       micId: "mic-default",
