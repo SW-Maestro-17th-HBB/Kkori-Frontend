@@ -34,6 +34,7 @@ import {
   Upload,
   UserRound,
   VideoOff,
+  WifiOff,
   X,
   type LucideIcon,
 } from "lucide-react";
@@ -75,6 +76,7 @@ const ICONS: Record<string, LucideIcon> = {
   "upload": Upload,
   "user-round": UserRound,
   "video-off": VideoOff,
+  "wifi-off": WifiOff,
   "x": X,
 };
 
