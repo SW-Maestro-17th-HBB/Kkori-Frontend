@@ -355,7 +355,7 @@ describe("SetupPage — 장비 점검", () => {
       room: "room-1",
       authSessionId: "sess-A",
       id: 34,
-      micIntent: false, // 발급 시점의 의도 기본값 — /live 의 토글·복원만 갱신한다
+      micIntent: true, // 마이크는 점검 필수 장비 — /live 진입 시 자동 발행으로 시작
       camIntent: true, // 점검에서 카메라를 확보했으므로 /live self-view 는 켜짐으로 시작
     });
     expect(JSON.parse(sessionStorage.getItem("hbb.interview.devicePrefs")!)).toEqual({
