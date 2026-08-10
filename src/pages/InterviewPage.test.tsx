@@ -475,6 +475,44 @@ describe("InterviewPage — 재연결·재입장", () => {
     expect(within(overlay).getByRole("button", { name: /다시 연결$/ })).toBeDisabled();
   });
 
+  it("오버레이는 dialog 시맨틱을 노출하고 배경 컨트롤을 inert 로 차단한다", async () => {
+    let resolveIssued!: (value: ReturnType<typeof reenterResponse>) => void;
+    reenterMock.mockReturnValue(
+      new Promise((resolve) => {
+        resolveIssued = resolve;
+      }),
+    );
+    renderLive();
+    await screen.findByText("연결됨");
+    act(() => {
+      connectedRoom()!.emitDisconnected(SERVER_SHUTDOWN);
+    });
+    const overlay = await screen.findByTestId("reconnect-overlay");
+    expect(overlay).toHaveAttribute("role", "dialog");
+    expect(overlay).toHaveAttribute("aria-modal", "true");
+    expect(overlay).toHaveAccessibleName("연결이 끊겼어요");
+    await waitFor(() => {
+      expect(screen.getByText("연결이 끊겼어요")).toHaveFocus(); // 초기 포커스 = 제목
+    });
+    // 배경(상단 바·하단 컨트롤)은 inert 조상으로 차단되고, 오버레이 안 버튼은 차단되지 않는다
+    expect(screen.getByRole("button", { name: /질문 보기/ }).closest("[inert]")).not.toBeNull();
+    expect(
+      within(overlay).getByRole("button", { name: "면접 종료" }).closest("[inert]"),
+    ).toBeNull();
+
+    // 재접속 성공 시 차단 해제 — 걸려 있던 발급 응답은 국면(세대) 폐기로 무시된다
+    act(() => {
+      connectedRoom()!.setState("connected");
+    });
+    await act(async () => {
+      resolveIssued(reenterResponse("jwt-stale"));
+    });
+    await waitFor(() => {
+      expect(screen.queryByTestId("reconnect-overlay")).toBeNull();
+    });
+    expect(screen.getByRole("button", { name: /질문 보기/ }).closest("[inert]")).toBeNull();
+  });
+
   it("자동 시도 소진 후 수동 '다시 연결'이 새 발급부터 재시도한다", async () => {
     reenterMock.mockRejectedValue(new Error("network down"));
     renderLive();

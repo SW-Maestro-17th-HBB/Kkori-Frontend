@@ -170,6 +170,19 @@ export function InterviewPage() {
   const overlayActive = reentryTriggered || reentry.requesting || reentryConnecting;
   const reentryBusy = reentry.requesting || reentryConnecting || endSession.isPending;
 
+  // 오버레이 표시 중 배경 컨트롤 차단 — 시각적 덮임만으로는 키보드 포커스·스크린리더
+  // 접근이 남는다. inert 는 속성으로 토글하고(브라우저가 포커스·AT 접근을 차단),
+  // 초기 포커스는 오버레이 제목으로 옮긴다 (dialog 진입 관례)
+  const topBarRef = useRef<HTMLDivElement | null>(null);
+  const bottomBarRef = useRef<HTMLDivElement | null>(null);
+  const overlayTitleRef = useRef<HTMLHeadingElement | null>(null);
+  useEffect(() => {
+    [topBarRef.current, bottomBarRef.current].forEach((el) => {
+      el?.toggleAttribute("inert", overlayActive);
+    });
+    if (overlayActive) overlayTitleRef.current?.focus();
+  }, [overlayActive]);
+
   const statusLabel = connectError ? "접속 실패" : CONNECTION_LABEL[connectionState];
   const statusDot = connectError ? "var(--red-600)" : CONNECTION_DOT[connectionState];
 
@@ -190,6 +203,7 @@ export function InterviewPage() {
     >
       {/* 상단 */}
       <div
+        ref={topBarRef}
         style={{
           position: "absolute",
           top: 0,
@@ -375,6 +389,7 @@ export function InterviewPage() {
 
       {/* 하단 컨트롤 */}
       <div
+        ref={bottomBarRef}
         style={{
           position: "absolute",
           bottom: 0,
@@ -462,6 +477,9 @@ export function InterviewPage() {
       {overlayActive && (
         <div
           data-testid="reconnect-overlay"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="reconnect-overlay-title"
           style={{
             position: "absolute",
             inset: 0,
@@ -498,6 +516,9 @@ export function InterviewPage() {
               <Icon name="wifi-off" size={26} strokeWidth={1.75} />
             </div>
             <h2
+              id="reconnect-overlay-title"
+              ref={overlayTitleRef}
+              tabIndex={-1}
               style={{
                 margin: "18px 0 0",
                 fontFamily: "var(--font-sans)",
@@ -505,6 +526,7 @@ export function InterviewPage() {
                 fontWeight: 700,
                 letterSpacing: "-0.01em",
                 color: "var(--fg-inverse)",
+                outline: "none",
               }}
             >
               연결이 끊겼어요
