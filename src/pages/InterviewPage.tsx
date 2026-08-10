@@ -13,6 +13,7 @@ import {
   updateStoredCamIntent,
   updateStoredMicIntent,
 } from "../hooks/interviewSession";
+import { useInterviewerQuestion } from "../hooks/useInterviewerQuestion";
 import { useLocalCamera } from "../hooks/useLocalCamera";
 import { useReentry } from "../hooks/useReentry";
 import { useAuthSessionId } from "../hooks/useAuthStatus";
@@ -36,8 +37,8 @@ const endFailureNotice = (err: unknown): string => {
 
 export function InterviewPage() {
   const nav = useNav();
-  // 질문 패널 — 질문 텍스트를 내려주는 계약이 아직 없어 기본 숨김 + 준비 중 안내만.
-  // 실계약(데이터 채널 등) 도입 시 이 패널에 실데이터를 연결한다
+  // 질문 패널 — 에이전트 전사 스트림(lk.transcription)의 면접관 final 발화를 표시.
+  // 기본 숨김이고, 발화 전(재입장 직후 포함)에는 안내 문구가 fallback 이다
   const [showQ, setShowQ] = useState(false);
   const [micFailed, setMicFailed] = useState(false);
   const [camFailed, setCamFailed] = useState(false);
@@ -79,6 +80,7 @@ export function InterviewPage() {
     startAudio,
   } = useLiveKitRoom(gateOk ? liveSession : undefined);
   const remoteAudioRef = useRemoteAudio(room);
+  const interviewerQuestion = useInterviewerQuestion(room);
 
   // 로컬 카메라 self-view — 룸에 publish 하지 않는 로컬 전용 트랙 (오디오만 전송).
   // 의도가 켜짐이면 접속과 무관하게 켠다. enableCamera 는 켜짐·획득 중이면 no-op 이라
@@ -351,7 +353,7 @@ export function InterviewPage() {
         </div>
       </div>
 
-      {/* 질문 패널 — 목 질문 텍스트는 제거됨. 계약이 생기면 준비 중 안내 자리에 실데이터 렌더 */}
+      {/* 질문 패널 — 마지막 면접관 final 발화. 발화 전에는 안내 문구 fallback */}
       {showQ && (
         <div
           style={{
@@ -384,7 +386,7 @@ export function InterviewPage() {
           </div>
           <div
             style={{
-              color: "rgba(255,255,255,.6)",
+              color: interviewerQuestion ? "rgba(255,255,255,.92)" : "rgba(255,255,255,.6)",
               fontFamily: "var(--font-sans)",
               fontSize: 14.5,
               fontWeight: 500,
@@ -392,7 +394,7 @@ export function InterviewPage() {
               marginTop: 9,
             }}
           >
-            질문은 면접관의 음성으로 진행돼요. 화면 표시는 준비 중이에요.
+            {interviewerQuestion ?? "면접관이 질문하면 여기에 표시돼요."}
           </div>
         </div>
       )}

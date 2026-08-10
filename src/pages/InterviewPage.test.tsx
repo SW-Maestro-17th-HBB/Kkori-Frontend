@@ -228,14 +228,14 @@ describe("InterviewPage — LiveKit 룸 접속", () => {
     expect(mic).toHaveAttribute("aria-pressed", "true");
   });
 
-  it("질문 패널은 기본 숨김이고, 토글로 열면 준비 중 안내를 보여준다 (목 질문 없음)", async () => {
+  it("질문 패널은 기본 숨김이고, 발화 전에 열면 안내 문구를 보여준다", async () => {
     renderLive();
     await waitConnected();
     expect(screen.queryByText("현재 질문")).toBeNull();
 
     await userEvent.click(screen.getByRole("button", { name: "질문 보기" }));
     expect(screen.getByText("현재 질문")).toBeInTheDocument();
-    expect(screen.getByText(/화면 표시는 준비 중이에요/)).toBeInTheDocument();
+    expect(screen.getByText("면접관이 질문하면 여기에 표시돼요.")).toBeInTheDocument();
 
     await userEvent.click(screen.getByRole("button", { name: "질문 숨기기" }));
     expect(screen.queryByText("현재 질문")).toBeNull();
@@ -890,5 +890,58 @@ describe("InterviewPage — 카메라 self-view", () => {
     await screen.findByTestId("reconnect-overlay");
     expect(screen.getByLabelText("내 카메라 화면")).toBeInTheDocument();
     expect(FakeMedia.tracks.at(-1)!.stopped).toBe(false);
+  });
+});
+
+/* ---------- 질문 패널 — lk.transcription 전사 수신 (HBB1-20) ---------- */
+
+describe("InterviewPage — 질문 패널 전사 수신", () => {
+  beforeEach(() => {
+    discardConnectedRoom();
+    FakeRoom.reset();
+    sessionStorage.clear();
+    localStorage.clear();
+    seedSession();
+  });
+
+  /** 에이전트 발화 수신 흉내 — 기본은 면접관 identity 의 final 세그먼트 */
+  const emitTranscription = (text: string, over: { identity?: string; final?: boolean } = {}) =>
+    act(() =>
+      connectedRoom()!.emitTextStream("lk.transcription", text, {
+        identity: over.identity ?? "agent-interviewer",
+        attributes: { "lk.transcription_final": String(over.final ?? true) },
+      }),
+    );
+
+  it("면접관 final 발화가 질문 패널에 표시되고, 새 발화가 오면 교체된다", async () => {
+    renderLive();
+    await waitConnected();
+    await emitTranscription("자기소개 부탁드립니다.");
+    await userEvent.click(screen.getByRole("button", { name: "질문 보기" }));
+    expect(screen.getByText("자기소개 부탁드립니다.")).toBeInTheDocument();
+
+    await emitTranscription("프로젝트에서 맡은 역할을 말씀해 주세요.");
+    expect(screen.getByText("프로젝트에서 맡은 역할을 말씀해 주세요.")).toBeInTheDocument();
+    expect(screen.queryByText("자기소개 부탁드립니다.")).toBeNull();
+  });
+
+  it("interim 세그먼트와 내 발화(STT 자막)는 표시하지 않는다", async () => {
+    renderLive();
+    await waitConnected();
+    await userEvent.click(screen.getByRole("button", { name: "질문 보기" }));
+
+    await emitTranscription("말하는 중인 질문입니다", { final: false });
+    await emitTranscription("제 답변 자막입니다", { identity: "candidate-1" }); // 내 identity
+    expect(screen.getByText("면접관이 질문하면 여기에 표시돼요.")).toBeInTheDocument();
+    expect(screen.queryByText("말하는 중인 질문입니다")).toBeNull();
+    expect(screen.queryByText("제 답변 자막입니다")).toBeNull();
+  });
+
+  it("패널이 닫혀 있어도 수신은 계속되어, 열면 최신 질문이 보인다", async () => {
+    renderLive();
+    await waitConnected();
+    await emitTranscription("최근 질문입니다.");
+    await userEvent.click(screen.getByRole("button", { name: "질문 보기" }));
+    expect(screen.getByText("최근 질문입니다.")).toBeInTheDocument();
   });
 });
