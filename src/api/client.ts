@@ -398,9 +398,32 @@ export const createInterviewSession = async (
   body: CreateSessionRequest,
 ): Promise<CreateSessionResponse> => (await createSessionApi(body)).data ?? {};
 
-/** 면접 세션 종료 — 202는 "수리"일 뿐이고 실제 종료는 LiveKit 룸 종료(ROOM_DELETED)가 알린다.
+/** 면접 세션 종료 — 202는 "수리"이고 서버측 룸 소멸은 이후 비동기로 일어난다
+    (fallback 최대 180초 보장). 화면은 202를 종료 확정으로 보고 즉시 전환한다(즉시 종료 UX).
     멱등 — 이미 종료된 세션에 재호출해도 202 no-op이며, 룸이 안 닫힐 때의 재호출은
     잔존 룸 삭제를 재시도하는 설계된 복구 경로다 (BE PRD 기능 2). */
 export const endInterviewSession = async (sessionId: number): Promise<void> => {
   await endSessionApi(sessionId);
 };
+
+/* ---------- 면접 재입장 (목 — BE 재연결 PRD 확정 대기) ---------- */
+
+export interface ReenterSessionResponse {
+  url: string;
+  token: string;
+  room: string;
+}
+
+// 재발급 토큰은 발급마다 유일해야 한다 (토큰 세대당 1회 복원 가드의 key)
+let reentryTokenSeq = 0;
+
+/** 재입장 토큰 재발급 — 같은 identity·룸의 새 입장 토큰을 받는다. 실계약(경로·응답·
+    에러 코드) 미확정: 목은 성공 응답만 재현하고, "이미 종료" 거부(reentryContract 의
+    REENTRY_SESSION_ENDED_CODE)는 테스트가 모듈 목으로 재현한다.
+    계약 확정 시 orval 재생성 fetcher 위임으로 본문만 교체한다. */
+export const reenterInterviewSession = async (sessionId: number): Promise<ReenterSessionResponse> =>
+  delay({
+    url: "wss://mock.livekit.local",
+    token: `reentry-${sessionId}-${++reentryTokenSeq}`,
+    room: `interview-${sessionId}`,
+  });

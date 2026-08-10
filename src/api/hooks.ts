@@ -17,6 +17,7 @@ import {
   postLogout,
   postSignup,
   reanalyzeResume,
+  reenterInterviewSession,
   regenerateReport,
   updateResumeParsed,
   uploadResume,
@@ -221,3 +222,8 @@ export const useCreateInterviewSession = () => useMutation({ mutationFn: createI
 /** 면접 세션 종료 — 멱등 202 수리 응답. 재호출이 안전한 복구 경로라 화면의
     명시 재시도 버튼으로 재실행한다 (자동 재시도는 두지 않음) */
 export const useEndInterviewSession = () => useMutation({ mutationFn: endInterviewSession });
+
+/** 면접 재입장 토큰 재발급 — 목(BE 재연결 PRD 확정 대기). 시도 스케줄·단일 진행은
+    재입장 오케스트레이션 훅이 관리하므로 여기엔 자동 재시도를 두지 않는다 */
+export const useReenterInterviewSession = () =>
+  useMutation({ mutationFn: reenterInterviewSession });

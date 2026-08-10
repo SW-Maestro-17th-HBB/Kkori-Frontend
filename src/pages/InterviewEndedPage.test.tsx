@@ -34,4 +34,17 @@ describe("InterviewEndedPage", () => {
     expect(await screen.findByTestId("dash-screen")).toBeInTheDocument();
     expect(screen.queryByText("면접이 끝났어요")).toBeNull();
   });
+
+  it("재입장 거부 수렴은 중립 부제를 보여준다 — 리포트 언급 없음", () => {
+    renderEnded({ pathname: "/live/ended", state: { ended: true, reason: "reentry-denied" } });
+    expect(screen.getByText("면접이 끝났어요")).toBeInTheDocument();
+    expect(screen.getByText("면접이 이미 종료되어 다시 입장할 수 없어요.")).toBeInTheDocument();
+    expect(screen.queryByText(/리포트에서 결과/)).toBeNull();
+  });
+
+  it("정상 종료 수렴의 기존 부제는 변하지 않는다", () => {
+    renderEnded({ pathname: "/live/ended", state: { ended: true } });
+    expect(screen.getByText(/답변 분석이 끝나면/)).toBeInTheDocument();
+    expect(screen.queryByText(/다시 입장할 수 없어요/)).toBeNull();
+  });
 });

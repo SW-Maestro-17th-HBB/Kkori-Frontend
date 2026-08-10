@@ -58,8 +58,8 @@ export interface LiveKitRoomState {
   room: Room;
   /** 연결 상태 (livekit ConnectionState — disconnected/connecting/connected/reconnecting…) */
   connectionState: ConnectionState;
-  /** 마지막 연결 해제 사유 — ROOM_DELETED 가 "면접 종료"의 단일 수렴점
-      (버튼 종료·시간 만료·서버 fallback 삭제가 전부 이 신호로 수렴한다).
+  /** 마지막 연결 해제 사유 — ROOM_DELETED 는 자연 종료(시간 만료·서버 fallback 삭제)의
+      수렴점이다 (버튼 종료는 202 확정 즉시 전환 — 즉시 종료 UX).
       해제 이벤트 전에는 null, 사유 없는 해제는 UNKNOWN_REASON */
   disconnectReason: DisconnectReason | null;
   /** 접속 실패 사유 — 연결 시도 자체가 거부됐을 때만 (재연결 실패는 connectionState 로 관찰) */
@@ -68,6 +68,9 @@ export interface LiveKitRoomState {
   micEnabled: boolean;
   /** 마이크 토글 — 첫 호출 시 브라우저 권한 프롬프트가 뜬다 */
   toggleMicrophone: () => Promise<void>;
+  /** 명시적 켜기 — 완전 해제(재입장·새로고침)로 unpublish 된 발행을 의도 상태대로
+      되살리는 복원용. 토글과 달리 현재 상태와 무관하게 켠다 */
+  enableMicrophone: () => Promise<void>;
   /** 브라우저 자동재생 정책으로 원격 오디오가 막혔는지 — false 면 startAudio 버튼 노출 */
   canPlayAudio: boolean;
   /** 사용자 제스처 안에서 호출해 원격 오디오 재생을 재개한다 */
@@ -202,26 +205,35 @@ export function useLiveKitRoom(session: LiveKitSession | undefined): LiveKitRoom
     () => room.localParticipant.isMicrophoneEnabled,
   );
 
-  const toggleMicrophone = useCallback(async () => {
-    const enable = !room.localParticipant.isMicrophoneEnabled;
-    try {
-      await room.localParticipant.setMicrophoneEnabled(
-        enable,
-        // 기본 장치 대체가 발동한 뒤의 켜기는 스테일 캡처 기본값 대신 기본 장치를 쓴다
-        enable && micFallbackRef.current ? { deviceId: "default" } : undefined,
-      );
-    } catch (err) {
-      // setup 에서 고른 마이크가 그 사이 제거된 경우: Room 캡처 기본값은 생성 시
-      // 고정이라 저장값 삭제만으로는 바뀌지 않으므로, 기본 장치를 명시해 1회
-      // 재시도한다. 권한 거부 등 다른 원인은 재시도 없이 그대로 실패시킨다.
-      const name = err instanceof Error ? err.name : "";
-      const deviceGone = name === "NotFoundError" || name === "OverconstrainedError";
-      if (!enable || appliedMicId === null || !deviceGone || micFallbackRef.current) throw err;
-      micFallbackRef.current = true;
-      clearDevicePreferences();
-      await room.localParticipant.setMicrophoneEnabled(true, { deviceId: "default" });
-    }
-  }, [room, appliedMicId]);
+  const setMicrophone = useCallback(
+    async (enable: boolean) => {
+      try {
+        await room.localParticipant.setMicrophoneEnabled(
+          enable,
+          // 기본 장치 대체가 발동한 뒤의 켜기는 스테일 캡처 기본값 대신 기본 장치를 쓴다
+          enable && micFallbackRef.current ? { deviceId: "default" } : undefined,
+        );
+      } catch (err) {
+        // setup 에서 고른 마이크가 그 사이 제거된 경우: Room 캡처 기본값은 생성 시
+        // 고정이라 저장값 삭제만으로는 바뀌지 않으므로, 기본 장치를 명시해 1회
+        // 재시도한다. 권한 거부 등 다른 원인은 재시도 없이 그대로 실패시킨다.
+        const name = err instanceof Error ? err.name : "";
+        const deviceGone = name === "NotFoundError" || name === "OverconstrainedError";
+        if (!enable || appliedMicId === null || !deviceGone || micFallbackRef.current) throw err;
+        micFallbackRef.current = true;
+        clearDevicePreferences();
+        await room.localParticipant.setMicrophoneEnabled(true, { deviceId: "default" });
+      }
+    },
+    [room, appliedMicId],
+  );
+
+  const toggleMicrophone = useCallback(
+    () => setMicrophone(!room.localParticipant.isMicrophoneEnabled),
+    [room, setMicrophone],
+  );
+
+  const enableMicrophone = useCallback(() => setMicrophone(true), [setMicrophone]);
 
   const canPlayAudio = useSyncExternalStore(
     useCallback(
@@ -245,6 +257,7 @@ export function useLiveKitRoom(session: LiveKitSession | undefined): LiveKitRoom
     connectError,
     micEnabled,
     toggleMicrophone,
+    enableMicrophone,
     canPlayAudio,
     startAudio,
   };

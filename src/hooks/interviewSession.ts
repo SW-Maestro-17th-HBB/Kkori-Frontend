@@ -16,14 +16,22 @@ export interface InterviewSessionRecord {
   room: string;
   /** 발급 요청 시작 시점에 캡처한 인증 세션 ID — 계정 교체 감지용 */
   authSessionId: string;
-  /** 세션 식별자 — 이후 세션 API 호출(종료·리포트 등)의 key */
+  /** 세션 식별자 — 이후 세션 API 호출(종료·재입장·리포트 등)의 key */
   id: number;
+  /** 마이크 의도 상태 — 성공한 사용자 토글·복원 재발행 때만 갱신하고, 연결 해제로
+      SDK 발행이 꺼진 것은 기록하지 않는다. 재입장·새로고침 복원의 원천.
+      필드가 없는 구레코드는 꺼짐으로 취급한다 (예상 밖 자동 발행 방지) */
+  micIntent?: boolean;
 }
 
 export function saveInterviewSession(session: InterviewSessionRecord): boolean {
   try {
     const { url, token, room, authSessionId, id } = session;
-    sessionStorage.setItem(STORAGE_KEY, JSON.stringify({ url, token, room, authSessionId, id }));
+    const micIntent = session.micIntent === true;
+    sessionStorage.setItem(
+      STORAGE_KEY,
+      JSON.stringify({ url, token, room, authSessionId, id, micIntent }),
+    );
     return true;
   } catch {
     return false; // 쿼터 초과 등 — 호출자가 이동을 차단한다
@@ -38,16 +46,22 @@ export function loadInterviewSession(): InterviewSessionRecord | null {
     if (!raw) return null;
     const parsed: unknown = JSON.parse(raw);
     if (typeof parsed !== "object" || parsed === null) return null;
-    const { url, token, room, authSessionId, id } = parsed as Record<string, unknown>;
+    const { url, token, room, authSessionId, id, micIntent } = parsed as Record<string, unknown>;
     if (!isFilled(url) || !isFilled(token) || !isFilled(room) || !isFilled(authSessionId)) {
       return null;
     }
     // id 없는 레코드는 구계약 저장분 — 무효 처리해 setup 재진입으로 유도한다
     if (typeof id !== "number") return null;
-    return { url, token, room, authSessionId, id };
+    return { url, token, room, authSessionId, id, micIntent: micIntent === true };
   } catch {
     return null;
   }
+}
+
+/** 저장된 레코드의 micIntent 만 갱신 — 성공한 토글·복원 시점에 호출 (레코드 없으면 no-op) */
+export function updateStoredMicIntent(micIntent: boolean) {
+  const record = loadInterviewSession();
+  if (record) saveInterviewSession({ ...record, micIntent });
 }
 
 export function clearInterviewSession() {
