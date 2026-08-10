@@ -50,7 +50,9 @@ const endFailureNotice = (err: unknown): string => {
 
 export function InterviewPage() {
   const nav = useNav();
-  const [showQ, setShowQ] = useState(true);
+  // 질문 패널 — 질문 텍스트를 내려주는 계약이 아직 없어 기본 숨김 + 준비 중 안내만.
+  // 실계약(데이터 채널 등) 도입 시 이 패널에 실데이터를 연결한다
+  const [showQ, setShowQ] = useState(false);
   const [micFailed, setMicFailed] = useState(false);
   // 세션 레코드 — 마운트 시 로드하되, 재입장 토큰 재발급이 교체할 수 있어 상태로 둔다
   const [activeSession, setActiveSession] = useState(loadInterviewSession);
@@ -325,7 +327,7 @@ export function InterviewPage() {
         </div>
       </div>
 
-      {/* 질문 패널 */}
+      {/* 질문 패널 — 목 질문 텍스트는 제거됨. 계약이 생기면 준비 중 안내 자리에 실데이터 렌더 */}
       {showQ && (
         <div
           style={{
@@ -354,20 +356,19 @@ export function InterviewPage() {
               color: "var(--blue-400)",
             }}
           >
-            현재 질문 · Q3 <span style={{ color: "rgba(255,255,255,.4)" }}>·</span>{" "}
-            <span style={{ color: "rgba(255,255,255,.55)" }}>꼬리질문</span>
+            현재 질문
           </div>
           <div
             style={{
-              color: "#f2f3f4",
+              color: "rgba(255,255,255,.6)",
               fontFamily: "var(--font-sans)",
-              fontSize: 16,
+              fontSize: 14.5,
               fontWeight: 500,
               lineHeight: 1.5,
               marginTop: 9,
             }}
           >
-            최근 프로젝트에서 가장 어려웠던 기술적 의사결정은 무엇이었나요?
+            질문은 면접관의 음성으로 진행돼요. 화면 표시는 준비 중이에요.
           </div>
         </div>
       )}

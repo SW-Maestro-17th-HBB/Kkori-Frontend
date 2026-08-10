@@ -221,6 +221,19 @@ describe("InterviewPage — LiveKit 룸 접속", () => {
     expect(mic).toHaveAttribute("aria-pressed", "true");
   });
 
+  it("질문 패널은 기본 숨김이고, 토글로 열면 준비 중 안내를 보여준다 (목 질문 없음)", async () => {
+    renderLive();
+    await screen.findByText("연결됨");
+    expect(screen.queryByText("현재 질문")).toBeNull();
+
+    await userEvent.click(screen.getByRole("button", { name: "질문 보기" }));
+    expect(screen.getByText("현재 질문")).toBeInTheDocument();
+    expect(screen.getByText(/화면 표시는 준비 중이에요/)).toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole("button", { name: "질문 숨기기" }));
+    expect(screen.queryByText("현재 질문")).toBeNull();
+  });
+
   it("구독된 원격 오디오 트랙이 숨김 컨테이너에 부착된다", async () => {
     renderLive();
     await screen.findByText("연결됨");
