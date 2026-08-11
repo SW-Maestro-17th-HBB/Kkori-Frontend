@@ -52,10 +52,15 @@ export function useReentry({
   const [attemptsUsed, setAttemptsUsed] = useState(0);
   const [requesting, setRequesting] = useState(false);
 
+  // "이미 종료" 거부 latch — terminal 거부 후 화면 전환(언마운트) 커밋 전의 렌더
+  // 틈에 남은 자동 시도가 다시 무장하지 못하게 한다. 전환 내비게이션은 transition
+  // (저우선순위)이라 requesting=false 커밋이 먼저 올 수 있는데, denied 는 같은 일반
+  // 우선순위라 그 커밋에 함께 반영된다 (CI 저속 환경 실측 레이스)
+  const [denied, setDenied] = useState(false);
   // 시도가 유효한 국면인지 — 발급 응답 도착 시점에 참조한다 (늦은 응답 폐기의 기준).
   // armed 만으로는 "복구 후 재끊김"으로 재무장한 새 국면과 이전 국면을 구분하지 못하므로,
   // 국면 전환마다 세대를 올려 요청이 속한 국면과 대조한다 (PRD: 시도 세대 기준 폐기)
-  const armed = triggered && !suspended && !halted && sessionId !== null;
+  const armed = triggered && !suspended && !halted && sessionId !== null && !denied;
   const armedRef = useRef(false);
   const generationRef = useRef(0);
   // 단일 진행 — 발급 요청이 날아가 있는 동안 새 시도를 막는 동기 가드
@@ -90,7 +95,10 @@ export function useReentry({
         },
         (err: unknown) => {
           if (!armedRef.current || generationRef.current !== generation) return; // 이전 국면의 늦은 실패 — 폐기
-          if (isApiError(err) && err.code === REENTRY_SESSION_ENDED_CODE) onDeniedRef.current();
+          if (isApiError(err) && err.code === REENTRY_SESSION_ENDED_CODE) {
+            setDenied(true); // terminal — 이후 렌더의 armed 를 영구 소등
+            onDeniedRef.current();
+          }
           // 그 외 실패(네트워크 등)는 시도 1회 소모 — 다음 예약은 스케줄 effect 가 잡는다
         },
       )
