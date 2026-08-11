@@ -904,16 +904,18 @@ describe("InterviewPage — 질문 패널 전사 수신", () => {
     seedSession();
   });
 
-  /** 에이전트 발화 수신 흉내 — 기본은 면접관 identity 의 final 세그먼트 */
-  const emitTranscription = (text: string, over: { identity?: string; final?: boolean } = {}) =>
+  /** 에이전트 발화 수신 흉내 — 실측 계약대로 열림 속성은 final="false" 다
+      (delta 스트림은 닫힘 트레일러에만 final=true 가 붙는다). 목의 readAll 은
+      즉시 resolve = 스트림이 닫혀 발화 전체가 도착한 상태를 재현한다 */
+  const emitTranscription = (text: string, over: { identity?: string } = {}) =>
     act(() =>
       connectedRoom()!.emitTextStream("lk.transcription", text, {
         identity: over.identity ?? "agent-interviewer",
-        attributes: { "lk.transcription_final": String(over.final ?? true) },
+        attributes: { "lk.transcription_final": "false", "lk.segment_id": "SG_test" },
       }),
     );
 
-  it("면접관 final 발화가 질문 패널에 표시되고, 새 발화가 오면 교체된다", async () => {
+  it("면접관 발화가 질문 패널에 표시되고, 새 발화가 오면 교체된다 (열림 속성 final=false 여도)", async () => {
     renderLive();
     await waitConnected();
     await emitTranscription("자기소개 부탁드립니다.");
@@ -925,15 +927,13 @@ describe("InterviewPage — 질문 패널 전사 수신", () => {
     expect(screen.queryByText("자기소개 부탁드립니다.")).toBeNull();
   });
 
-  it("interim 세그먼트와 내 발화(STT 자막)는 표시하지 않는다", async () => {
+  it("내 발화(STT 자막)는 표시하지 않는다", async () => {
     renderLive();
     await waitConnected();
     await userEvent.click(screen.getByRole("button", { name: "질문 보기" }));
 
-    await emitTranscription("말하는 중인 질문입니다", { final: false });
     await emitTranscription("제 답변 자막입니다", { identity: "candidate-1" }); // 내 identity
     expect(screen.getByText("면접관이 질문하면 여기에 표시돼요.")).toBeInTheDocument();
-    expect(screen.queryByText("말하는 중인 질문입니다")).toBeNull();
     expect(screen.queryByText("제 답변 자막입니다")).toBeNull();
   });
 
