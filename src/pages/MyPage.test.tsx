@@ -25,16 +25,24 @@ const userInfo = (name: string) => ({
   createdAt: "2026-05-10T09:00:00Z",
 });
 
-/** GET /api/v1/user 는 항상 성공, PATCH 는 호출별 결과 큐로 제어한다 */
-function stubUserApi(patchResults: (Response | Error)[] = []) {
+/** GET /api/v1/user 는 getResults 큐 소진 후 항상 성공, PATCH 는 호출별 결과 큐로 제어한다 */
+function stubUserApi(
+  patchResults: (Response | Error)[] = [],
+  getResults: (Response | Error)[] = [],
+) {
   let pi = 0;
+  let gi = 0;
   const mock = vi.fn<(input: RequestInfo | URL, init?: RequestInit) => Promise<Response>>(
     (input, init) => {
       const url = String(input);
       if (!url.endsWith("/api/v1/user")) {
         return Promise.reject(new Error(`unexpected fetch: ${url}`));
       }
-      if ((init?.method ?? "GET") === "GET") return Promise.resolve(envelope(userInfo("김개발")));
+      if ((init?.method ?? "GET") === "GET") {
+        const queued = getResults[gi++];
+        if (!queued) return Promise.resolve(envelope(userInfo("김개발")));
+        return queued instanceof Error ? Promise.reject(queued) : Promise.resolve(queued);
+      }
       const result = patchResults[pi++];
       if (!result) return Promise.reject(new Error("unexpected PATCH"));
       return result instanceof Error ? Promise.reject(result) : Promise.resolve(result);
@@ -64,9 +72,23 @@ describe("MyPage — 프로필 실데이터", () => {
   it("내 정보 조회 결과(이름·이메일·가입일)를 표시한다", async () => {
     stubUserApi();
     renderWithProviders(<MyPage />, { route: "/account" });
+    expect(screen.getByText("프로필을 불러오는 중…")).toBeInTheDocument(); // 조회 완료 전
     expect(await screen.findAllByText("김개발")).not.toHaveLength(0);
     expect(screen.getAllByText("dev@kkori.ai").length).toBeGreaterThan(0);
     expect(screen.getByText("2026.05.10")).toBeInTheDocument();
+  });
+
+  it("프로필 조회 실패 시 안내를 표시하고 다시 시도로 복구한다", async () => {
+    stubUserApi([], [errorEnvelope("C001", 500)]); // 최초 조회만 실패 — 이후 성공
+    const user = userEvent.setup();
+    renderWithProviders(<MyPage />, { route: "/account" });
+
+    expect(await screen.findByRole("alert")).toHaveTextContent("프로필을 불러오지 못했어요");
+    expect(screen.queryByRole("button", { name: /프로필 수정/ })).toBeNull(); // 편집 진입 차단
+
+    await user.click(screen.getByRole("button", { name: "다시 시도" }));
+    expect(await screen.findAllByText("김개발")).not.toHaveLength(0);
+    expect(screen.getByRole("button", { name: /프로필 수정/ })).toBeInTheDocument();
   });
 
   it("이름 저장이 PATCH 로 전송되고(공백 제거) 화면이 응답 결과로 갱신된다", async () => {

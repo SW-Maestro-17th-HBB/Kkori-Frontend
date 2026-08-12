@@ -1,6 +1,7 @@
 /* ============================ 마이페이지 (/account) ============================ */
 import { Fragment, useRef, useState } from "react";
 import { useProfile, useSubscription, useUpdateProfileName } from "../api/hooks";
+import { errorMessage } from "../api/request";
 import {
   Avatar,
   Badge,
@@ -29,7 +30,13 @@ const NOTIF_LABELS: Record<NotifId, string> = {
 
 export function MyPage({ tab }: { tab?: TabId }) {
   const nav = useNav();
-  const { data: profile } = useProfile();
+  const {
+    data: profile,
+    isPending: profilePending,
+    isError: profileError,
+    error: profileErrorDetail,
+    refetch: refetchProfile,
+  } = useProfile();
   const { data: sub } = useSubscription();
 
   const [active, setActive] = useState<TabId>(tab ?? "profile");
@@ -165,7 +172,39 @@ export function MyPage({ tab }: { tab?: TabId }) {
         {active === "profile" && (
           <Card>
             <SectionLabel style={{ marginBottom: 4 }}>기본 정보</SectionLabel>
-            {!editing ? (
+            {profilePending ? (
+              <p
+                style={{
+                  fontFamily: "var(--font-sans)",
+                  fontSize: 14,
+                  fontWeight: 500,
+                  color: "var(--fg-tertiary)",
+                  marginTop: 14,
+                }}
+              >
+                프로필을 불러오는 중…
+              </p>
+            ) : profileError ? (
+              <Fragment>
+                <p
+                  role="alert"
+                  style={{
+                    fontFamily: "var(--font-sans)",
+                    fontSize: 14,
+                    fontWeight: 500,
+                    color: "var(--fg-tertiary)",
+                    marginTop: 14,
+                  }}
+                >
+                  프로필을 불러오지 못했어요. {errorMessage(profileErrorDetail)}
+                </p>
+                <div style={{ display: "flex", gap: 8, marginTop: 14 }}>
+                  <Button variant="assistive" onClick={() => void refetchProfile()}>
+                    다시 시도
+                  </Button>
+                </div>
+              </Fragment>
+            ) : !editing ? (
               <Fragment>
                 <div style={{ marginTop: 8 }}>
                   {(
