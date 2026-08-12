@@ -10,8 +10,11 @@ import {
   clearInterviewSession,
   loadInterviewSession,
   saveInterviewSession,
+  updateStoredCamIntent,
   updateStoredMicIntent,
 } from "../hooks/interviewSession";
+import { useInterviewerQuestion } from "../hooks/useInterviewerQuestion";
+import { useLocalCamera } from "../hooks/useLocalCamera";
 import { useReentry } from "../hooks/useReentry";
 import { useAuthSessionId } from "../hooks/useAuthStatus";
 import { useNav } from "../hooks/useNav";
@@ -24,22 +27,6 @@ import {
 } from "../hooks/useLiveKitRoom";
 import { ROUTES } from "../routes";
 
-const CONNECTION_LABEL: Record<ConnectionState, string> = {
-  [ConnectionState.Disconnected]: "연결 끊김",
-  [ConnectionState.Connecting]: "연결 중…",
-  [ConnectionState.Connected]: "연결됨",
-  [ConnectionState.Reconnecting]: "재연결 중…",
-  [ConnectionState.SignalReconnecting]: "재연결 중…",
-};
-
-const CONNECTION_DOT: Record<ConnectionState, string> = {
-  [ConnectionState.Disconnected]: "var(--red-600)",
-  [ConnectionState.Connecting]: "var(--blue-400)",
-  [ConnectionState.Connected]: "var(--green-600)",
-  [ConnectionState.Reconnecting]: "var(--blue-400)",
-  [ConnectionState.SignalReconnecting]: "var(--blue-400)",
-};
-
 /** 종료 요청 실패 안내 — S008(종료 신호 발신 실패)은 종료 의도가 이미 기록된 상태라
     실패로 다루지 않고 즉시 수렴한다(endConfirmed). 여기 도달하는 것은 그 외 코드뿐 —
     공통 재시도 안내 + 서버 메시지 병기. */
@@ -50,14 +37,17 @@ const endFailureNotice = (err: unknown): string => {
 
 export function InterviewPage() {
   const nav = useNav();
-  // 질문 패널 — 질문 텍스트를 내려주는 계약이 아직 없어 기본 숨김 + 준비 중 안내만.
-  // 실계약(데이터 채널 등) 도입 시 이 패널에 실데이터를 연결한다
+  // 질문 패널 — 에이전트 전사 스트림(lk.transcription)의 면접관 final 발화를 표시.
+  // 기본 숨김이고, 발화 전(재입장 직후 포함)에는 안내 문구가 fallback 이다
   const [showQ, setShowQ] = useState(false);
   const [micFailed, setMicFailed] = useState(false);
+  const [camFailed, setCamFailed] = useState(false);
   // 세션 레코드 — 마운트 시 로드하되, 재입장 토큰 재발급이 교체할 수 있어 상태로 둔다
   const [activeSession, setActiveSession] = useState(loadInterviewSession);
   // 마이크 의도 상태 — 성공한 토글·복원 때만 갱신 (연결 해제로 꺼진 SDK 상태는 미기록)
   const [micIntent, setMicIntent] = useState(activeSession?.micIntent === true);
+  // 카메라 의도 상태 — setup 에서 카메라 확보 시 켜짐으로 시작 (핸드오프가 기록)
+  const [camIntent, setCamIntent] = useState(activeSession?.camIntent === true);
   const authSessionId = useAuthSessionId();
   // 저장값이 없거나(직행·손상) 발급 당시 계정과 다르면 통과 불가 — 이전 계정의
   // 토큰이 다음 사용자에게 넘어가는 것을 막는다 (PRD 인증 세션 검증)
@@ -90,6 +80,30 @@ export function InterviewPage() {
     startAudio,
   } = useLiveKitRoom(gateOk ? liveSession : undefined);
   const remoteAudioRef = useRemoteAudio(room);
+  const interviewerQuestion = useInterviewerQuestion(room);
+
+  // 로컬 카메라 self-view — 룸에 publish 하지 않는 로컬 전용 트랙 (오디오만 전송).
+  // 의도가 켜짐이면 접속과 무관하게 켠다. enableCamera 는 켜짐·획득 중이면 no-op 이라
+  // 성공한 토글 뒤의 재실행도 무해하고, StrictMode 재마운트는 정지 후 다시 켠다
+  const { cameraTrack, cameraEnabled, enableCamera, toggleCamera } = useLocalCamera();
+  useEffect(() => {
+    if (!gateOk || !camIntent) return;
+    void enableCamera().then(
+      () => setCamFailed(false),
+      () => setCamFailed(true),
+    );
+  }, [gateOk, camIntent, enableCamera]);
+
+  // 트랙 부착은 effect 로만 관리 — 트랙이 바뀌거나 사라지면 detach 로 정리한다
+  const selfViewRef = useRef<HTMLVideoElement | null>(null);
+  useEffect(() => {
+    const el = selfViewRef.current;
+    if (!cameraTrack || !el) return;
+    cameraTrack.attach(el);
+    return () => {
+      cameraTrack.detach(el);
+    };
+  }, [cameraTrack]);
 
   const endSession = useEndInterviewSession();
   const [confirmEndOpen, setConfirmEndOpen] = useState(false);
@@ -154,14 +168,16 @@ export function InterviewPage() {
     if (!activeSession || connectionState !== ConnectionState.Connected) return;
     if (restoredTokenRef.current === activeSession.token) return;
     restoredTokenRef.current = activeSession.token;
-    saveInterviewSession({ ...activeSession, micIntent });
+    // 의도 상태는 현재값으로 저장 — activeSession 에 남은 발급 시점 값이 토글로
+    // 갱신된 저장값(updateStored*Intent)을 되돌리지 않게 한다
+    saveInterviewSession({ ...activeSession, micIntent, camIntent });
     if (micIntent) {
       void enableMicrophone().then(
         () => setMicFailed(false),
         () => setMicFailed(true),
       );
     }
-  }, [activeSession, connectionState, micIntent, enableMicrophone]);
+  }, [activeSession, connectionState, micIntent, camIntent, enableMicrophone]);
 
   // 재입장발 재접속 중(Connecting)에도 오버레이를 유지한다 — attemptsUsed 는
   // 재접속 성공 시 0 으로 복귀하므로 최초 입장·핸드오프의 Connecting 은 제외된다
@@ -182,9 +198,6 @@ export function InterviewPage() {
     });
     if (overlayActive) overlayTitleRef.current?.focus();
   }, [overlayActive]);
-
-  const statusLabel = connectError ? "접속 실패" : CONNECTION_LABEL[connectionState];
-  const statusDot = connectError ? "var(--red-600)" : CONNECTION_DOT[connectionState];
 
   // 세션 없이는 면접 화면이 성립하지 않는다 — 설정 화면으로 돌려보낸다 (히스토리 미기록)
   if (!gateOk) return <Navigate to={ROUTES.setup} replace />;
@@ -217,32 +230,10 @@ export function InterviewPage() {
           zIndex: 6,
         }}
       >
-        {/* 좌측 자리 유지용 — 타이머 표시는 제거됨(남은 시간의 원천이 서버에 없어
-            어림값 표기가 오정보였다). 자연 만료는 ROOM_DELETED 수렴으로 처리된다 */}
+        {/* 좌측 자리 유지용 — 타이머·연결 상태 필은 제거됨(타이머는 서버에 남은 시간
+            원천이 없어 오정보였고, 상태 필은 정상 시 불필요·이상 시 재연결 오버레이가
+            대신 전한다). 자연 만료는 ROOM_DELETED 수렴으로 처리된다 */}
         <span aria-hidden style={{ width: 1 }} />
-        {/* 재입장 오버레이가 연결 상태를 대신 전한다 — 뒤에 비치는 상태 필은 중복이라 숨긴다 */}
-        {!overlayActive && (
-          <span
-            role="status"
-            style={{
-              display: "inline-flex",
-              alignItems: "center",
-              gap: 8,
-              height: 32,
-              padding: "0 14px",
-              borderRadius: "var(--radius-full)",
-              background: "var(--bg-inverse-subtle)",
-              border: "1px solid var(--border-inverse-strong)",
-              color: "var(--fg-inverse)",
-              fontFamily: "var(--font-sans)",
-              fontSize: 13,
-              fontWeight: 600,
-            }}
-          >
-            <span style={{ width: 8, height: 8, borderRadius: "50%", background: statusDot }} />{" "}
-            {statusLabel}
-          </span>
-        )}
         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
           {/* 자동재생 정책으로 원격 오디오가 막힌 경우 — 사용자 제스처로 재개 */}
           {connectionState === ConnectionState.Connected && !canPlayAudio && (
@@ -269,14 +260,15 @@ export function InterviewPage() {
       {/* 원격 오디오 부착 지점 — 화면에는 보이지 않고 <audio> 요소만 담는다 */}
       <div ref={remoteAudioRef} style={{ display: "none" }} data-testid="remote-audio" />
 
-      {/* self-view PiP */}
+      {/* self-view PiP — 카메라 켜짐이면 로컬 트랙을 미러로 표시, 꺼짐·실패면 아이콘 유지 */}
       <div
         style={{
           position: "absolute",
           top: 76,
           left: 22,
-          width: 168,
-          height: 108,
+          // 16:9 — 웹캠 원본 비율과 일치시켜 cover 크롭을 줄인다 (자세 확인 용도)
+          width: 240,
+          height: 135,
           borderRadius: "var(--radius-12)",
           border: "1px solid rgba(255,255,255,.18)",
           background: "var(--neutral-925)",
@@ -284,10 +276,30 @@ export function InterviewPage() {
           alignItems: "center",
           justifyContent: "center",
           color: "rgba(255,255,255,.5)",
+          overflow: "hidden",
           zIndex: 6,
         }}
       >
-        <Icon name="user-round" size={30} strokeWidth={1.75} />
+        {cameraTrack ? (
+          // 자기 모습 미리보기 — 에코 방지를 위해 항상 음소거, 거울 반전
+          <video
+            ref={selfViewRef}
+            muted
+            autoPlay
+            playsInline
+            aria-label="내 카메라 화면"
+            style={{
+              position: "absolute",
+              inset: 0,
+              width: "100%",
+              height: "100%",
+              objectFit: "cover",
+              transform: "scaleX(-1)",
+            }}
+          />
+        ) : (
+          <Icon name="user-round" size={30} strokeWidth={1.75} />
+        )}
         <span
           style={{
             position: "absolute",
@@ -341,7 +353,7 @@ export function InterviewPage() {
         </div>
       </div>
 
-      {/* 질문 패널 — 목 질문 텍스트는 제거됨. 계약이 생기면 준비 중 안내 자리에 실데이터 렌더 */}
+      {/* 질문 패널 — 마지막 면접관 final 발화. 발화 전에는 안내 문구 fallback */}
       {showQ && (
         <div
           style={{
@@ -374,7 +386,7 @@ export function InterviewPage() {
           </div>
           <div
             style={{
-              color: "rgba(255,255,255,.6)",
+              color: interviewerQuestion ? "rgba(255,255,255,.92)" : "rgba(255,255,255,.6)",
               fontFamily: "var(--font-sans)",
               fontSize: 14.5,
               fontWeight: 500,
@@ -382,7 +394,7 @@ export function InterviewPage() {
               marginTop: 9,
             }}
           >
-            질문은 면접관의 음성으로 진행돼요. 화면 표시는 준비 중이에요.
+            {interviewerQuestion ?? "면접관이 질문하면 여기에 표시돼요."}
           </div>
         </div>
       )}
@@ -439,6 +451,23 @@ export function InterviewPage() {
             주세요
           </span>
         )}
+        {/* 카메라는 선택 장비 — 실패해도 placeholder 를 유지하고 음성으로 계속 진행한다 */}
+        {camFailed && (
+          <span
+            role="alert"
+            style={{
+              color: "var(--fg-inverse)",
+              fontFamily: "var(--font-sans)",
+              fontSize: 12,
+              display: "inline-flex",
+              alignItems: "center",
+              gap: 6,
+            }}
+          >
+            <Icon name="video-off" size={13} /> 카메라를 켤 수 없어요. 브라우저 카메라 권한을 확인해
+            주세요
+          </span>
+        )}
         <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 12 }}>
           <button
             className="dark-btn dark-btn--round"
@@ -465,8 +494,24 @@ export function InterviewPage() {
             <Icon name={showQ ? "eye-off" : "eye"} size={16} />{" "}
             {showQ ? "질문 숨기기" : "질문 보기"}
           </button>
-          <button className="dark-btn dark-btn--round" aria-label="카메라 끄기">
-            <Icon name="video-off" size={18} />
+          <button
+            className="dark-btn dark-btn--round"
+            aria-label="카메라"
+            aria-pressed={cameraEnabled}
+            onClick={() =>
+              // 실패 시 꺼진 상태 그대로(placeholder 유지) + 안내 문구 노출.
+              // 성공한 토글만 의도 상태(camIntent)에 반영한다
+              void toggleCamera().then(
+                (enabled) => {
+                  setCamFailed(false);
+                  setCamIntent(enabled);
+                  updateStoredCamIntent(enabled);
+                },
+                () => setCamFailed(true),
+              )
+            }
+          >
+            <Icon name={cameraEnabled ? "video" : "video-off"} size={18} />
           </button>
         </div>
       </div>

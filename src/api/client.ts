@@ -1,6 +1,6 @@
 /* ============================================================
    API 클라이언트 — 도메인별로 목 → 실제 API 점진 교체 중.
-   [실제] 인증(auth)·이력서(resume)  [목] 리포트·사용자·알림
+   [실제] 인증·사용자·이력서·리포트·세션  [목] 구독·알림·재입장
    ============================================================ */
 import * as fixtures from "./fixtures";
 import {
@@ -13,6 +13,7 @@ import {
 } from "./generated/resume/resume";
 import { regenerate as regenerateApi } from "./generated/report/report";
 import { create as createSessionApi, end as endSessionApi } from "./generated/session/session";
+import { getMyInfo, update as updateUserApi } from "./generated/user/user";
 import type {
   InterviewSessionCreateResponse,
   ReportRegenerateResponse as ReportRegenerateResponseModel,
@@ -22,6 +23,7 @@ import type {
   ResumeSummaryResponseAnalysisStatus,
   ResumeUploadResponse as ResumeUploadResponseModel,
   StructuredData as StructuredDataModel,
+  UserInfoResponse,
 } from "./generated/kkoriAPI.schemas";
 import { ApiError, FE_ERROR_CODES, request } from "./request";
 import type { components } from "./schema";
@@ -83,8 +85,7 @@ export const postLogout = (expectedSessionId: string, signal?: AbortSignal): Pro
     signal,
   });
 
-export const fetchProfile = (): Promise<Profile> => delay(fixtures.profile);
-
+/* 구독·알림은 백엔드 엔드포인트가 아직 없다 — 목 유지가 곧 fallback */
 export const fetchSubscription = (): Promise<Subscription> => delay(fixtures.subscription);
 
 export const fetchNotifications = (): Promise<NotificationItem[]> => delay(fixtures.notifications);
@@ -196,6 +197,30 @@ export const updateResumeParsed = async (
   resumeId: number,
   structuredData: StructuredData,
 ): Promise<ResumeParsedResponse> => (await updateParsed(resumeId, { structuredData })).data ?? {};
+
+/* ---------- 사용자 (실제 API — orval 생성 fetcher 사용) ---------- */
+
+/** 내 정보 응답 → UI 모델. email·name 은 카카오 제공 여부에 따라 null 일 수 있다(BE 스펙) —
+    이름은 "사용자"로 대체하고 이니셜은 표시 이름의 첫 글자를 쓴다. kakaoLinked 는
+    카카오 전용 로그인 서비스라 항상 true (API 에 연동 여부 필드가 없다). */
+export function toUiProfile(info: UserInfoResponse): Profile {
+  const name = info.name?.trim() || "사용자";
+  return {
+    name,
+    email: info.email ?? "",
+    initials: [...name][0],
+    joinedAt: info.createdAt ? formatDate(info.createdAt) : "",
+    kakaoLinked: true,
+  };
+}
+
+export const fetchProfile = async (): Promise<Profile> =>
+  toUiProfile((await getMyInfo()).data ?? {});
+
+/** 이름 수정 — PATCH 는 name 만 수정 가능(공백 제거 후 1~100자 검증은 화면 소관).
+    응답이 수정 결과 전체라 그대로 UI 모델로 반환한다 (호출자가 캐시 교체에 사용). */
+export const updateProfileName = async (name: string): Promise<Profile> =>
+  toUiProfile((await updateUserApi({ name })).data ?? {});
 
 /* ---------- 리포트 (실제 API) ---------- */
 

@@ -887,6 +887,11 @@ export function SetupPage() {
       room: livekitRoom,
       authSessionId: capturedAuthSessionId,
       id,
+      // 마이크는 점검 필수(확보·권한 완료)라 /live 는 켜짐으로 시작한다 —
+      // 접속 성공 시 복원 effect 가 자동 발행하고, 이후엔 사용자 토글만 반영
+      micIntent: true,
+      // 점검에서 카메라를 확보했으면 /live self-view 를 켜짐으로 시작한다
+      camIntent: setup.cameraId !== null,
     });
     if (!saved) {
       void room.disconnect();
@@ -899,8 +904,11 @@ export function SetupPage() {
       token: livekitToken,
       authSessionId: capturedAuthSessionId,
     });
-    // 점검에서 고른 마이크를 /live 로 전달 — 실패한 시도가 선호를 덮지 않게 성공 후에만
-    saveDevicePreferences({ micId: setup.micId ?? undefined });
+    // 점검에서 고른 장치를 /live 로 전달 — 실패한 시도가 선호를 덮지 않게 성공 후에만
+    saveDevicePreferences({
+      micId: setup.micId ?? undefined,
+      cameraId: setup.cameraId ?? undefined,
+    });
     nav("interview");
   };
 

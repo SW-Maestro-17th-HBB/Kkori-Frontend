@@ -3,6 +3,7 @@ import {
   clearInterviewSession,
   loadInterviewSession,
   saveInterviewSession,
+  updateStoredCamIntent,
   updateStoredMicIntent,
 } from "./interviewSession";
 
@@ -22,25 +23,38 @@ describe("interviewSession", () => {
     sessionStorage.clear();
   });
 
-  it("저장·로드 라운드트립 — micIntent 미지정은 꺼짐으로 정규화된다", () => {
+  it("저장·로드 라운드트립 — micIntent·camIntent 미지정은 꺼짐으로 정규화된다", () => {
     expect(saveInterviewSession(record)).toBe(true);
-    expect(loadInterviewSession()).toEqual({ ...record, micIntent: false });
-    expect(saveInterviewSession({ ...record, micIntent: true })).toBe(true);
-    expect(loadInterviewSession()).toEqual({ ...record, micIntent: true });
+    expect(loadInterviewSession()).toEqual({ ...record, micIntent: false, camIntent: false });
+    expect(saveInterviewSession({ ...record, micIntent: true, camIntent: true })).toBe(true);
+    expect(loadInterviewSession()).toEqual({ ...record, micIntent: true, camIntent: true });
   });
 
-  it("micIntent 없는 구레코드는 꺼짐으로 로드한다 (예상 밖 자동 발행 방지)", () => {
+  it("의도 필드 없는 구레코드는 꺼짐으로 로드한다 (예상 밖 자동 발행·점등 방지)", () => {
     sessionStorage.setItem(KEY, JSON.stringify(record)); // 필드 자체가 없는 저장분
     expect(loadInterviewSession()!.micIntent).toBe(false);
+    expect(loadInterviewSession()!.camIntent).toBe(false);
   });
 
   it("updateStoredMicIntent 는 다른 필드를 보존하며 갱신하고, 레코드 없으면 no-op", () => {
-    saveInterviewSession(record);
+    saveInterviewSession({ ...record, camIntent: true });
     updateStoredMicIntent(true);
-    expect(loadInterviewSession()).toEqual({ ...record, micIntent: true });
+    expect(loadInterviewSession()).toEqual({ ...record, micIntent: true, camIntent: true });
 
     sessionStorage.clear();
     updateStoredMicIntent(true); // 저장분 없음 — 조용히 통과해야 한다
+    expect(sessionStorage.getItem(KEY)).toBeNull();
+  });
+
+  it("updateStoredCamIntent 는 다른 필드를 보존하며 갱신하고, 레코드 없으면 no-op", () => {
+    saveInterviewSession({ ...record, micIntent: true });
+    updateStoredCamIntent(true);
+    expect(loadInterviewSession()).toEqual({ ...record, micIntent: true, camIntent: true });
+    updateStoredCamIntent(false);
+    expect(loadInterviewSession()).toEqual({ ...record, micIntent: true, camIntent: false });
+
+    sessionStorage.clear();
+    updateStoredCamIntent(true); // 저장분 없음 — 조용히 통과해야 한다
     expect(sessionStorage.getItem(KEY)).toBeNull();
   });
 

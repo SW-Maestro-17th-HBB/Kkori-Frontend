@@ -2,15 +2,7 @@
    목 데이터 — 프로토타입 하드코딩 값 그대로.
    API 연동 시 client.ts의 fetch 구현만 교체하면 됨.
    ============================================================ */
-import type { NotificationItem, Profile, ReportDetail, Subscription, TimelineEntry } from "./types";
-
-export const profile: Profile = {
-  name: "홍길동",
-  email: "hong@example.com",
-  initials: "홍",
-  joinedAt: "2026.05.10",
-  kakaoLinked: true,
-};
+import type { NotificationItem, ReportDetail, Subscription, TimelineEntry } from "./types";
 
 export const subscription: Subscription = {
   plan: "free",

@@ -15,11 +15,17 @@ import { SetupPage } from "./SetupPage";
 
 vi.mock("livekit-client", async () => (await import("../test/livekitMock")).createLiveKitMock());
 
-// 이력서 목록만 케이스별로 제어한다 — 나머지 client 모듈은 원본 유지
-const { fetchResumesMock } = vi.hoisted(() => ({ fetchResumesMock: vi.fn() }));
+// 이력서 목록·프로필만 목으로 제어한다 — 나머지 client 모듈은 원본 유지.
+// 프로필 목이 없으면 TopNav 의 GET /api/v1/user 가 세션 발급용 fetch 스텁을 소비해
+// 응답 순서를 어긋나게 한다 (세션 스텁은 URL 무관 순차 응답)
+const { fetchResumesMock, fetchProfileMock } = vi.hoisted(() => ({
+  fetchResumesMock: vi.fn(),
+  fetchProfileMock: vi.fn(),
+}));
 vi.mock("../api/client", async (importOriginal) => ({
   ...(await importOriginal<typeof import("../api/client")>()),
   fetchResumes: fetchResumesMock,
+  fetchProfile: fetchProfileMock,
 }));
 
 /** useNav 이동 결과 확인용 — 현재 경로를 노출한다 */
@@ -111,6 +117,14 @@ beforeEach(() => {
   localStorage.clear();
   fetchResumesMock.mockReset();
   fetchResumesMock.mockResolvedValue(fixtures.resumes);
+  fetchProfileMock.mockReset();
+  fetchProfileMock.mockResolvedValue({
+    name: "홍길동",
+    email: "hong@example.com",
+    initials: "홍",
+    joinedAt: "2026.05.10",
+    kakaoLinked: true,
+  });
 });
 
 afterEach(() => {
@@ -355,14 +369,36 @@ describe("SetupPage — 장비 점검", () => {
       room: "room-1",
       authSessionId: "sess-A",
       id: 34,
-      micIntent: false, // 발급 시점의 의도 기본값 — /live 의 토글·복원만 갱신한다
+      micIntent: true, // 마이크는 점검 필수 장비 — /live 진입 시 자동 발행으로 시작
+      camIntent: true, // 점검에서 카메라를 확보했으므로 /live self-view 는 켜짐으로 시작
     });
     expect(JSON.parse(sessionStorage.getItem("hbb.interview.devicePrefs")!)).toEqual({
       micId: "mic-default",
+      cameraId: "cam-default",
     });
     // 이동 전에 이 화면에서 LiveKit 접속을 확립한다 (핸드오프용 룸)
     const room = FakeRoom.instances.at(-1)!;
     expect(room.connect).toHaveBeenCalledWith("wss://lk.example", "lk-token");
+  });
+
+  it("카메라 없이(음성 진행) 시작하면 camIntent 꺼짐으로 저장하고 cameraId 를 남기지 않는다", async () => {
+    seedLogin();
+    stubSessionFetch();
+    FakeMedia.acquireResults = ["in-use", "ok"]; // 결합 실패(카메라 점유) → 마이크 단독 성공
+    renderSetupPage();
+    await startCheck();
+    await speakIntoMic();
+    await userEvent.click(screen.getByRole("button", { name: "면접 시작" }));
+
+    await waitFor(() => {
+      expect(screen.getByTestId("location")).toHaveTextContent("/live");
+    });
+    expect(JSON.parse(sessionStorage.getItem("hbb.interview.session")!)).toMatchObject({
+      camIntent: false, // /live 가 예상 밖 카메라 점등 없이 placeholder 로 시작한다
+    });
+    expect(JSON.parse(sessionStorage.getItem("hbb.interview.devicePrefs")!)).toEqual({
+      micId: "mic-default",
+    });
   });
 });
 

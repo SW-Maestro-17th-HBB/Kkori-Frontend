@@ -204,6 +204,12 @@ FakeMedia.reset(); // 모듈 로드 시 기본 장치 목록 채움
 /** 마이크 발행 결과 지시자 — notfound 는 저장 장치 소멸, denied 는 권한 거부 */
 export type MicResult = "ok" | "notfound" | "denied";
 
+/** 실 SDK TextStreamHandler 의 (reader, participantInfo) 시그니처 흉내 */
+type FakeTextStreamHandler = (
+  reader: { info: { attributes: Record<string, string> }; readAll: () => Promise<string> },
+  participantInfo: { identity: string },
+) => void;
+
 export class FakeRoom {
   /** 생성 순서대로 쌓인다 — StrictMode 이중 마운트로 여분이 생기니 마지막 것을 쓸 것 */
   static instances: FakeRoom[] = [];
@@ -233,11 +239,14 @@ export class FakeRoom {
   }
 
   private listeners = new Map<string, Set<Listener>>();
+  private textHandlers = new Map<string, FakeTextStreamHandler>();
   state = "disconnected";
   canPlaybackAudio = true;
   /** 생성자 옵션 그대로 보관 — audioCaptureDefaults 전달 검증용 */
   options: unknown;
   localParticipant: {
+    /** 실 SDK 는 접속 토큰의 identity 를 노출한다 — 화자(내 발화) 필터 검증용 고정값 */
+    identity: string;
     isMicrophoneEnabled: boolean;
     setMicrophoneEnabled: (enabled: boolean, options?: unknown) => Promise<void>;
   };
@@ -252,6 +261,7 @@ export class FakeRoom {
     this.options = options;
     FakeRoom.instances.push(this);
     this.localParticipant = {
+      identity: "candidate-1",
       isMicrophoneEnabled: false,
       // 두 번째 인자(캡처 옵션)는 vi.fn 호출 기록으로만 검증한다
       setMicrophoneEnabled: vi.fn(async (enabled: boolean) => {
@@ -272,6 +282,31 @@ export class FakeRoom {
       // 실제 SDK 처럼 수동 해제도 Disconnected(CLIENT_INITIATED) 를 발화한다
       this.emitDisconnected(1);
     });
+  }
+
+  /** 실 SDK 와 동일하게 토픽당 1개만 허용 — 중복 등록은 예외 */
+  registerTextStreamHandler = vi.fn((topic: string, callback: FakeTextStreamHandler) => {
+    if (this.textHandlers.has(topic)) {
+      throw new Error(`A text stream handler for topic "${topic}" has already been set.`);
+    }
+    this.textHandlers.set(topic, callback);
+  });
+
+  unregisterTextStreamHandler = vi.fn((topic: string) => {
+    this.textHandlers.delete(topic);
+  });
+
+  /** 텍스트 스트림 수신 흉내 — 핸들러 호출 후 readAll 마이크로태스크까지 마친다 */
+  async emitTextStream(
+    topic: string,
+    text: string,
+    opts: { identity: string; attributes?: Record<string, string> },
+  ) {
+    this.textHandlers.get(topic)?.(
+      { info: { attributes: opts.attributes ?? {} }, readAll: async () => text },
+      { identity: opts.identity },
+    );
+    await Promise.resolve();
   }
 
   /** 서버측 해제 흉내 — reason 은 DisconnectReason 값 (ROOM_DELETED = 5) */

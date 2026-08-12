@@ -12,7 +12,7 @@ import { ApiError } from "../api/request";
 import { saveInterviewSession, type InterviewSessionRecord } from "../hooks/interviewSession";
 import { discardConnectedRoom, stashConnectedRoom } from "../hooks/useLiveKitRoom";
 import { renderWithProviders } from "../test/render";
-import { FakeRoom, makeFakeAudioTrack } from "../test/livekitMock";
+import { FakeMedia, FakeRoom, makeFakeAudioTrack } from "../test/livekitMock";
 import { InterviewPage } from "./InterviewPage";
 
 vi.mock("livekit-client", async () => (await import("../test/livekitMock")).createLiveKitMock());
@@ -40,6 +40,14 @@ beforeEach(() => {
 /** StrictMode 이중 마운트로 버려지는 인스턴스가 생긴다 — 접속된 룸 중 가장 최근 것을 쓴다 */
 const connectedRoom = () =>
   FakeRoom.instances.filter((room) => vi.mocked(room.connect).mock.calls.length > 0).at(-1);
+
+/** 접속 완료 대기 — 상태 필이 제거되어(정상 시 표시 없음) 연결 시에만 활성화되는
+    마이크 버튼으로 판정한다 */
+const waitConnected = async () => {
+  await waitFor(() => {
+    expect(screen.getByRole("button", { name: "마이크" })).toBeEnabled();
+  });
+};
 
 const SESSION_KEY = "hbb.interview.session";
 
@@ -147,22 +155,21 @@ describe("InterviewPage — LiveKit 룸 접속", () => {
     seedSession();
   });
 
-  it("저장된 세션으로 룸에 접속하고 상태 칩이 '연결됨'으로 바뀐다", async () => {
+  it("저장된 세션으로 룸에 접속한다", async () => {
     renderLive();
-    expect(await screen.findByText("연결됨")).toBeInTheDocument();
+    await waitConnected();
     expect(connectedRoom()!.connect).toHaveBeenCalledWith("wss://test.example", "jwt-token");
   });
 
-  it("접속이 거부되면 재연결 오버레이가 상태를 대신 전한다 (상태 필은 숨김)", async () => {
+  it("접속이 거부되면 재연결 오버레이가 상태를 전한다", async () => {
     FakeRoom.connectBehavior = "fail";
     renderLive();
     expect(await screen.findByTestId("reconnect-overlay")).toBeInTheDocument();
-    expect(screen.queryByText("접속 실패")).toBeNull();
   });
 
   it("자동재생이 막히면 '소리 켜기'가 나타나고, 실패 시 유지되다 재클릭 성공 시 사라진다", async () => {
     renderLive();
-    await screen.findByText("연결됨");
+    await waitConnected();
 
     act(() => {
       connectedRoom()!.setCanPlaybackAudio(false);
@@ -186,7 +193,7 @@ describe("InterviewPage — LiveKit 룸 접속", () => {
 
   it("마이크 버튼은 연결 중에만 활성화되고 클릭으로 발행을 토글한다", async () => {
     renderLive();
-    await screen.findByText("연결됨");
+    await waitConnected();
     const mic = screen.getByRole("button", { name: "마이크" });
     expect(mic).toBeEnabled();
     expect(mic).toHaveAttribute("aria-pressed", "false");
@@ -206,7 +213,7 @@ describe("InterviewPage — LiveKit 룸 접속", () => {
   it("마이크 발행이 실패하면 안내 문구를 보여주고, 이후 성공하면 지운다", async () => {
     FakeRoom.micBehavior = "fail";
     renderLive();
-    await screen.findByText("연결됨");
+    await waitConnected();
 
     const mic = screen.getByRole("button", { name: "마이크" });
     await userEvent.click(mic);
@@ -221,14 +228,14 @@ describe("InterviewPage — LiveKit 룸 접속", () => {
     expect(mic).toHaveAttribute("aria-pressed", "true");
   });
 
-  it("질문 패널은 기본 숨김이고, 토글로 열면 준비 중 안내를 보여준다 (목 질문 없음)", async () => {
+  it("질문 패널은 기본 숨김이고, 발화 전에 열면 안내 문구를 보여준다", async () => {
     renderLive();
-    await screen.findByText("연결됨");
+    await waitConnected();
     expect(screen.queryByText("현재 질문")).toBeNull();
 
     await userEvent.click(screen.getByRole("button", { name: "질문 보기" }));
     expect(screen.getByText("현재 질문")).toBeInTheDocument();
-    expect(screen.getByText(/화면 표시는 준비 중이에요/)).toBeInTheDocument();
+    expect(screen.getByText("면접관이 질문하면 여기에 표시돼요.")).toBeInTheDocument();
 
     await userEvent.click(screen.getByRole("button", { name: "질문 숨기기" }));
     expect(screen.queryByText("현재 질문")).toBeNull();
@@ -236,7 +243,7 @@ describe("InterviewPage — LiveKit 룸 접속", () => {
 
   it("구독된 원격 오디오 트랙이 숨김 컨테이너에 부착된다", async () => {
     renderLive();
-    await screen.findByText("연결됨");
+    await waitConnected();
 
     const container = screen.getByTestId("remote-audio");
     const track = makeFakeAudioTrack();
@@ -293,7 +300,7 @@ describe("InterviewPage — 면접 종료", () => {
     const fetchMock = vi.fn().mockImplementation(async () => envelope(null));
     vi.stubGlobal("fetch", fetchMock);
     renderLive();
-    await screen.findByText("연결됨");
+    await waitConnected();
 
     await clickEndAndConfirm();
 
@@ -313,7 +320,7 @@ describe("InterviewPage — 면접 종료", () => {
     const fetchMock = vi.fn().mockImplementation(async () => envelope(null));
     vi.stubGlobal("fetch", fetchMock);
     renderLive();
-    await screen.findByText("연결됨");
+    await waitConnected();
 
     await userEvent.click(screen.getByRole("button", { name: "면접 종료" }));
     await screen.findByText("면접을 종료할까요?");
@@ -325,7 +332,7 @@ describe("InterviewPage — 면접 종료", () => {
 
   it("/end 없이 도착한 ROOM_DELETED(시간 만료 자연 종료)도 동일하게 전환한다", async () => {
     renderLive();
-    await screen.findByText("연결됨");
+    await waitConnected();
 
     act(() => {
       connectedRoom()!.emitDisconnected(ROOM_DELETED);
@@ -336,7 +343,7 @@ describe("InterviewPage — 면접 종료", () => {
 
   it("그 외 사유의 해제는 종료로 전환하지 않고 재연결 오버레이를 띄운다", async () => {
     renderLive();
-    await screen.findByText("연결됨");
+    await waitConnected();
 
     act(() => {
       connectedRoom()!.emitDisconnected(SERVER_SHUTDOWN);
@@ -353,7 +360,7 @@ describe("InterviewPage — 면접 종료", () => {
       vi.fn().mockImplementation(async () => envelope(null)),
     );
     renderLive();
-    await screen.findByText("연결됨");
+    await waitConnected();
     act(() => {
       connectedRoom()!.emitDisconnected(SERVER_SHUTDOWN);
     });
@@ -376,7 +383,7 @@ describe("InterviewPage — 면접 종료", () => {
         ),
     );
     renderLive();
-    await screen.findByText("연결됨");
+    await waitConnected();
 
     await clickEndAndConfirm();
     // S008 = 종료 의도 기록 + 서버 fallback 이 최대 180초 내 룸 종료 보장 — 202 와 동일 수렴
@@ -415,7 +422,7 @@ describe("InterviewPage — 재연결·재입장", () => {
       }),
     );
     renderLive();
-    await screen.findByText("연결됨");
+    await waitConnected();
 
     act(() => {
       connectedRoom()!.emitDisconnected(SERVER_SHUTDOWN);
@@ -436,7 +443,7 @@ describe("InterviewPage — 재연결·재입장", () => {
         "jwt-token-2",
       );
     });
-    expect(await screen.findByText("연결됨")).toBeInTheDocument();
+    await waitConnected();
     await waitFor(() => {
       expect(screen.queryByTestId("reconnect-overlay")).toBeNull();
     });
@@ -452,7 +459,7 @@ describe("InterviewPage — 재연결·재입장", () => {
 
   it("ROOM_DELETED 해제는 재입장을 시도하지 않는다 (기존 계약 회귀)", async () => {
     renderLive();
-    await screen.findByText("연결됨");
+    await waitConnected();
     act(() => {
       connectedRoom()!.emitDisconnected(ROOM_DELETED);
     });
@@ -463,7 +470,7 @@ describe("InterviewPage — 재연결·재입장", () => {
   it("발급 진행 중에는 수동 버튼이 비활성화된다 (단일 진행)", async () => {
     // 기본 목 = 영원히 대기 — 첫 발급이 in-flight 로 남는다
     renderLive();
-    await screen.findByText("연결됨");
+    await waitConnected();
     act(() => {
       connectedRoom()!.emitDisconnected(SERVER_SHUTDOWN);
     });
@@ -483,7 +490,7 @@ describe("InterviewPage — 재연결·재입장", () => {
       }),
     );
     renderLive();
-    await screen.findByText("연결됨");
+    await waitConnected();
     act(() => {
       connectedRoom()!.emitDisconnected(SERVER_SHUTDOWN);
     });
@@ -516,7 +523,7 @@ describe("InterviewPage — 재연결·재입장", () => {
   it("자동 시도 소진 후 수동 '다시 연결'이 새 발급부터 재시도한다", async () => {
     reenterMock.mockRejectedValue(new Error("network down"));
     renderLive();
-    await screen.findByText("연결됨");
+    await waitConnected();
     act(() => {
       connectedRoom()!.emitDisconnected(SERVER_SHUTDOWN);
     });
@@ -535,7 +542,7 @@ describe("InterviewPage — 재연결·재입장", () => {
     await waitFor(() => {
       expect(reenterMock).toHaveBeenCalledTimes(4);
     });
-    expect(await screen.findByText("연결됨")).toBeInTheDocument();
+    await waitConnected();
     await waitFor(() => {
       expect(screen.queryByTestId("reconnect-overlay")).toBeNull();
     });
@@ -546,7 +553,7 @@ describe("InterviewPage — 재연결·재입장", () => {
       new ApiError(REENTRY_SESSION_ENDED_CODE, "이미 종료된 면접입니다.", 409),
     );
     renderLive();
-    await screen.findByText("연결됨");
+    await waitConnected();
     act(() => {
       connectedRoom()!.emitDisconnected(SERVER_SHUTDOWN);
     });
@@ -567,7 +574,7 @@ describe("InterviewPage — 재연결·재입장", () => {
       vi.fn().mockImplementation(async () => envelope(null)),
     );
     renderLive();
-    await screen.findByText("연결됨");
+    await waitConnected();
     act(() => {
       connectedRoom()!.emitDisconnected(SERVER_SHUTDOWN);
     });
@@ -603,7 +610,7 @@ describe("InterviewPage — 재연결·재입장", () => {
         ),
     );
     renderLive();
-    await screen.findByText("연결됨");
+    await waitConnected();
     act(() => {
       connectedRoom()!.emitDisconnected(SERVER_SHUTDOWN);
     });
@@ -627,7 +634,7 @@ describe("InterviewPage — 재연결·재입장", () => {
         ),
     );
     renderLive();
-    await screen.findByText("연결됨");
+    await waitConnected();
     act(() => {
       connectedRoom()!.emitDisconnected(SERVER_SHUTDOWN);
     });
@@ -649,7 +656,7 @@ describe("InterviewPage — 재연결·재입장", () => {
     await waitFor(() => {
       expect(reenterMock).toHaveBeenCalledTimes(4);
     });
-    expect(await screen.findByText("연결됨")).toBeInTheDocument();
+    await waitConnected();
   });
 
   it("새로고침 스테일 토큰의 접속 실패는 재입장 폴백으로 복구된다", async () => {
@@ -673,7 +680,7 @@ describe("InterviewPage — 재연결·재입장", () => {
         "jwt-token-2",
       );
     });
-    expect(await screen.findByText("연결됨")).toBeInTheDocument();
+    await waitConnected();
     await waitFor(() => {
       expect(screen.queryByTestId("reconnect-overlay")).toBeNull();
     });
@@ -703,7 +710,7 @@ describe("InterviewPage — 마이크 복원", () => {
 
   it("토글 성공이 micIntent 를 저장값에 반영한다", async () => {
     renderLive();
-    await screen.findByText("연결됨");
+    await waitConnected();
     const mic = screen.getByRole("button", { name: "마이크" });
 
     await userEvent.click(mic);
@@ -718,7 +725,7 @@ describe("InterviewPage — 마이크 복원", () => {
 
   it("연결 해제로 꺼진 발행 상태는 micIntent 에 기록되지 않는다", async () => {
     renderLive();
-    await screen.findByText("연결됨");
+    await waitConnected();
     await userEvent.click(screen.getByRole("button", { name: "마이크" }));
     await waitFor(() => {
       expect(JSON.parse(sessionStorage.getItem(SESSION_KEY)!).micIntent).toBe(true);
@@ -734,7 +741,7 @@ describe("InterviewPage — 마이크 복원", () => {
   it("새로고침 복원 — 폴백 없이 접속해도 저장된 micIntent 가 자동 재발행된다", async () => {
     seedSession({ micIntent: true });
     renderLive();
-    await screen.findByText("연결됨");
+    await waitConnected();
     await waitFor(() => {
       expect(screen.getByRole("button", { name: "마이크" })).toHaveAttribute(
         "aria-pressed",
@@ -748,7 +755,7 @@ describe("InterviewPage — 마이크 복원", () => {
     seedSession({ micIntent: true });
     reenterMock.mockResolvedValue(reenterResponse("jwt-token-B"));
     renderLive();
-    await screen.findByText("연결됨");
+    await waitConnected();
     await waitFor(() => {
       expect(screen.getByRole("button", { name: "마이크" })).toHaveAttribute(
         "aria-pressed",
@@ -768,10 +775,173 @@ describe("InterviewPage — 마이크 복원", () => {
     await waitFor(() => {
       expect(vi.mocked(room.connect)).toHaveBeenLastCalledWith("wss://re.example", "jwt-token-B");
     });
-    await screen.findByText("연결됨");
+    await waitConnected();
     // 토큰 세대가 바뀌었으므로 복원이 1회 더 실행된다
     await waitFor(() => {
       expect(enableCalls()).toBeGreaterThan(restoredOnA);
     });
+  });
+});
+
+/* ---------- 카메라 self-view (HBB1-20) — 룸에 publish 하지 않는 로컬 트랙 ---------- */
+
+describe("InterviewPage — 카메라 self-view", () => {
+  beforeEach(() => {
+    discardConnectedRoom();
+    FakeRoom.reset();
+    FakeMedia.reset();
+    sessionStorage.clear();
+    localStorage.clear();
+    seedSession();
+  });
+
+  it("camIntent 꺼짐이면 placeholder 만 표시하고 카메라를 획득하지 않는다", async () => {
+    renderLive();
+    await waitConnected();
+    expect(screen.queryByLabelText("내 카메라 화면")).toBeNull();
+    expect(FakeMedia.createLocalTracks).not.toHaveBeenCalled();
+  });
+
+  it("camIntent 켜짐 세션은 마운트 시 self-view 를 자동으로 켠다 (접속과 무관한 로컬 트랙)", async () => {
+    seedSession({ camIntent: true });
+    renderLive();
+    expect(await screen.findByLabelText("내 카메라 화면")).toBeInTheDocument();
+    const track = FakeMedia.tracks.at(-1)!;
+    expect(track.attach).toHaveBeenCalled();
+    expect(track.kind).toBe("video");
+  });
+
+  it("카메라 토글 성공이 표시·저장값(camIntent)에 반영되고, 끄기는 트랙을 정지한다", async () => {
+    renderLive();
+    await waitConnected();
+    const camera = screen.getByRole("button", { name: "카메라" });
+    expect(camera).toHaveAttribute("aria-pressed", "false");
+
+    await userEvent.click(camera);
+    expect(await screen.findByLabelText("내 카메라 화면")).toBeInTheDocument();
+    expect(camera).toHaveAttribute("aria-pressed", "true");
+    expect(JSON.parse(sessionStorage.getItem(SESSION_KEY)!).camIntent).toBe(true);
+
+    const track = FakeMedia.tracks.at(-1)!;
+    await userEvent.click(camera);
+    await waitFor(() => {
+      expect(screen.queryByLabelText("내 카메라 화면")).toBeNull();
+    });
+    expect(camera).toHaveAttribute("aria-pressed", "false");
+    expect(track.stop).toHaveBeenCalled();
+    expect(JSON.parse(sessionStorage.getItem(SESSION_KEY)!).camIntent).toBe(false);
+  });
+
+  it("카메라 켜기 실패 시 안내 문구를 보여주고 placeholder 를 유지한다 (음성 진행)", async () => {
+    FakeMedia.trackBehavior = "denied";
+    renderLive();
+    await waitConnected();
+
+    const camera = screen.getByRole("button", { name: "카메라" });
+    await userEvent.click(camera);
+    expect(await screen.findByRole("alert")).toHaveTextContent("카메라를 켤 수 없어요");
+    expect(camera).toHaveAttribute("aria-pressed", "false");
+    expect(screen.queryByLabelText("내 카메라 화면")).toBeNull();
+
+    FakeMedia.trackBehavior = "ok";
+    await userEvent.click(camera);
+    await waitFor(() => {
+      expect(screen.queryByRole("alert")).toBeNull();
+    });
+    expect(await screen.findByLabelText("내 카메라 화면")).toBeInTheDocument();
+  });
+
+  it("재입장 토큰 갱신 후에도 꺼둔 카메라가 저장값에 유지된다 (발급 시점 값으로 미회귀)", async () => {
+    seedSession({ camIntent: true });
+    reenterMock.mockResolvedValue(reenterResponse("jwt-token-B"));
+    renderLive();
+    await waitConnected();
+    await screen.findByLabelText("내 카메라 화면");
+
+    await userEvent.click(screen.getByRole("button", { name: "카메라" })); // 끄기
+    await waitFor(() => {
+      expect(JSON.parse(sessionStorage.getItem(SESSION_KEY)!).camIntent).toBe(false);
+    });
+
+    const room = connectedRoom()!;
+    act(() => {
+      room.emitDisconnected(SERVER_SHUTDOWN);
+    });
+    await waitFor(() => {
+      expect(vi.mocked(room.connect)).toHaveBeenLastCalledWith("wss://re.example", "jwt-token-B");
+    });
+    await waitConnected();
+    // 접속 성공 시 저장값 갱신이 activeSession 에 남은 발급 시점 camIntent 로 되돌리지 않는다
+    await waitFor(() => {
+      expect(JSON.parse(sessionStorage.getItem(SESSION_KEY)!).camIntent).toBe(false);
+    });
+    expect(screen.queryByLabelText("내 카메라 화면")).toBeNull();
+  });
+
+  it("재연결 국면(오버레이)에도 self-view 는 유지된다", async () => {
+    seedSession({ camIntent: true });
+    renderLive();
+    await waitConnected();
+    await screen.findByLabelText("내 카메라 화면");
+
+    act(() => {
+      connectedRoom()!.emitDisconnected(SERVER_SHUTDOWN);
+    });
+    await screen.findByTestId("reconnect-overlay");
+    expect(screen.getByLabelText("내 카메라 화면")).toBeInTheDocument();
+    expect(FakeMedia.tracks.at(-1)!.stopped).toBe(false);
+  });
+});
+
+/* ---------- 질문 패널 — lk.transcription 전사 수신 (HBB1-20) ---------- */
+
+describe("InterviewPage — 질문 패널 전사 수신", () => {
+  beforeEach(() => {
+    discardConnectedRoom();
+    FakeRoom.reset();
+    sessionStorage.clear();
+    localStorage.clear();
+    seedSession();
+  });
+
+  /** 에이전트 발화 수신 흉내 — 실측 계약대로 열림 속성은 final="false" 다
+      (delta 스트림은 닫힘 트레일러에만 final=true 가 붙는다). 목의 readAll 은
+      즉시 resolve = 스트림이 닫혀 발화 전체가 도착한 상태를 재현한다 */
+  const emitTranscription = (text: string, over: { identity?: string } = {}) =>
+    act(() =>
+      connectedRoom()!.emitTextStream("lk.transcription", text, {
+        identity: over.identity ?? "agent-interviewer",
+        attributes: { "lk.transcription_final": "false", "lk.segment_id": "SG_test" },
+      }),
+    );
+
+  it("면접관 발화가 질문 패널에 표시되고, 새 발화가 오면 교체된다 (열림 속성 final=false 여도)", async () => {
+    renderLive();
+    await waitConnected();
+    await emitTranscription("자기소개 부탁드립니다.");
+    await userEvent.click(screen.getByRole("button", { name: "질문 보기" }));
+    expect(screen.getByText("자기소개 부탁드립니다.")).toBeInTheDocument();
+
+    await emitTranscription("프로젝트에서 맡은 역할을 말씀해 주세요.");
+    expect(screen.getByText("프로젝트에서 맡은 역할을 말씀해 주세요.")).toBeInTheDocument();
+    expect(screen.queryByText("자기소개 부탁드립니다.")).toBeNull();
+  });
+
+  it("내 발화(STT 자막)는 표시하지 않는다", async () => {
+    renderLive();
+    await waitConnected();
+    await userEvent.click(screen.getByRole("button", { name: "질문 보기" }));
+
+    await emitTranscription("제 답변 자막입니다", { identity: "candidate-1" }); // 내 identity
+    expect(screen.getByText("면접관이 질문하면 여기에 표시돼요.")).toBeInTheDocument();
+    expect(screen.queryByText("제 답변 자막입니다")).toBeNull();
+  });
+
+  it("패널이 닫혀 있어도 수신은 계속되어, 열면 최신 질문이 보인다", async () => {
+    renderLive();
+    await waitConnected();
+    await emitTranscription("최근 질문입니다.");
+    await userEvent.click(screen.getByRole("button", { name: "질문 보기" }));
+    expect(screen.getByText("최근 질문입니다.")).toBeInTheDocument();
   });
 });
