@@ -25,10 +25,14 @@ export function useInterviewerQuestion(room: Room): string | null {
       // interim/final 이중 스트림 모델은 지원자 STT 쪽 이야기다).
       // readAll 은 스트림이 닫힐 때(발화 완료·중단) 실제 발화된 전체 텍스트로
       // resolve 하므로, 이 대기가 곧 "발화 완료 후 표시" 결정의 구현이다.
-      void reader.readAll().then((text) => {
-        const trimmed = text.trim();
-        if (active && trimmed) setQuestion(trimmed);
-      });
+      void reader.readAll().then(
+        (text) => {
+          const trimmed = text.trim();
+          if (active && trimmed) setQuestion(trimmed);
+        },
+        // 스트림 중단·오류(재연결 끊김 등)는 표시 전용 경로라 무시한다 — 직전 질문 유지
+        () => {},
+      );
     });
     return () => {
       active = false;
