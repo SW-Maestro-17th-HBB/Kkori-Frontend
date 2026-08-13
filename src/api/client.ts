@@ -369,7 +369,7 @@ export const fetchReportDetail = async (id: number | string): Promise<ReportDeta
 
 interface TimelineItemRes {
   questionNumber: number;
-  questionType: string; // MAIN | TAIL
+  questionType: string; // 대본 값 그대로 전달됨 — 값 집합 합의 미정 (실값: initial/topic/followup/final)
   parentQuestionNumber: number | null;
   question: string;
   answer: string;
@@ -387,7 +387,10 @@ export const fetchReportTimeline = async (id: number | string): Promise<Timeline
   const data = await request<{ items: TimelineItemRes[] }>("GET", `/api/v1/reports/${id}/timeline`);
   return data.items.map((it) => ({
     questionNumber: it.questionNumber,
-    isTail: it.questionType === "TAIL",
+    // 꼬리 판별은 questionType 값 매칭이 아니라 구조 규칙으로 한다 — 본질문은
+    // parentQuestionNumber가 자기 번호와 동일(백엔드 PRD 대본 계약), questionType의
+    // 값 집합은 합의 미정이라 실값(followup 등)에 묶이면 깨진다.
+    isTail: it.parentQuestionNumber != null && it.parentQuestionNumber !== it.questionNumber,
     parentQuestionNumber: it.parentQuestionNumber,
     question: it.question,
     answer: it.answer,
