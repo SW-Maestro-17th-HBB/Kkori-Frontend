@@ -93,7 +93,7 @@ export interface TimelineEvaluation {
 /** 타임라인 항목 — 질문 1개(+답변+평가). 백엔드 GET /reports/{id}/timeline 매핑. */
 export interface TimelineEntry {
   questionNumber: number;
-  isTail: boolean; // questionType === "TAIL"
+  isTail: boolean; // parentQuestionNumber !== questionNumber (본질문은 자기 번호와 동일 — 구조 규칙)
   parentQuestionNumber: number | null;
   question: string;
   answer: string; // 빈 문자열이면 "답변 없음"으로 표시
