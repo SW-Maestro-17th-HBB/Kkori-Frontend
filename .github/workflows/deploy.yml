@@ -16,9 +16,10 @@ concurrency:
 
 env:
   AWS_REGION: ap-northeast-2
-  # TODO: 도메인 확보(enable_dns=true) 후 실제 도메인으로 교체
-  VITE_API_BASE_URL: https://d3a8rktswgpmg2.cloudfront.net
-  VITE_KAKAO_CLIENT_ID: 4d1ac7ce33bb9dac9cdae7197ff069a7
+  # 값은 리포 설정의 Actions Variables에서 관리 (Settings → Secrets and variables → Actions → Variables).
+  # 도메인 확보(enable_dns=true) 시 VITE_API_BASE_URL 변수만 설정에서 교체하면 된다.
+  VITE_API_BASE_URL: ${{ vars.VITE_API_BASE_URL }}
+  VITE_KAKAO_CLIENT_ID: ${{ vars.VITE_KAKAO_CLIENT_ID }}
   FRONTEND_BUCKET: kkori-prod-frontend-172630972882
   CLOUDFRONT_DISTRIBUTION_ID: E344QNDFH5Q16Z
 
