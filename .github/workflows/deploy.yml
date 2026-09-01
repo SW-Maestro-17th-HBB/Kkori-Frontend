@@ -28,6 +28,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          persist-credentials: false # 이후 단계에 Git 인증 불필요, 빌드 스크립트에 토큰 노출 차단
 
       - uses: pnpm/action-setup@v4 # 버전은 package.json의 packageManager를 따른다
 
