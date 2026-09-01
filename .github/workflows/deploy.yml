@@ -1,0 +1,53 @@
+# CD — main 브랜치 push(= develop→main 머지) 시 프론트 프로드 배포 (S3 + CloudFront).
+# 인증은 GitHub OIDC → kkori-cd 롤 (액세스 키 없음, Kkori-Infra envs/prod/cicd.tf 참조).
+name: Deploy
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  id-token: write
+  contents: read
+
+concurrency:
+  group: deploy
+  cancel-in-progress: false
+
+env:
+  AWS_REGION: ap-northeast-2
+  # 값은 리포 설정의 Actions Variables에서 관리 (Settings → Secrets and variables → Actions → Variables).
+  # 도메인 확보(enable_dns=true) 시 VITE_API_BASE_URL 변수만 설정에서 교체하면 된다.
+  VITE_API_BASE_URL: ${{ vars.VITE_API_BASE_URL }}
+  VITE_KAKAO_CLIENT_ID: ${{ vars.VITE_KAKAO_CLIENT_ID }}
+  FRONTEND_BUCKET: ${{ vars.FRONTEND_BUCKET }}
+  CLOUDFRONT_DISTRIBUTION_ID: ${{ vars.CLOUDFRONT_DISTRIBUTION_ID }}
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false # 이후 단계에 Git 인증 불필요, 빌드 스크립트에 토큰 노출 차단
+
+      - uses: pnpm/action-setup@v4 # 버전은 package.json의 packageManager를 따른다
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      - run: pnpm build
+
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::172630972882:role/kkori-cd
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: S3 업로드 및 CloudFront 무효화
+        run: |
+          aws s3 sync dist/ "s3://${FRONTEND_BUCKET}/" --delete
+          aws cloudfront create-invalidation --distribution-id "$CLOUDFRONT_DISTRIBUTION_ID" --paths "/*"
