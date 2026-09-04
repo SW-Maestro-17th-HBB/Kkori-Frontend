@@ -22,15 +22,17 @@ export function Button({
   onClick,
   style,
   children,
+  "aria-label": ariaLabel,
 }: {
-  variant?: "solid" | "assistive" | "outlined" | "text";
-  size?: "sm" | "md" | "lg";
-  fullWidth?: boolean;
-  leadingIcon?: ReactNode;
-  disabled?: boolean;
-  onClick?: MouseEventHandler<HTMLButtonElement>;
-  style?: CSSProperties;
-  children: ReactNode;
+  "variant"?: "solid" | "assistive" | "outlined" | "text";
+  "size"?: "sm" | "md" | "lg";
+  "fullWidth"?: boolean;
+  "leadingIcon"?: ReactNode;
+  "disabled"?: boolean;
+  "onClick"?: MouseEventHandler<HTMLButtonElement>;
+  "style"?: CSSProperties;
+  "children": ReactNode;
+  "aria-label"?: string;
 }) {
   const cls = [
     "wds-btn",
@@ -41,7 +43,14 @@ export function Button({
     .filter(Boolean)
     .join(" ");
   return (
-    <button type="button" className={cls} disabled={disabled} onClick={onClick} style={style}>
+    <button
+      type="button"
+      className={cls}
+      disabled={disabled}
+      onClick={onClick}
+      style={style}
+      aria-label={ariaLabel}
+    >
       {leadingIcon}
       {children}
     </button>
@@ -78,13 +87,7 @@ export function Tag({ style, children }: { style?: CSSProperties; children: Reac
 }
 
 /* ---------- Card ---------- */
-export function Card({
-  style,
-  children,
-}: {
-  style?: CSSProperties;
-  children: ReactNode;
-}) {
+export function Card({ style, children }: { style?: CSSProperties; children: ReactNode }) {
   return (
     <div className="wds-card" style={style}>
       {children}
@@ -96,7 +99,13 @@ export function Card({
 export function Progress({ value }: { value: number }) {
   const v = Math.max(0, Math.min(100, value));
   return (
-    <div className="wds-progress" role="progressbar" aria-valuenow={v} aria-valuemin={0} aria-valuemax={100}>
+    <div
+      className="wds-progress"
+      role="progressbar"
+      aria-valuenow={v}
+      aria-valuemin={0}
+      aria-valuemax={100}
+    >
       <div className="wds-progress__fill" style={{ width: `${v}%` }} />
     </div>
   );
@@ -129,7 +138,14 @@ export function Modal({
   if (!open) return null;
   return (
     <div className="wds-modal-overlay" onClick={onClose}>
-      <div className="wds-modal" role="dialog" aria-modal="true" aria-label={title} style={style} onClick={(e) => e.stopPropagation()}>
+      <div
+        className="wds-modal"
+        role="dialog"
+        aria-modal="true"
+        aria-label={title}
+        style={style}
+        onClick={(e) => e.stopPropagation()}
+      >
         <h2 className="wds-modal__title">{title}</h2>
         <div className="wds-modal__body">{children}</div>
         {actions && actions.length > 0 && (
@@ -216,16 +232,22 @@ export function Chip({
   selected,
   onClick,
   children,
+  "aria-expanded": ariaExpanded,
+  "aria-haspopup": ariaHaspopup,
 }: {
-  selected?: boolean;
-  onClick?: MouseEventHandler<HTMLButtonElement>;
-  children: ReactNode;
+  "selected"?: boolean;
+  "onClick"?: MouseEventHandler<HTMLButtonElement>;
+  "children": ReactNode;
+  "aria-expanded"?: boolean;
+  "aria-haspopup"?: boolean | "menu" | "listbox";
 }) {
   return (
     <button
       type="button"
       className={`wds-chip${selected ? " wds-chip--selected" : ""}`}
       onClick={onClick}
+      aria-expanded={ariaExpanded}
+      aria-haspopup={ariaHaspopup}
     >
       {children}
     </button>

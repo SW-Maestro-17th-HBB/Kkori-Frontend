@@ -15,7 +15,11 @@ docs/drafts/
 # 에디터 / OS
 .DS_Store
 .idea/
+.vscode/
 *.local
 
 # Claude Code 로컬 설정
 .claude
+
+# 로컬 검증용 토큰 주입 페이지 (커밋 금지)
+public/__dev-auth.html

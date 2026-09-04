@@ -18,7 +18,9 @@
   cursor: pointer;
   white-space: nowrap;
   border-radius: var(--radius-btn-md);
-  transition: background-color 0.12s ease, border-color 0.12s ease,
+  transition:
+    background-color 0.12s ease,
+    border-color 0.12s ease,
     color 0.12s ease;
 }
 .wds-btn--sm {
@@ -319,7 +321,9 @@
   color: var(--fg-secondary);
   cursor: pointer;
   white-space: nowrap;
-  transition: border-color 0.12s ease, background-color 0.12s ease,
+  transition:
+    border-color 0.12s ease,
+    background-color 0.12s ease,
     color 0.12s ease;
 }
 .wds-chip:hover {

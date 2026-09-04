@@ -3,6 +3,7 @@
    단일 브랜드 블루(--blue-800) 액센트 · 쿨 뉴트럴 · 헤어라인 · 플랫.
    ============================================================ */
 import type { CSSProperties, ElementType, ReactNode } from "react";
+import type { ReportStatus } from "../api/types";
 import { Badge, Progress, Tag } from "./ds";
 import { Icon } from "./Icon";
 
@@ -66,13 +67,7 @@ export function Display({
 }
 
 /* ---------- 섹션 라벨 (caption, secondary) ---------- */
-export function SectionLabel({
-  children,
-  style,
-}: {
-  children: ReactNode;
-  style?: CSSProperties;
-}) {
+export function SectionLabel({ children, style }: { children: ReactNode; style?: CSSProperties }) {
   return (
     <div
       style={{
@@ -134,6 +129,25 @@ export function WeakTag({ children }: { children: ReactNode }) {
   return <Tag style={{ height: 26, fontSize: 12 }}>{children}</Tag>;
 }
 
+/* ---------- 미완성 리포트 점수 자리 표시 (생성 중/실패) — 목록·대시보드 공용 ----------
+   완료 전 리포트는 점수 대신 상태를 보여준다 (report.md §2). width 를 주면 고정폭 레이아웃 유지. */
+export function PendingScore({ status, width }: { status: ReportStatus; width?: number }) {
+  const failed = status === "FAILED";
+  return (
+    <span
+      style={{
+        ...(width !== undefined ? { width, flexShrink: 0 } : null),
+        fontFamily: "var(--font-sans)",
+        fontSize: 12.5,
+        fontWeight: 600,
+        color: failed ? "var(--fg-tertiary)" : "var(--blue-800)",
+      }}
+    >
+      {failed ? "생성 실패" : "생성 중"}
+    </span>
+  );
+}
+
 /* ---------- 점수 (대형 브랜드 블루 숫자) ---------- */
 export function ScoreNum({
   score,
@@ -178,8 +192,11 @@ export function ScoreNum({
   );
 }
 
-/* ---------- 채점 축 바 (Progress, 브랜드 블루 fill) ---------- */
-export function AxisBar({ label, value }: { label: string; value: number }) {
+/* ---------- 채점 축 바 (Progress, 브랜드 블루 fill) ----------
+   value 가 null 이면 아직 평가되지 않은 축(전달력 — 음성 분석 도입 전)으로 보고
+   점수 대신 안내 문구를 표시한다. */
+export function AxisBar({ label, value }: { label: string; value: number | null }) {
+  const pending = value === null;
   return (
     <div>
       <div
@@ -195,15 +212,21 @@ export function AxisBar({ label, value }: { label: string; value: number }) {
         <span style={{ color: "var(--fg-default)" }}>{label}</span>
         <span
           style={{
-            color: "var(--fg-secondary)",
+            color: pending ? "var(--fg-tertiary)" : "var(--fg-secondary)",
             fontVariantNumeric: "tabular-nums",
             fontWeight: 600,
+            fontSize: pending ? 12.5 : 14,
           }}
         >
-          {value}
+          {pending ? "음성 분석 예정" : value}
         </span>
       </div>
-      <Progress value={value} />
+      {value === null ? (
+        // 미평가 축 — progressbar 역할 없이 빈 트랙만 그린다(스크린리더가 "0점"으로 읽지 않게)
+        <div className="wds-progress" aria-hidden="true" />
+      ) : (
+        <Progress value={value} />
+      )}
     </div>
   );
 }
@@ -227,7 +250,12 @@ export function DocThumb({ ext = "PDF", size = 40 }: { ext?: string; size?: numb
         justifyContent: "center",
       }}
     >
-      <Icon name="file-text" size={Math.round(size * 0.46)} strokeWidth={1.75} style={{ color: "var(--fg-tertiary)" }} />
+      <Icon
+        name="file-text"
+        size={Math.round(size * 0.46)}
+        strokeWidth={1.75}
+        style={{ color: "var(--fg-tertiary)" }}
+      />
       <span
         style={{
           position: "absolute",
@@ -301,7 +329,15 @@ export function Section({
         }}
       >
         <div style={{ display: "flex", alignItems: "baseline", gap: 10 }}>
-          <h2 style={{ margin: 0, fontSize: 22, fontWeight: 700, letterSpacing: "-0.019em", color: "var(--fg-strong)" }}>
+          <h2
+            style={{
+              margin: 0,
+              fontSize: 22,
+              fontWeight: 700,
+              letterSpacing: "-0.019em",
+              color: "var(--fg-strong)",
+            }}
+          >
             {title}
           </h2>
           {count != null && (

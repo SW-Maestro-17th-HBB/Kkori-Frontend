@@ -22,16 +22,21 @@ import {
   LogOut,
   MessageCircle,
   Mic,
+  MicOff,
   MoreHorizontal,
   Pencil,
   Play,
+  Plus,
   Repeat2,
   RotateCw,
   Trash2,
   TrendingUp,
   Upload,
   UserRound,
+  Video,
   VideoOff,
+  WifiOff,
+  X,
   type LucideIcon,
 } from "lucide-react";
 
@@ -41,35 +46,40 @@ const ICONS: Record<string, LucideIcon> = {
   "arrow-left": ArrowLeft,
   "audio-lines": AudioLines,
   "bar-chart-3": BarChart3,
-  bell: Bell,
-  check: Check,
+  "bell": Bell,
+  "check": Check,
   "check-circle-2": CheckCircle2,
   "chevron-down": ChevronDown,
   "chevron-right": ChevronRight,
   "chevron-up": ChevronUp,
   "corner-down-right": CornerDownRight,
   "credit-card": CreditCard,
-  download: Download,
-  eye: Eye,
+  "download": Download,
+  "eye": Eye,
   "eye-off": EyeOff,
   "file-text": FileText,
   "file-up": FileUp,
-  info: Info,
-  loader: Loader,
-  lock: Lock,
+  "info": Info,
+  "loader": Loader,
+  "lock": Lock,
   "log-out": LogOut,
   "message-circle": MessageCircle,
-  mic: Mic,
+  "mic": Mic,
+  "mic-off": MicOff,
   "more-horizontal": MoreHorizontal,
-  pencil: Pencil,
-  play: Play,
+  "pencil": Pencil,
+  "play": Play,
+  "plus": Plus,
   "repeat-2": Repeat2,
   "rotate-cw": RotateCw,
   "trash-2": Trash2,
   "trending-up": TrendingUp,
-  upload: Upload,
+  "upload": Upload,
   "user-round": UserRound,
+  "video": Video,
   "video-off": VideoOff,
+  "wifi-off": WifiOff,
+  "x": X,
 };
 
 /* ---------- Lucide 아이콘 (wanted-icons 대체 · 24그리드 2px 라인 currentColor) ---------- */
@@ -86,7 +96,9 @@ export function Icon({
 }) {
   const Cmp = ICONS[name];
   if (!Cmp && import.meta.env.DEV) {
-    console.warn(`[Icon] 등록되지 않은 아이콘: "${name}" — src/components/Icon.tsx의 ICONS에 추가하세요.`);
+    console.warn(
+      `[Icon] 등록되지 않은 아이콘: "${name}" — src/components/Icon.tsx의 ICONS에 추가하세요.`,
+    );
   }
   return (
     <span

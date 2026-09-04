@@ -1,6 +1,6 @@
 /* ---------- 상단 네비게이션 (앱 셸) — 프로토타입 lib.jsx TopNav 이식 ---------- */
 import { Fragment, useState } from "react";
-import { useNotifications, useProfile } from "../api/hooks";
+import { useLogout, useNotifications, useProfile } from "../api/hooks";
 import type { NavKey } from "../routes";
 import { useNav } from "../hooks/useNav";
 import { Avatar, IconButton } from "./ds";
@@ -11,6 +11,7 @@ export type TopNavActive = "home" | "resume" | "report" | null;
 
 export function TopNav({ active }: { active: TopNavActive }) {
   const nav = useNav();
+  const logout = useLogout();
   const [notifOpen, setNotifOpen] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const { data: notifs = [] } = useNotifications();
@@ -24,8 +25,24 @@ export function TopNav({ active }: { active: TopNavActive }) {
   ];
 
   return (
-    <header style={{ height: 60, background: "var(--bg-surface)", borderBottom: "1px solid var(--border-subtle)" }}>
-      <div style={{ maxWidth: 1200, margin: "0 auto", height: "100%", padding: "0 28px", display: "flex", alignItems: "center", gap: 28 }}>
+    <header
+      style={{
+        height: 60,
+        background: "var(--bg-surface)",
+        borderBottom: "1px solid var(--border-subtle)",
+      }}
+    >
+      <div
+        style={{
+          maxWidth: 1200,
+          margin: "0 auto",
+          height: "100%",
+          padding: "0 28px",
+          display: "flex",
+          alignItems: "center",
+          gap: 28,
+        }}
+      >
         <button className="linkbtn" onClick={() => nav("dash")}>
           <Wordmark size={19} />
         </button>
@@ -51,12 +68,19 @@ export function TopNav({ active }: { active: TopNavActive }) {
         <div style={{ flex: 1 }} />
         <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
           <div style={{ position: "relative" }}>
-            <IconButton ariaLabel="알림" notification={hasUnread} onClick={() => setNotifOpen((o) => !o)}>
+            <IconButton
+              ariaLabel="알림"
+              notification={hasUnread}
+              onClick={() => setNotifOpen((o) => !o)}
+            >
               <Icon name="bell" size={20} />
             </IconButton>
             {notifOpen && (
               <Fragment>
-                <div onClick={() => setNotifOpen(false)} style={{ position: "fixed", inset: 0, zIndex: 40 }} />
+                <div
+                  onClick={() => setNotifOpen(false)}
+                  style={{ position: "fixed", inset: 0, zIndex: 40 }}
+                />
                 <div
                   style={{
                     position: "absolute",
@@ -80,17 +104,42 @@ export function TopNav({ active }: { active: TopNavActive }) {
                       borderBottom: "1px solid var(--border-subtle)",
                     }}
                   >
-                    <span style={{ fontFamily: "var(--font-sans)", fontSize: 15, fontWeight: 700, color: "var(--fg-strong)" }}>알림</span>
-                    <span style={{ fontFamily: "var(--font-sans)", fontSize: 12, fontWeight: 600, color: "var(--blue-800)", cursor: "pointer" }}>
+                    <span
+                      style={{
+                        fontFamily: "var(--font-sans)",
+                        fontSize: 15,
+                        fontWeight: 700,
+                        color: "var(--fg-strong)",
+                      }}
+                    >
+                      알림
+                    </span>
+                    <span
+                      style={{
+                        fontFamily: "var(--font-sans)",
+                        fontSize: 12,
+                        fontWeight: 600,
+                        color: "var(--blue-800)",
+                        cursor: "pointer",
+                      }}
+                    >
                       모두 읽음
                     </span>
                   </div>
                   <div style={{ maxHeight: 340, overflowY: "auto" }}>
                     {notifs.map((n, i) => {
                       const toneColor =
-                        n.tone === "done" ? "var(--green-600)" : n.tone === "ing" ? "var(--blue-800)" : "var(--fg-secondary)";
+                        n.tone === "done"
+                          ? "var(--green-600)"
+                          : n.tone === "ing"
+                            ? "var(--blue-800)"
+                            : "var(--fg-secondary)";
                       const toneBg =
-                        n.tone === "done" ? "var(--bg-success-subtle)" : n.tone === "ing" ? "var(--bg-brand-subtle)" : "var(--bg-muted)";
+                        n.tone === "done"
+                          ? "var(--bg-success-subtle)"
+                          : n.tone === "ing"
+                            ? "var(--bg-brand-subtle)"
+                            : "var(--bg-muted)";
                       return (
                         <button
                           key={n.id}
@@ -124,17 +173,55 @@ export function TopNav({ active }: { active: TopNavActive }) {
                             <Icon name={n.icon} size={17} />
                           </span>
                           <span style={{ flex: 1, minWidth: 0, textAlign: "left" }}>
-                            <span style={{ display: "block", fontFamily: "var(--font-sans)", fontSize: 13.5, fontWeight: 600, color: "var(--fg-strong)", lineHeight: 1.4 }}>
+                            <span
+                              style={{
+                                display: "block",
+                                fontFamily: "var(--font-sans)",
+                                fontSize: 13.5,
+                                fontWeight: 600,
+                                color: "var(--fg-strong)",
+                                lineHeight: 1.4,
+                              }}
+                            >
                               {n.title}
                             </span>
-                            <span style={{ display: "block", fontFamily: "var(--font-sans)", fontSize: 12.5, fontWeight: 500, color: "var(--fg-secondary)", marginTop: 3 }}>
+                            <span
+                              style={{
+                                display: "block",
+                                fontFamily: "var(--font-sans)",
+                                fontSize: 12.5,
+                                fontWeight: 500,
+                                color: "var(--fg-secondary)",
+                                marginTop: 3,
+                              }}
+                            >
                               {n.desc}
                             </span>
-                            <span style={{ display: "block", fontFamily: "var(--font-sans)", fontSize: 11.5, fontWeight: 500, color: "var(--fg-tertiary)", marginTop: 5 }}>
+                            <span
+                              style={{
+                                display: "block",
+                                fontFamily: "var(--font-sans)",
+                                fontSize: 11.5,
+                                fontWeight: 500,
+                                color: "var(--fg-tertiary)",
+                                marginTop: 5,
+                              }}
+                            >
                               {n.time}
                             </span>
                           </span>
-                          {n.unread && <span style={{ width: 7, height: 7, borderRadius: "50%", background: "var(--blue-800)", flexShrink: 0, marginTop: 6 }} />}
+                          {n.unread && (
+                            <span
+                              style={{
+                                width: 7,
+                                height: 7,
+                                borderRadius: "50%",
+                                background: "var(--blue-800)",
+                                flexShrink: 0,
+                                marginTop: 6,
+                              }}
+                            />
+                          )}
                         </button>
                       );
                     })}
@@ -173,14 +260,28 @@ export function TopNav({ active }: { active: TopNavActive }) {
               }}
             >
               <Avatar initials={profile?.initials ?? ""} size={28} />
-              <span style={{ fontFamily: "var(--font-sans)", fontSize: 14, fontWeight: 600, color: "var(--fg-strong)" }}>
+              <span
+                style={{
+                  fontFamily: "var(--font-sans)",
+                  fontSize: 14,
+                  fontWeight: 600,
+                  color: "var(--fg-strong)",
+                }}
+              >
                 {profile?.name ?? ""}
               </span>
-              <Icon name={menuOpen ? "chevron-up" : "chevron-down"} size={16} style={{ color: "var(--fg-tertiary)" }} />
+              <Icon
+                name={menuOpen ? "chevron-up" : "chevron-down"}
+                size={16}
+                style={{ color: "var(--fg-tertiary)" }}
+              />
             </button>
             {menuOpen && (
               <Fragment>
-                <div onClick={() => setMenuOpen(false)} style={{ position: "fixed", inset: 0, zIndex: 40 }} />
+                <div
+                  onClick={() => setMenuOpen(false)}
+                  style={{ position: "fixed", inset: 0, zIndex: 40 }}
+                />
                 <div
                   style={{
                     position: "absolute",
@@ -195,10 +296,25 @@ export function TopNav({ active }: { active: TopNavActive }) {
                     overflow: "hidden",
                   }}
                 >
-                  <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "16px", borderBottom: "1px solid var(--border-subtle)" }}>
+                  <div
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 12,
+                      padding: "16px",
+                      borderBottom: "1px solid var(--border-subtle)",
+                    }}
+                  >
                     <Avatar initials={profile?.initials ?? ""} size={40} />
                     <div style={{ minWidth: 0 }}>
-                      <div style={{ fontFamily: "var(--font-sans)", fontSize: 15, fontWeight: 700, color: "var(--fg-strong)" }}>
+                      <div
+                        style={{
+                          fontFamily: "var(--font-sans)",
+                          fontSize: 15,
+                          fontWeight: 700,
+                          color: "var(--fg-strong)",
+                        }}
+                      >
                         {profile?.name ?? ""}
                       </div>
                       <div
@@ -237,16 +353,18 @@ export function TopNav({ active }: { active: TopNavActive }) {
                         color: "var(--fg-default)",
                       }}
                     >
-                      <Icon name="user-round" size={18} style={{ color: "var(--fg-secondary)" }} /> 마이페이지
+                      <Icon name="user-round" size={18} style={{ color: "var(--fg-secondary)" }} />{" "}
+                      마이페이지
                     </button>
                   </div>
                   <div style={{ padding: "6px", borderTop: "1px solid var(--border-subtle)" }}>
                     <button
                       className="linkbtn menu-item menu-item--danger"
-                      onClick={() => {
-                        setMenuOpen(false);
-                        nav("landing");
-                      }}
+                      // 메뉴를 닫지 않는다 — 진행 문구·비활성 상태가 보여야 하고,
+                      // 완료 시 랜딩 이동이 어차피 이 화면을 벗어난다
+                      onClick={() => logout.mutate()}
+                      disabled={logout.isPending}
+                      aria-busy={logout.isPending}
                       style={{
                         width: "100%",
                         display: "flex",
@@ -260,7 +378,8 @@ export function TopNav({ active }: { active: TopNavActive }) {
                         color: "var(--red-700)",
                       }}
                     >
-                      <Icon name="log-out" size={18} /> 로그아웃
+                      <Icon name="log-out" size={18} />{" "}
+                      {logout.isPending ? "로그아웃 중…" : "로그아웃"}
                     </button>
                   </div>
                 </div>

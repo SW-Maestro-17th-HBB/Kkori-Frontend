@@ -15,6 +15,7 @@
 ```bash
 pnpm install
 pnpm dev          # http://localhost:5173
+pnpm test         # Vitest (pnpm test:watch = 워치 모드)
 pnpm build        # tsc -b + vite build → dist/
 pnpm preview      # 빌드 결과 미리보기
 ```
@@ -37,19 +38,19 @@ src/
 
 ## 라우트
 
-| 경로 | 화면 |
-|---|---|
-| `/` | 랜딩 |
-| `/login` | 로그인 |
-| `/signup` | 약관 동의 |
-| `/dashboard` | 대시보드 |
-| `/resumes` | 이력서 관리 |
-| `/setup` | 면접 설정 |
-| `/live` | 면접 진행 |
-| `/reports` | 리포트 목록 |
-| `/reports/:id` | 리포트 상세 |
-| `/account` | 마이페이지 |
-| `/sample` | 예시 리포트 (로그인 전) |
+| 경로           | 화면                    |
+| -------------- | ----------------------- |
+| `/`            | 랜딩                    |
+| `/login`       | 로그인                  |
+| `/signup`      | 약관 동의               |
+| `/dashboard`   | 대시보드                |
+| `/resumes`     | 이력서 관리             |
+| `/setup`       | 면접 설정               |
+| `/live`        | 면접 진행               |
+| `/reports`     | 리포트 목록             |
+| `/reports/:id` | 리포트 상세             |
+| `/account`     | 마이페이지              |
+| `/sample`      | 예시 리포트 (로그인 전) |
 
 ## 백엔드 연동 포인트
 
