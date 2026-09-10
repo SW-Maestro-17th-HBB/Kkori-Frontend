@@ -1,10 +1,11 @@
-import { afterEach, describe, expect, it, vi } from "vitest";
-import { screen } from "@testing-library/react";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { act, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { Route, Routes } from "react-router";
-import { useQueryClient } from "@tanstack/react-query";
+import { QueryClient, useQueryClient } from "@tanstack/react-query";
 import { renderWithProviders } from "../test/render";
 import { LOGOUT_TIMEOUT } from "../api/hooks";
+import { NOTIFICATIONS_KEY, pushStatusEvent, type AppNotification } from "../api/notifications";
 import { __resetAuthForTests } from "../api/request";
 import {
   getAccessToken,
@@ -33,7 +34,7 @@ const tokenPair = (at: string, rt: string) => envelope({ accessToken: at, refres
 const userInfo = () =>
   envelope({ id: 1, email: "hong@example.com", name: "홍길동", createdAt: "2026-05-10T00:00:00Z" });
 
-/** URL 별 순차 응답 스텁 — 알림은 fixture 목이라 fetch 에는 인증·프로필 API 만 잡힌다 */
+/** URL 별 순차 응답 스텁 — 알림은 세션 캐시(SSE 원천)라 fetch 에는 인증·프로필 API 만 잡힌다 */
 function stubApi({
   logout = [],
   reissue = [],
@@ -261,5 +262,99 @@ describe("TopNav — 로그아웃", () => {
     // 프로필 조회(GET /api/v1/user)는 렌더에 필요해 발생한다 — 인증 API 만 없어야 한다
     expect(callsTo(mock, "/api/v1/auth/logout")).toHaveLength(0);
     expect(callsTo(mock, "/api/v1/auth/reissue")).toHaveLength(0);
+  });
+});
+
+/* ---------- 알림 (HBB1-331) — 상태 스트림이 채운 세션 캐시를 읽는다 ---------- */
+
+const T0 = 1_700_000_000_000;
+
+/** 알림이 시드된 세션 캐시로 TopNav 를 렌더한다 — 행 클릭 이동 검증용 프로브 라우트 포함 */
+function renderTopNavWithNotifications(seed: (queryClient: QueryClient) => void) {
+  const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  seed(queryClient);
+  return renderWithProviders(
+    <Routes>
+      <Route path="/top" element={<TopNav active={null} />} />
+      <Route path="/reports/:id" element={<div>리포트-상세-도착</div>} />
+    </Routes>,
+    { route: "/top", queryClient },
+  );
+}
+
+const bellButton = () => screen.getByRole("button", { name: "알림" });
+const hasUnreadDot = () => bellButton().querySelector(".wds-iconbtn__notif") !== null;
+const notificationsOf = (queryClient: QueryClient) =>
+  queryClient.getQueryData<AppNotification[]>(NOTIFICATIONS_KEY) ?? [];
+
+describe("TopNav — 알림", () => {
+  beforeEach(async () => {
+    await setTokens("at-1", "rt-1");
+    stubApi();
+  });
+
+  it("알림이 없으면 뱃지 없이 빈 상태 안내를 보여준다", async () => {
+    const user = userEvent.setup();
+    renderTopNavWithNotifications(() => {});
+
+    expect(hasUnreadDot()).toBe(false);
+    await user.click(bellButton());
+
+    expect(screen.getByText("새 알림이 없어요")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "모두 읽음" })).toBeDisabled();
+    expect(screen.queryByRole("button", { name: "모두 지우기" })).not.toBeInTheDocument();
+  });
+
+  it("읽지 않은 알림이 있으면 뱃지를 켜고, 행을 누르면 읽음 처리 후 해당 화면으로 이동한다", async () => {
+    const user = userEvent.setup();
+    const { queryClient } = renderTopNavWithNotifications((qc) => {
+      pushStatusEvent(qc, { kind: "report", resourceId: 12, phase: "completed" }, T0);
+    });
+
+    expect(hasUnreadDot()).toBe(true);
+    await user.click(bellButton());
+    await user.click(screen.getByRole("button", { name: /리포트가 준비됐어요/ }));
+
+    expect(await screen.findByText("리포트-상세-도착")).toBeInTheDocument();
+    expect(notificationsOf(queryClient)[0].unread).toBe(false);
+  });
+
+  it("모두 읽음은 뱃지를 끄고, 모두 지우기는 목록을 비운다", async () => {
+    const user = userEvent.setup();
+    const { queryClient } = renderTopNavWithNotifications((qc) => {
+      pushStatusEvent(qc, { kind: "report", resourceId: 1, phase: "completed" }, T0);
+      pushStatusEvent(
+        qc,
+        { kind: "resume", resourceId: 2, phase: "failed", message: "PDF 를 읽지 못했어요" },
+        T0 + 1,
+      );
+    });
+
+    await user.click(bellButton());
+    expect(screen.getByText("PDF 를 읽지 못했어요")).toBeInTheDocument(); // 실패 사유는 백엔드 message 그대로
+
+    await user.click(screen.getByRole("button", { name: "모두 읽음" }));
+    await waitFor(() => expect(hasUnreadDot()).toBe(false));
+    expect(notificationsOf(queryClient).every((n) => !n.unread)).toBe(true);
+
+    await user.click(screen.getByRole("button", { name: "모두 지우기" }));
+    expect(await screen.findByText("새 알림이 없어요")).toBeInTheDocument();
+    expect(notificationsOf(queryClient)).toEqual([]);
+  });
+
+  it("스트림 이벤트가 열려 있는 패널에 실시간으로 반영된다", async () => {
+    const user = userEvent.setup();
+    const { queryClient } = renderTopNavWithNotifications(() => {});
+    await user.click(bellButton());
+    expect(screen.getByText("새 알림이 없어요")).toBeInTheDocument();
+
+    act(() => {
+      pushStatusEvent(queryClient, { kind: "resume", resourceId: 5, phase: "completed" }, T0);
+    });
+
+    expect(
+      await screen.findByRole("button", { name: /이력서 분석이 끝났어요/ }),
+    ).toBeInTheDocument();
+    expect(hasUnreadDot()).toBe(true);
   });
 });

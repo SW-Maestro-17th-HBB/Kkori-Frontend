@@ -3,7 +3,6 @@ import {
   createInterviewSession,
   deleteResume,
   endInterviewSession,
-  fetchNotifications,
   fetchProfile,
   fetchReportDetail,
   fetchReports,
@@ -128,9 +127,6 @@ export const useUpdateProfileName = () => {
 
 export const useSubscription = () =>
   useQuery({ queryKey: ["subscription"], queryFn: fetchSubscription });
-
-export const useNotifications = () =>
-  useQuery({ queryKey: ["notifications"], queryFn: fetchNotifications });
 
 /* ---------- 이력서 ---------- */
 
