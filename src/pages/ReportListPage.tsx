@@ -17,6 +17,7 @@ import {
 import { TopNav } from "../components/TopNav";
 import { reportDetailPath } from "../routes";
 import type { ReportSortKey, ReportSortOrder, ReportStatus, TrendPoint } from "../api/types";
+import { layoutTrend, TREND_CHART } from "../utils/trendScale";
 
 /** 정렬 선택지 — 백엔드 sort·order 조합에 1:1 매핑. */
 const SORT_OPTIONS: readonly {
@@ -53,50 +54,71 @@ const STATE_CELL = {
 } as const;
 
 /* 점수 추이 — SVG 라인 + HTML 오버레이 점·숫자
-   (preserveAspectRatio="none" 왜곡을 오버레이로 회피) */
+   (preserveAspectRatio="none" 왜곡을 오버레이로 회피). 좌표 계산은 utils/trendScale.ts */
 function TrendChart({ pts }: { pts: TrendPoint[] }) {
-  const H = 96,
-    min = 55,
-    max = 90,
-    padY = 14;
-  const xpct = (i: number) => (i / (pts.length - 1)) * 100;
-  const ypx = (s: number) => H - ((s - min) / (max - min)) * (H - padY * 2) - padY;
-  const line = pts.map((p, i) => `${xpct(i)},${ypx(p.s)}`).join(" ");
+  if (pts.length === 0) {
+    return (
+      <div
+        style={{
+          flex: 1,
+          minHeight: 120,
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          fontFamily: "var(--font-sans)",
+          fontSize: 13,
+          fontWeight: 500,
+          color: "var(--fg-tertiary)",
+        }}
+      >
+        완료된 리포트가 쌓이면 점수 추이를 보여드려요
+      </div>
+    );
+  }
+  const H = TREND_CHART.height;
+  const { points, showLabel } = layoutTrend(pts.map((p) => p.s));
+  const line = points.map((p) => `${p.x},${p.y}`).join(" ");
   const area = `0,${H} ${line} 100,${H}`;
+  const single = pts.length === 1; // 점 하나는 선·면 없이 점만 — 잇거나 채울 구간이 없다
   return (
-    <div style={{ flex: 1, marginTop: 20 }}>
+    // 좌우 여백 — 0%·100% 위치의 점과 라벨이 카드 안쪽 경계에 잘리지 않게
+    <div style={{ flex: 1, marginTop: 20, padding: "0 14px" }}>
       <div style={{ position: "relative", height: H }}>
-        <svg
-          viewBox={`0 0 100 ${H}`}
-          preserveAspectRatio="none"
-          style={{ position: "absolute", inset: 0, width: "100%", height: "100%" }}
-        >
-          <defs>
-            <linearGradient id="hbbTrend" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%" stopColor="var(--blue-800)" stopOpacity="0.18" />
-              <stop offset="100%" stopColor="var(--blue-800)" stopOpacity="0" />
-            </linearGradient>
-          </defs>
-          <polygon points={area} fill="url(#hbbTrend)" />
-          <polyline
-            points={line}
-            fill="none"
-            stroke="var(--blue-800)"
-            strokeWidth="2.5"
-            strokeLinejoin="round"
-            strokeLinecap="round"
-            vectorEffect="non-scaling-stroke"
-          />
-        </svg>
+        {!single && (
+          <svg
+            viewBox={`0 0 100 ${H}`}
+            preserveAspectRatio="none"
+            style={{ position: "absolute", inset: 0, width: "100%", height: "100%" }}
+          >
+            <defs>
+              <linearGradient id="hbbTrend" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stopColor="var(--blue-800)" stopOpacity="0.18" />
+                <stop offset="100%" stopColor="var(--blue-800)" stopOpacity="0" />
+              </linearGradient>
+            </defs>
+            <polygon points={area} fill="url(#hbbTrend)" />
+            <polyline
+              points={line}
+              fill="none"
+              stroke="var(--blue-800)"
+              strokeWidth="2.5"
+              strokeLinejoin="round"
+              strokeLinecap="round"
+              vectorEffect="non-scaling-stroke"
+            />
+          </svg>
+        )}
         {pts.map((p, i) => {
+          const { x, y } = points[i];
           const last = i === pts.length - 1;
+          // 같은 날 리포트가 여럿일 수 있어 날짜 문자열은 key 로 쓰지 않는다 (순서 고정 목록 — 인덱스로 충분)
           return (
-            <span key={p.d}>
+            <span key={i}>
               <span
                 style={{
                   position: "absolute",
-                  left: `${xpct(i)}%`,
-                  top: ypx(p.s),
+                  left: `${x}%`,
+                  top: y,
                   transform: "translate(-50%,-50%)",
                   width: last ? 10 : 7,
                   height: last ? 10 : 7,
@@ -108,8 +130,8 @@ function TrendChart({ pts }: { pts: TrendPoint[] }) {
               <span
                 style={{
                   position: "absolute",
-                  left: `${xpct(i)}%`,
-                  top: ypx(p.s) - 12,
+                  left: `${x}%`,
+                  top: y - 12,
                   transform: "translate(-50%,-100%)",
                   fontFamily: "var(--font-sans)",
                   fontSize: 12,
@@ -125,20 +147,28 @@ function TrendChart({ pts }: { pts: TrendPoint[] }) {
           );
         })}
       </div>
-      <div style={{ display: "flex", justifyContent: "space-between", marginTop: 8 }}>
-        {pts.map((p) => (
-          <span
-            key={p.d}
-            style={{
-              fontFamily: "var(--font-sans)",
-              fontSize: 11.5,
-              fontWeight: 500,
-              color: "var(--fg-tertiary)",
-            }}
-          >
-            {p.d}
-          </span>
-        ))}
+      {/* 날짜 라벨 — 점과 같은 x 에 절대 배치한다 (space-between 은 점 위치와 어긋난다) */}
+      <div style={{ position: "relative", height: 16, marginTop: 8 }}>
+        {pts.map(
+          (p, i) =>
+            showLabel[i] && (
+              <span
+                key={i}
+                style={{
+                  position: "absolute",
+                  left: `${points[i].x}%`,
+                  transform: "translateX(-50%)",
+                  fontFamily: "var(--font-sans)",
+                  fontSize: 11.5,
+                  fontWeight: 500,
+                  color: "var(--fg-tertiary)",
+                  whiteSpace: "nowrap",
+                }}
+              >
+                {p.d}
+              </span>
+            ),
+        )}
       </div>
     </div>
   );
