@@ -9,6 +9,7 @@ import {
   type MouseEventHandler,
   type ReactNode,
   type ChangeEventHandler,
+  forwardRef,
 } from "react";
 import "./ds.css";
 
@@ -255,24 +256,25 @@ export function Chip({
 }
 
 /* ---------- IconButton ---------- */
-export function IconButton({
-  ariaLabel,
-  ariaExpanded,
-  ariaHasPopup,
-  notification,
-  onClick,
-  children,
-}: {
-  ariaLabel: string;
-  /** 팝업(알림 패널 등)을 여는 버튼이면 열림 상태·팝업 종류를 보조기기에 알린다 */
-  ariaExpanded?: boolean;
-  ariaHasPopup?: "dialog" | "menu";
-  notification?: boolean;
-  onClick?: MouseEventHandler<HTMLButtonElement>;
-  children: ReactNode;
-}) {
+// ref 를 노출한다 — 팝업을 닫은 뒤 포커스를 이 버튼으로 되돌리는 용도(키보드 사용자 위치 유지)
+export const IconButton = forwardRef<
+  HTMLButtonElement,
+  {
+    ariaLabel: string;
+    /** 팝업(알림 패널 등)을 여는 버튼이면 열림 상태·팝업 종류를 보조기기에 알린다 */
+    ariaExpanded?: boolean;
+    ariaHasPopup?: "dialog" | "menu";
+    notification?: boolean;
+    onClick?: MouseEventHandler<HTMLButtonElement>;
+    children: ReactNode;
+  }
+>(function IconButton(
+  { ariaLabel, ariaExpanded, ariaHasPopup, notification, onClick, children },
+  ref,
+) {
   return (
     <button
+      ref={ref}
       type="button"
       className="wds-iconbtn"
       aria-label={ariaLabel}
@@ -284,7 +286,7 @@ export function IconButton({
       {notification && <span className="wds-iconbtn__notif" />}
     </button>
   );
-}
+});
 
 /* ---------- Avatar ---------- */
 export function Avatar({ initials, size = 32 }: { initials: string; size?: number }) {

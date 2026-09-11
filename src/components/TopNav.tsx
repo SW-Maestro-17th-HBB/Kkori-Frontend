@@ -1,5 +1,5 @@
 /* ---------- 상단 네비게이션 (앱 셸) — 프로토타입 lib.jsx TopNav 이식 ---------- */
-import { Fragment, useCallback, useEffect, useState } from "react";
+import { Fragment, useCallback, useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router";
 import { useLogout, useProfile } from "../api/hooks";
 import {
@@ -248,7 +248,13 @@ export function TopNav({ active }: { active: TopNavActive }) {
   const navigate = useNavigate();
   const logout = useLogout();
   const [notifOpen, setNotifOpen] = useState(false);
-  const closeNotif = useCallback(() => setNotifOpen(false), []);
+  const bellRef = useRef<HTMLButtonElement>(null);
+  // Escape·배경 클릭으로 닫을 때 포커스가 body 로 떨어지지 않게 종 버튼으로 되돌린다.
+  // 행 클릭은 화면이 이동해 새 화면이 포커스를 가져가므로 되돌리지 않는다.
+  const closeNotifAndRefocus = useCallback(() => {
+    setNotifOpen(false);
+    bellRef.current?.focus();
+  }, []);
   const [menuOpen, setMenuOpen] = useState(false);
   const notifs = useNotifications();
   const { markRead, markAllRead, clear } = useNotificationActions();
@@ -306,6 +312,7 @@ export function TopNav({ active }: { active: TopNavActive }) {
         <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
           <div style={{ position: "relative" }}>
             <IconButton
+              ref={bellRef}
               ariaLabel="알림"
               ariaExpanded={notifOpen}
               ariaHasPopup="dialog"
@@ -316,7 +323,10 @@ export function TopNav({ active }: { active: TopNavActive }) {
             </IconButton>
             {notifOpen && (
               <Fragment>
-                <div onClick={closeNotif} style={{ position: "fixed", inset: 0, zIndex: 40 }} />
+                <div
+                  onClick={closeNotifAndRefocus}
+                  style={{ position: "fixed", inset: 0, zIndex: 40 }}
+                />
                 <NotificationPanel
                   items={notifs}
                   onSelect={(n) => {
@@ -326,7 +336,7 @@ export function TopNav({ active }: { active: TopNavActive }) {
                   }}
                   onMarkAllRead={markAllRead}
                   onClear={clear}
-                  onClose={closeNotif}
+                  onClose={closeNotifAndRefocus}
                 />
               </Fragment>
             )}

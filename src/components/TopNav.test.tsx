@@ -386,9 +386,12 @@ describe("TopNav — 알림", () => {
     // 읽지 않음 점은 시각 정보뿐이라 대체 텍스트로도 전달한다
     expect(within(dialog).getByRole("img", { name: "읽지 않음" })).toBeInTheDocument();
 
+    await user.tab(); // 패널 안(모두 읽음)으로 포커스 이동
+    expect(screen.getByRole("button", { name: "모두 읽음" })).toHaveFocus();
     await user.keyboard("{Escape}");
 
     expect(screen.queryByRole("dialog", { name: "알림" })).not.toBeInTheDocument();
     expect(bellButton()).toHaveAttribute("aria-expanded", "false");
+    expect(bellButton()).toHaveFocus(); // 패널이 사라져도 포커스 위치를 잃지 않는다
   });
 });
