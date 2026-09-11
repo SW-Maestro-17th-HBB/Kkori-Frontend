@@ -9,6 +9,7 @@ vi.mock("@microsoft/fetch-event-source", () => ({
 
 import { fetchEventSource } from "@microsoft/fetch-event-source";
 import type { FetchEventSourceInit } from "@microsoft/fetch-event-source";
+import { NOTIFICATIONS_KEY, type AppNotification } from "./notifications";
 import { RESUME_SSE_PATH, useResumeStatusStream } from "./resumeStatusStream";
 import { createQueryWrapper } from "../test/render";
 
@@ -32,7 +33,7 @@ const mount = () => {
   const view = renderHook(() => useResumeStatusStream(), {
     wrapper: createQueryWrapper(queryClient),
   });
-  return { ...view, invalidate };
+  return { ...view, invalidate, queryClient };
 };
 
 describe("useResumeStatusStream", () => {
@@ -105,5 +106,23 @@ describe("useResumeStatusStream", () => {
     expect(signal.aborted).toBe(false);
     unmount();
     expect(signal.aborted).toBe(true);
+  });
+
+  it("이벤트를 알림 센터에 쌓는다 — 단계 변경은 한 행을 갱신하고, 완료 행이 그 행을 덮어쓴다", () => {
+    const { queryClient } = mount();
+    const on = lastOptions().onmessage!;
+    const msg = (event: string, data: string) => ({ id: "", event, data, retry: undefined });
+    const list = () => queryClient.getQueryData<AppNotification[]>(NOTIFICATIONS_KEY) ?? [];
+
+    on(msg("RESUME_ANALYSIS_STATUS_CHANGED", '{"resumeId":3,"status":"PARSING"}'));
+    on(msg("RESUME_ANALYSIS_STATUS_CHANGED", '{"resumeId":3,"status":"EMBEDDING"}'));
+    expect(list()).toMatchObject([
+      { key: "resume:3", tone: "ing", unread: false, href: "/resumes" },
+    ]);
+
+    on(msg("RESUME_ANALYSIS_COMPLETED", '{"resumeId":3,"status":"EMBEDDED"}'));
+    expect(list()).toHaveLength(1);
+    expect(list()[0]).toMatchObject({ key: "resume:3", tone: "done", unread: true });
+    expect(list()[0].title).toBe("이력서 분석이 끝났어요");
   });
 });

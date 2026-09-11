@@ -10,6 +10,9 @@ import { consumePostLoginRedirect } from "./api/tokenStore";
 import { kakaoAuthorizeRedirect } from "./utils/kakaoLogin";
 import { ROUTE_ACCESS, ROUTES, type NavKey } from "./routes";
 import App from "./App";
+import { fetchEventSource } from "@microsoft/fetch-event-source";
+import { REPORT_SSE_PATH } from "./api/reportStatusStream";
+import { RESUME_SSE_PATH } from "./api/resumeStatusStream";
 
 /* checking 상태는 현재 동기 판정에서 발생하지 않으므로 훅을 오버라이드해 재현한다.
    vi.mock 은 파일 전체에 hoist 되므로, 오버라이드가 없을 땐 실제 구현을 그대로
@@ -263,5 +266,38 @@ describe("checking 차단 (비동기 판정 대비)", () => {
     expect(screen.queryByText(LOGIN_HEADING)).not.toBeInTheDocument(); // OAuth 시작 차단
     expect(screen.queryByText(DASH_TEXT)).not.toBeInTheDocument();
     expect(screen.queryByText(/약관/)).not.toBeInTheDocument(); // 가입 화면 차단
+  });
+});
+
+/* ---------- 보호 구역 공통 상태 스트림 (HBB1-331) ---------- */
+
+vi.mock("@microsoft/fetch-event-source", () => ({
+  // 실제 라이브러리는 연결이 살아있는 동안 pending — 테스트에선 호출 기록만 필요
+  fetchEventSource: vi.fn(() => new Promise<void>(() => {})),
+}));
+
+describe("보호 구역 공통 상태 스트림 — 세션당 한 번만 연결한다", () => {
+  const mockedFES = vi.mocked(fetchEventSource);
+  /** StrictMode 이중 마운트로 즉시 끊긴 첫 시도는 제외한 실제 연결 경로 */
+  const livePaths = () =>
+    mockedFES.mock.calls.filter(([, init]) => !init?.signal?.aborted).map(([url]) => String(url));
+
+  beforeEach(() => {
+    mockedFES.mockClear();
+  });
+
+  it("보호 화면에 들어가면 이력서·리포트 상태 SSE 를 각각 한 번씩 연결한다", async () => {
+    seedLogin();
+    renderWithProviders(<App />, { route: ROUTES.dash });
+    await screen.findByText(DASH_TEXT);
+
+    expect(livePaths().sort()).toEqual([REPORT_SSE_PATH, RESUME_SSE_PATH].sort());
+  });
+
+  it("게스트 화면(랜딩)에서는 연결하지 않는다", async () => {
+    renderWithProviders(<App />, { route: ROUTES.landing });
+    await screen.findByRole("heading", { name: /이력서로 시작하는/ });
+
+    expect(mockedFES).not.toHaveBeenCalled();
   });
 });

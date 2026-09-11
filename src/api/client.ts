@@ -30,7 +30,6 @@ import type { components } from "./schema";
 import { getAuthSnapshot } from "./tokenStore";
 import type {
   CreateSessionRequest,
-  NotificationItem,
   Profile,
   ReportDetail,
   ReportListParams,
@@ -87,8 +86,6 @@ export const postLogout = (expectedSessionId: string, signal?: AbortSignal): Pro
 
 /* 구독·알림은 백엔드 엔드포인트가 아직 없다 — 목 유지가 곧 fallback */
 export const fetchSubscription = (): Promise<Subscription> => delay(fixtures.subscription);
-
-export const fetchNotifications = (): Promise<NotificationItem[]> => delay(fixtures.notifications);
 
 /* ---------- 이력서 (실제 API — orval 생성 fetcher 사용) ----------
    경로·파라미터·타입은 src/api/generated/ 의 생성 코드가 원천이다.

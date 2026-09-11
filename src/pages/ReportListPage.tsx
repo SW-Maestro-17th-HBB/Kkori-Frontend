@@ -2,7 +2,6 @@
 import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router";
 import { useRegenerateReport, useReports, useReportStats } from "../api/hooks";
-import { useReportStatusStream } from "../api/reportStatusStream";
 import { errorMessage } from "../api/request";
 import { Button, Chip, Tag } from "../components/ds";
 import { Icon } from "../components/Icon";
@@ -363,7 +362,6 @@ export function ReportListPage() {
   });
   const rows = pageData?.items ?? [];
   const { data: stats } = useReportStats();
-  useReportStatusStream();
 
   /** 재생성 결과 안내 — 자동으로 사라지지 않고 사용자가 닫는다 */
   const [toast, setToast] = useState<{
