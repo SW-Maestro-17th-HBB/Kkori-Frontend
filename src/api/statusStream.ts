@@ -66,7 +66,7 @@ export function useStatusStream(config: StatusStreamConfig) {
     const ctrl = new AbortController();
     let opened = false;
     let retry = 0;
-    void fetchEventSource(`${API_BASE_URL}${config.path}`, {
+    fetchEventSource(`${API_BASE_URL}${config.path}`, {
       signal: ctrl.signal,
       // 매 (재)연결 직전에 최신 AT 를 부착 — REST 쪽 자동 재발급으로 회전된 토큰을
       // 다음 재연결 시도가 자연히 줍는다 (SSE 자체는 재발급을 트리거하지 않음)
@@ -98,12 +98,20 @@ export function useStatusStream(config: StatusStreamConfig) {
         const statusEvent = parseStatusEvent(config, phase, ev.data);
         if (statusEvent) pushStatusEvent(queryClient, statusEvent);
       },
+      // 서버·프록시가 응답을 정상 종료하면(SseEmitter 타임아웃, LB 유휴 종료 등) 라이브러리는
+      // 재연결하지 않고 끝낸다 — throw 해서 onerror 의 재시도(백오프) 경로로 보낸다
+      onclose() {
+        throw new Error("SSE 연결이 종료됨");
+      },
       onerror(err) {
         if (err instanceof FatalSseError) throw err; // 인증 실패 → 재연결 영구 중단
         // 그 외(네트워크 등)는 지수 백오프로 재시도한다(throw 하지 않으면 재연결). 상한 30초.
         retry += 1;
         return Math.min(1000 * 2 ** (retry - 1), 30_000);
       },
+    }).catch(() => {
+      // 여기 도달하는 건 onerror 가 rethrow 한 인증 실패뿐이다(abort 는 reject 가 아니라 resolve).
+      // 재연결을 멈추는 게 목적이므로 삼킨다 — 재발급·재로그인은 REST 요청 경로(request.ts)가 맡는다.
     });
     return () => ctrl.abort();
   }, [queryClient, config]);

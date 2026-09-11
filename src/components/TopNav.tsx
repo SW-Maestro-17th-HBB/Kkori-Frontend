@@ -1,5 +1,5 @@
 /* ---------- 상단 네비게이션 (앱 셸) — 프로토타입 lib.jsx TopNav 이식 ---------- */
-import { Fragment, useState } from "react";
+import { Fragment, useCallback, useEffect, useState } from "react";
 import { useNavigate } from "react-router";
 import { useLogout, useProfile } from "../api/hooks";
 import {
@@ -24,22 +24,34 @@ const TONE_STYLE: Record<NotificationTone, { color: string; background: string }
   fail: { color: "var(--red-600)", background: "var(--bg-danger-subtle)" },
 };
 
-/** 알림 드롭다운 — 열려 있는 동안만 마운트되어 상대 시간 시계(useNow)도 그동안만 돈다 */
+/** 알림 드롭다운 — 열려 있는 동안만 마운트되어 상대 시간 시계(useNow)와 Escape 리스너도 그동안만 산다 */
 function NotificationPanel({
   items,
   onSelect,
   onMarkAllRead,
   onClear,
+  onClose,
 }: {
   items: AppNotification[];
   onSelect: (item: AppNotification) => void;
   onMarkAllRead: () => void;
   onClear: () => void;
+  onClose: () => void;
 }) {
   const now = useNow();
+  // 포커스가 종 버튼에 남아 있어 패널의 onKeyDown 으로는 Escape 를 받을 수 없다 — document 에서 듣는다
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+    };
+    document.addEventListener("keydown", onKeyDown);
+    return () => document.removeEventListener("keydown", onKeyDown);
+  }, [onClose]);
   const hasUnread = items.some((n) => n.unread);
   return (
     <div
+      role="dialog"
+      aria-label="알림"
       style={{
         position: "absolute",
         top: "calc(100% + 10px)",
@@ -192,6 +204,8 @@ function NotificationPanel({
                 </span>
                 {n.unread && (
                   <span
+                    role="img"
+                    aria-label="읽지 않음"
                     style={{
                       width: 7,
                       height: 7,
@@ -234,6 +248,7 @@ export function TopNav({ active }: { active: TopNavActive }) {
   const navigate = useNavigate();
   const logout = useLogout();
   const [notifOpen, setNotifOpen] = useState(false);
+  const closeNotif = useCallback(() => setNotifOpen(false), []);
   const [menuOpen, setMenuOpen] = useState(false);
   const notifs = useNotifications();
   const { markRead, markAllRead, clear } = useNotificationActions();
@@ -292,6 +307,8 @@ export function TopNav({ active }: { active: TopNavActive }) {
           <div style={{ position: "relative" }}>
             <IconButton
               ariaLabel="알림"
+              ariaExpanded={notifOpen}
+              ariaHasPopup="dialog"
               notification={hasUnread}
               onClick={() => setNotifOpen((o) => !o)}
             >
@@ -299,10 +316,7 @@ export function TopNav({ active }: { active: TopNavActive }) {
             </IconButton>
             {notifOpen && (
               <Fragment>
-                <div
-                  onClick={() => setNotifOpen(false)}
-                  style={{ position: "fixed", inset: 0, zIndex: 40 }}
-                />
+                <div onClick={closeNotif} style={{ position: "fixed", inset: 0, zIndex: 40 }} />
                 <NotificationPanel
                   items={notifs}
                   onSelect={(n) => {
@@ -312,6 +326,7 @@ export function TopNav({ active }: { active: TopNavActive }) {
                   }}
                   onMarkAllRead={markAllRead}
                   onClear={clear}
+                  onClose={closeNotif}
                 />
               </Fragment>
             )}

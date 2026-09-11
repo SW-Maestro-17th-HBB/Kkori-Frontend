@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { act, screen, waitFor } from "@testing-library/react";
+import { act, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { Route, Routes } from "react-router";
 import { QueryClient, useQueryClient } from "@tanstack/react-query";
@@ -356,5 +356,39 @@ describe("TopNav — 알림", () => {
       await screen.findByRole("button", { name: /이력서 분석이 끝났어요/ }),
     ).toBeInTheDocument();
     expect(hasUnreadDot()).toBe(true);
+  });
+
+  it("진행 중 이벤트는 행만 보이고 뱃지는 켜지 않는다", async () => {
+    const user = userEvent.setup();
+    renderTopNavWithNotifications((qc) => {
+      pushStatusEvent(qc, { kind: "report", resourceId: 3, phase: "changed" }, T0);
+    });
+
+    expect(hasUnreadDot()).toBe(false);
+    await user.click(bellButton());
+
+    expect(screen.getByRole("button", { name: /리포트를 만들고 있어요/ })).toBeInTheDocument();
+    expect(screen.queryByRole("img", { name: "읽지 않음" })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "모두 읽음" })).toBeDisabled();
+  });
+
+  it("종 버튼이 열림 상태를 알리고, 패널은 dialog 역할이며 Escape 로 닫힌다", async () => {
+    const user = userEvent.setup();
+    renderTopNavWithNotifications((qc) => {
+      pushStatusEvent(qc, { kind: "resume", resourceId: 1, phase: "completed" }, T0);
+    });
+
+    expect(bellButton()).toHaveAttribute("aria-expanded", "false");
+    await user.click(bellButton());
+
+    expect(bellButton()).toHaveAttribute("aria-expanded", "true");
+    const dialog = screen.getByRole("dialog", { name: "알림" });
+    // 읽지 않음 점은 시각 정보뿐이라 대체 텍스트로도 전달한다
+    expect(within(dialog).getByRole("img", { name: "읽지 않음" })).toBeInTheDocument();
+
+    await user.keyboard("{Escape}");
+
+    expect(screen.queryByRole("dialog", { name: "알림" })).not.toBeInTheDocument();
+    expect(bellButton()).toHaveAttribute("aria-expanded", "false");
   });
 });

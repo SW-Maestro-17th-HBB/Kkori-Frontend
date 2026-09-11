@@ -168,4 +168,24 @@ describe("useReportStatusStream", () => {
     unmount();
     expect(signal.aborted).toBe(true);
   });
+
+  it("서버가 연결을 정상 종료하면 onclose 가 throw 해 재시도(백오프) 경로로 보낸다", () => {
+    mount();
+    const { onclose, onerror } = lastOptions();
+    let closed: unknown = null;
+    try {
+      onclose!();
+    } catch (e) {
+      closed = e;
+    }
+    expect(closed).toBeInstanceOf(Error);
+    expect(onerror!(closed)).toBe(1000); // 인증 실패가 아니므로 재연결한다
+  });
+
+  it("인증 실패로 스트림 Promise 가 거부돼도 처리되지 않은 거부를 남기지 않는다", async () => {
+    mockedFES.mockImplementationOnce(() => Promise.reject(new Error("SSE 인증 실패 (HTTP 401)")));
+    mount();
+    // 거부가 전파될 틈을 준다 — 미처리 거부가 남으면 vitest 가 실행을 실패시킨다
+    await new Promise((resolve) => setTimeout(resolve, 0));
+  });
 });

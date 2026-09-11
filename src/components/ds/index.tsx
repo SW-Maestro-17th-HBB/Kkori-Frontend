@@ -257,17 +257,29 @@ export function Chip({
 /* ---------- IconButton ---------- */
 export function IconButton({
   ariaLabel,
+  ariaExpanded,
+  ariaHasPopup,
   notification,
   onClick,
   children,
 }: {
   ariaLabel: string;
+  /** 팝업(알림 패널 등)을 여는 버튼이면 열림 상태·팝업 종류를 보조기기에 알린다 */
+  ariaExpanded?: boolean;
+  ariaHasPopup?: "dialog" | "menu";
   notification?: boolean;
   onClick?: MouseEventHandler<HTMLButtonElement>;
   children: ReactNode;
 }) {
   return (
-    <button type="button" className="wds-iconbtn" aria-label={ariaLabel} onClick={onClick}>
+    <button
+      type="button"
+      className="wds-iconbtn"
+      aria-label={ariaLabel}
+      aria-expanded={ariaExpanded}
+      aria-haspopup={ariaHasPopup}
+      onClick={onClick}
+    >
       {children}
       {notification && <span className="wds-iconbtn__notif" />}
     </button>
