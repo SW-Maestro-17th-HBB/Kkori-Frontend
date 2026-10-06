@@ -29,7 +29,19 @@ describe("initAnalytics", () => {
     expect(script?.async).toBe(true);
     expect(queue()).toHaveLength(2);
     expect(queue()[0]).toEqual(["js", expect.any(Date)]);
-    expect(queue()[1]).toEqual(["config", "G-TEST1234", { send_page_view: false }]);
+    expect(queue()[1]).toEqual([
+      "config",
+      "G-TEST1234",
+      { send_page_view: false, page_location: `${window.location.origin}/` },
+    ]);
+  });
+
+  it("초기 config 의 page_location 도 주소창 쿼리를 뗀다 (자동 이벤트의 기본값)", () => {
+    window.history.replaceState(null, "", "/auth/kakao/callback?code=secret-code&state=xyz");
+    initAnalytics("G-TEST1234");
+    const [, , params] = queue()[1] as [string, string, Record<string, unknown>];
+    expect(params.page_location).toBe(`${window.location.origin}/auth/kakao/callback`);
+    expect(JSON.stringify(queue())).not.toContain("secret-code");
   });
 
   it("큐 항목은 arguments 객체다 (gtag.js 는 배열을 명령으로 해석하지 않음)", () => {
@@ -56,10 +68,11 @@ describe("trackPageView", () => {
     initAnalytics("G-TEST1234");
     trackPageView("/auth/kakao/callback");
 
-    const [command, name, params] = queue()[2];
-    expect(command).toBe("event");
-    expect(name).toBe("page_view");
-    expect(params).toEqual({ page_location: `${window.location.origin}/auth/kakao/callback` });
+    const expected = `${window.location.origin}/auth/kakao/callback`;
+    // set 이 먼저 — 이후 자동 이벤트(user_engagement·scroll 등)의 기본 page_location 갱신
+    expect(queue()[2]).toEqual(["set", { page_location: expected }]);
+    expect(queue()[3]).toEqual(["event", "page_view", { page_location: expected }]);
+    expect(queue()).toHaveLength(4);
     expect(JSON.stringify(queue())).not.toContain("secret-code");
   });
 });

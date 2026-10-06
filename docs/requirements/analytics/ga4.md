@@ -10,9 +10,9 @@ GA4 웹 데이터 스트림의 gtag 를 prod 빌드에만 로드하고, React Ro
 
 ```text
 deploy.yml ── vars.VITE_GA_MEASUREMENT_ID ──▶ pnpm build (prod 번들에 ID 포함)
-main.tsx ── initAnalytics() ── ID 있음 → gtag 로더 삽입 + config(send_page_view: false)
+main.tsx ── initAnalytics() ── ID 있음 → gtag 로더 삽입 + config(send_page_view: false, page_location = origin + pathname)
                              └─ ID 없음 → no-op
-App.tsx ── PageViewTracker ── pathname 변경마다 trackPageView(pathname) → page_view(page_location = origin + pathname)
+App.tsx ── PageViewTracker ── pathname 변경마다 trackPageView(pathname) → set(page_location) + page_view(page_location = origin + pathname)
 ```
 
 ### 결정 사항
@@ -31,7 +31,7 @@ App.tsx ── PageViewTracker ── pathname 변경마다 trackPageView(pathna
 | No. | Function | Description |
 | --- | --- | --- |
 | 1 | 초기화 가드 | `VITE_GA_MEASUREMENT_ID` 가 비어 있으면 gtag 로더 삽입·dataLayer 생성·이벤트 전송을 전부 생략한다. |
-| 2 | page_view 수동 전송 | 경로(pathname)가 바뀔 때마다 page_view 1건을 보내고, `page_location` 은 origin + pathname 으로 명시해 쿼리스트링·해시를 싣지 않는다. |
+| 2 | page_view 수동 전송 | 경로(pathname)가 바뀔 때마다 page_view 1건을 보내고, `page_location` 은 origin + pathname 으로 명시해 쿼리스트링·해시를 싣지 않는다. 같은 값을 `set` 으로 고정해 자동 이벤트(user_engagement·scroll 등)도 쿼리를 싣지 않는다. |
 | 3 | 배포 주입 | prod 배포 워크플로가 GitHub Actions Variables 의 `VITE_GA_MEASUREMENT_ID` 를 빌드 env 로 넘긴다. 변수가 없으면 분석이 꺼진 빌드가 나온다. |
 
 ---
@@ -42,14 +42,15 @@ App.tsx ── PageViewTracker ── pathname 변경마다 trackPageView(pathna
 
 `initAnalytics()` 는 측정 ID 가 빈 문자열이거나 `window.gtag` 가 이미 있으면 바로 반환한다. ID 가 있으면 공식 스니펫과 같은 순서로 `dataLayer` 큐와 `gtag` 함수를 만들고(`js`, `config` 명령), `https://www.googletagmanager.com/gtag/js?id=<ID>` 로더를 `<head>` 에 async 삽입한다.
 
-- `config` 는 `send_page_view: false` 로 보낸다(기능 2 가 수동 전송).
+- `config` 는 `send_page_view: false` 와 정제한 `page_location`(origin + pathname)을 함께 보낸다. send_page_view 는 자동 page_view 만 끄고, user_engagement·scroll 같은 자동 이벤트는 document.location(쿼리 포함)을 기본값으로 쓰므로 config 단계에서 기본값을 바꿔 둔다.
 - 큐 항목은 `arguments` 객체여야 한다. gtag.js 는 배열을 명령으로 해석하지 않는다.
 - 테스트 셋업(`src/test/setup.ts`)은 ID 를 빈 값으로 고정해 개발자 로컬 `.env.local` 이 테스트를 흔들지 않게 한다.
 
 ### 검증 기준
 
 - ID 가 비어 있으면 `window.gtag`·`window.dataLayer`·로더 `<script>` 가 전부 없는지 확인
-- ID 가 있으면 로더 1개가 삽입되고 큐에 `["js", Date]`, `["config", ID, { send_page_view: false }]` 가 순서대로 있는지 확인
+- ID 가 있으면 로더 1개가 삽입되고 큐에 `["js", Date]`, `["config", ID, { send_page_view: false, page_location }]` 가 순서대로 있는지 확인
+- 주소창에 `?code=…` 가 있어도 config 의 page_location 에 쿼리가 없는지 확인
 - 두 번 호출해도 로더·큐가 중복되지 않는지 확인
 
 ## page_view 수동 전송
@@ -58,7 +59,7 @@ App.tsx ── PageViewTracker ── pathname 변경마다 trackPageView(pathna
 
 `App.tsx` 의 `PageViewTracker` 가 `useLocation().pathname` 변경을 effect 로 감지해 `trackPageView(pathname)` 을 호출한다. StrictMode(개발·테스트)의 effect 이중 실행에서 중복 전송되지 않게 마지막 전송 경로를 기억한다.
 
-- `trackPageView` 는 `page_location: window.location.origin + pathname` 을 명시한다. 명시하지 않으면 gtag 가 `document.location`(쿼리 포함)으로 채운다.
+- `trackPageView` 는 `page_location: window.location.origin + pathname` 을 명시한다. 명시하지 않으면 gtag 가 `document.location`(쿼리 포함)으로 채운다. 같은 값을 `gtag('set', { page_location })` 으로도 고정해 이후 자동 이벤트의 기본값을 새 경로로 갱신한다.
 - 카카오 콜백 `/auth/kakao/callback?code=…&state=…` 에서도 `code`·`state` 가 전송되지 않는다.
 - 가드 리다이렉트(예: 미로그인 `/dashboard` → `/login`)는 두 경로 모두 page_view 가 남는다. 분석 시 `/login` 유입의 일부는 리다이렉트임을 감안한다.
 

@@ -60,4 +60,4 @@ src/
 
 ## 사용 분석 (GA4)
 
-`VITE_GA_MEASUREMENT_ID`가 있을 때만 gtag를 로드해요. prod 빌드만 `deploy.yml`이 GitHub Actions Variables에서 주입하고, 로컬·CI·테스트는 비어 있어 분석 코드가 동작하지 않아요. page_view는 경로가 바뀔 때 pathname만 수동 전송하고 쿼리스트링은 싣지 않아요. 결정 근거와 GA 콘솔 설정 체크리스트는 `docs/requirements/analytics/ga4.md`에 있어요.
+`VITE_GA_MEASUREMENT_ID`가 있을 때만 gtag를 로드해요. prod 빌드만 `deploy.yml`이 GitHub Actions Variables에서 주입하고, 기본 로컬·CI·테스트 설정에서는 비어 있어 분석 코드가 동작하지 않아요. 로컬에서 GA DebugView로 확인하려면 `.env.local`에 ID를 넣으면 돼요. page_view는 경로가 바뀔 때 pathname만 수동 전송하고 쿼리스트링은 싣지 않아요. 결정 근거와 GA 콘솔 설정 체크리스트는 `docs/requirements/analytics/ga4.md`에 있어요.
