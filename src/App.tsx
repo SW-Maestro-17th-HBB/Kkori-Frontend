@@ -2,10 +2,14 @@ import { Component, lazy, Suspense, useEffect, useRef, useState, type ReactNode 
 import { Navigate, Outlet, Route, Routes, useLocation } from "react-router";
 import { QueryClientProvider, useQueryClient } from "@tanstack/react-query";
 import { makeQueryClient } from "./api/queryClient";
+import { useNotifications } from "./api/notifications";
+import { useReportStatusStream } from "./api/reportStatusStream";
+import { useResumeStatusStream } from "./api/resumeStatusStream";
 import { REPORT_DETAIL_PATTERN, ROUTES } from "./routes";
 import { clearInterviewSession } from "./hooks/interviewSession";
 import { useAuthSessionId, useAuthStatus } from "./hooks/useAuthStatus";
 import { discardConnectedRoom } from "./hooks/useLiveKitRoom";
+import { trackPageView } from "./utils/analytics";
 import { LandingPage } from "./pages/LandingPage";
 import { AuthPage } from "./pages/AuthPage";
 import { KakaoCallbackPage } from "./pages/KakaoCallbackPage";
@@ -80,6 +84,20 @@ function ScrollToTop() {
   return null;
 }
 
+/** GA4 page_view — 경로가 바뀔 때마다 1회 전송. pathname 만 넘겨 쿼리스트링(카카오 콜백의
+    code·state)이 제3자로 나가지 않게 한다. 측정 ID 가 없으면 trackPageView 가 no-op.
+    StrictMode 는 개발·테스트에서 effect 를 두 번 실행하므로 마지막 전송 경로를 기억해 중복을 막는다. */
+function PageViewTracker() {
+  const { pathname } = useLocation();
+  const lastTracked = useRef<string | null>(null);
+  useEffect(() => {
+    if (lastTracked.current === pathname) return;
+    lastTracked.current = pathname;
+    trackPageView(pathname);
+  }, [pathname]);
+  return null;
+}
+
 /** 인증 세션 전이 관찰 — 로그아웃(A→null)·계정 교체(A→B) 시 **루트** 클라이언트를
     비운다. 보호 화면의 데이터 격리는 ProtectedSessionBoundary(세션 전용 클라이언트 +
     remount) 소관이고, 여기는 루트에 남는 게스트 쿼리(카카오 code 교환 응답의 토큰 등)의
@@ -135,6 +153,17 @@ function AuthCheckingScreen() {
   );
 }
 
+/** 보호 구역 공통 실시간 구독 — 이력서·리포트 상태 SSE 를 세션당 한 번만 연결한다.
+    이벤트는 해당 도메인 쿼리 무효화(화면 갱신)와 알림 센터(TopNav 종 아이콘) 양쪽으로 흐른다.
+    알림 캐시의 관찰자도 여기서 붙잡아 둔다 — TopNav 가 없는 화면(/live 등)에 오래 머물러도
+    쌓인 알림이 gc 로 사라지지 않게 한다. */
+function StatusStreams() {
+  useReportStatusStream();
+  useResumeStatusStream();
+  useNotifications();
+  return null;
+}
+
 /** 보호 구역 세션 경계 — RequireAuth 가 key={sessionId} 로 마운트하므로 세션이 바뀌면
     (다른 탭 계정 교체 포함) 이 subtree 가 통째로 remount 된다. 페이지 로컬 상태(폼·
     모달·savedName 등)가 이전 계정에서 승계되지 않고, Query 캐시도 세션 전용
@@ -144,6 +173,7 @@ function ProtectedSessionBoundary() {
   const [client] = useState(makeQueryClient); // remount 마다 새 클라이언트
   return (
     <QueryClientProvider client={client}>
+      <StatusStreams />
       <Outlet />
     </QueryClientProvider>
   );
@@ -178,6 +208,7 @@ export default function App() {
   return (
     <>
       <ScrollToTop />
+      <PageViewTracker />
       <AuthSessionObserver />
       <Routes>
         <Route path={ROUTES.landing} element={<LandingPage />} />

@@ -2,46 +2,13 @@
    목 데이터 — 프로토타입 하드코딩 값 그대로.
    API 연동 시 client.ts의 fetch 구현만 교체하면 됨.
    ============================================================ */
-import type { NotificationItem, ReportDetail, Subscription, TimelineEntry } from "./types";
+import type { ReportDetail, Subscription, TimelineEntry } from "./types";
 
 export const subscription: Subscription = {
   plan: "free",
   usedRealInterviews: 1,
   maxRealInterviews: 3,
 };
-
-export const notifications: NotificationItem[] = [
-  {
-    id: 1,
-    icon: "check-circle-2",
-    tone: "done",
-    title: "리포트가 준비됐어요",
-    desc: "백엔드 개발자 · 실전 30분 · 82점",
-    time: "방금 전",
-    unread: true,
-    to: "reportDetail",
-  },
-  {
-    id: 2,
-    icon: "loader",
-    tone: "ing",
-    title: "이력서 분석이 끝나면 알려드릴게요",
-    desc: "신입_포트폴리오.pdf · 62%",
-    time: "5분 전",
-    unread: true,
-    to: "resume",
-  },
-  {
-    id: 3,
-    icon: "trending-up",
-    tone: "info",
-    title: "이번 주 평균 점수가 4점 올랐어요",
-    desc: "꾸준히 연습한 덕분이에요",
-    time: "어제",
-    unread: false,
-    to: "reportList",
-  },
-];
 
 /** 공개 예시 리포트(/sample) 전용 정적 데이터 — 비로그인 쇼케이스라 실제 API를 호출하지 않는다.
     실제 리포트 상세는 client.ts fetchReportDetail 이 백엔드에서 가져온다.

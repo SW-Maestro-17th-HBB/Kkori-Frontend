@@ -7,6 +7,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { ApiError } from "../api/request";
 import type { ReportPage, ReportStats, ReportSummary } from "../api/types";
 import { renderWithProviders } from "../test/render";
+import { TREND_CHART } from "../utils/trendScale";
 import { ReportListPage } from "./ReportListPage";
 
 const { fetchReportsMock, fetchReportStatsMock, regenerateReportMock } = vi.hoisted(() => ({
@@ -154,5 +155,53 @@ describe("ReportListPage 재생성", () => {
     expect(await regenerateButton("실패B.pdf")).toBeDisabled();
     expect(regenerateReportMock).toHaveBeenCalledTimes(2);
     pending.resolveAll();
+  });
+});
+
+/* 점수 추이 (HBB1-335) — 리포트가 여러 개일 때 차트가 깨지던 문제의 회귀 방지 */
+describe("ReportListPage 점수 추이", () => {
+  const statsWith = (trend: ReportStats["trend"]): ReportStats => ({
+    ...EMPTY_STATS,
+    totalCount: trend.length,
+    trend,
+  });
+
+  it("완료 리포트가 없으면 빈 안내를 보여준다", async () => {
+    renderWithProviders(<ReportListPage />, { route: "/reports" });
+    expect(
+      await screen.findByText("완료된 리포트가 쌓이면 점수 추이를 보여드려요"),
+    ).toBeInTheDocument();
+  });
+
+  it("리포트가 1개면 점·점수·날짜만 그리고 선은 그리지 않는다 (0 으로 나누지 않음)", async () => {
+    fetchReportStatsMock.mockResolvedValue(statsWith([{ d: "8.27", s: 83 }]));
+    const { container } = renderWithProviders(<ReportListPage />, { route: "/reports" });
+
+    expect(await screen.findByText("8.27")).toBeInTheDocument();
+    expect(screen.getByText("83")).toBeInTheDocument();
+    expect(container.querySelector("polyline")).toBeNull();
+    expect(container.innerHTML).not.toContain("NaN");
+  });
+
+  it("점수가 55~90 밖이어도 점이 차트 안에 놓이고, 같은 날짜가 여럿이어도 모두 그린다", async () => {
+    fetchReportStatsMock.mockResolvedValue(
+      statsWith([
+        { d: "8.01", s: 40 },
+        { d: "8.03", s: 58 },
+        { d: "8.03", s: 96 },
+      ]),
+    );
+    const { container } = renderWithProviders(<ReportListPage />, { route: "/reports" });
+
+    await screen.findByText("96");
+    const points = container.querySelector("polyline")!.getAttribute("points")!;
+    expect(points).not.toContain("NaN");
+    for (const pair of points.split(" ")) {
+      const y = Number(pair.split(",")[1]);
+      expect(y).toBeGreaterThanOrEqual(TREND_CHART.padTop);
+      expect(y).toBeLessThanOrEqual(TREND_CHART.height - TREND_CHART.padBottom);
+    }
+    expect(screen.getAllByText("8.03")).toHaveLength(2); // 같은 날짜 두 건 — key 충돌 없이 둘 다 표시
+    expect(screen.getByText("40")).toBeInTheDocument();
   });
 });
