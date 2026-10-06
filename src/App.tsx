@@ -9,6 +9,7 @@ import { REPORT_DETAIL_PATTERN, ROUTES } from "./routes";
 import { clearInterviewSession } from "./hooks/interviewSession";
 import { useAuthSessionId, useAuthStatus } from "./hooks/useAuthStatus";
 import { discardConnectedRoom } from "./hooks/useLiveKitRoom";
+import { trackPageView } from "./utils/analytics";
 import { LandingPage } from "./pages/LandingPage";
 import { AuthPage } from "./pages/AuthPage";
 import { KakaoCallbackPage } from "./pages/KakaoCallbackPage";
@@ -79,6 +80,20 @@ function ScrollToTop() {
   const { pathname } = useLocation();
   useEffect(() => {
     window.scrollTo(0, 0);
+  }, [pathname]);
+  return null;
+}
+
+/** GA4 page_view — 경로가 바뀔 때마다 1회 전송. pathname 만 넘겨 쿼리스트링(카카오 콜백의
+    code·state)이 제3자로 나가지 않게 한다. 측정 ID 가 없으면 trackPageView 가 no-op.
+    StrictMode 는 개발·테스트에서 effect 를 두 번 실행하므로 마지막 전송 경로를 기억해 중복을 막는다. */
+function PageViewTracker() {
+  const { pathname } = useLocation();
+  const lastTracked = useRef<string | null>(null);
+  useEffect(() => {
+    if (lastTracked.current === pathname) return;
+    lastTracked.current = pathname;
+    trackPageView(pathname);
   }, [pathname]);
   return null;
 }
@@ -193,6 +208,7 @@ export default function App() {
   return (
     <>
       <ScrollToTop />
+      <PageViewTracker />
       <AuthSessionObserver />
       <Routes>
         <Route path={ROUTES.landing} element={<LandingPage />} />

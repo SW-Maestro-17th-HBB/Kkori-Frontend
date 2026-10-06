@@ -8,6 +8,7 @@ import * as apiClient from "./api/client";
 import { discardConnectedRoom, stashConnectedRoom } from "./hooks/useLiveKitRoom";
 import { consumePostLoginRedirect } from "./api/tokenStore";
 import { kakaoAuthorizeRedirect } from "./utils/kakaoLogin";
+import * as analytics from "./utils/analytics";
 import { ROUTE_ACCESS, ROUTES, type NavKey } from "./routes";
 import App from "./App";
 import { fetchEventSource } from "@microsoft/fetch-event-source";
@@ -299,5 +300,21 @@ describe("보호 구역 공통 상태 스트림 — 세션당 한 번만 연결�
     await screen.findByRole("heading", { name: /이력서로 시작하는/ });
 
     expect(mockedFES).not.toHaveBeenCalled();
+  });
+});
+
+describe("GA4 page_view 추적", () => {
+  it("경로가 바뀔 때마다 pathname 만 1회씩 넘긴다 (쿼리스트링 제외, StrictMode 이중 effect 에도 1회)", async () => {
+    const spy = vi.spyOn(analytics, "trackPageView").mockImplementation(() => {});
+    const user = userEvent.setup();
+    renderWithProviders(<App />, { route: { pathname: ROUTES.landing, search: "?utm_source=x" } });
+    await screen.findByRole("heading", { name: /이력서로 시작하는/ });
+    expect(spy).toHaveBeenCalledTimes(1);
+    expect(spy).toHaveBeenCalledWith(ROUTES.landing);
+
+    await user.click(screen.getAllByRole("button", { name: "무료로 시작하기" })[0]);
+    await screen.findByText(LOGIN_HEADING);
+    expect(spy).toHaveBeenCalledTimes(2);
+    expect(spy).toHaveBeenLastCalledWith(ROUTES.auth);
   });
 });

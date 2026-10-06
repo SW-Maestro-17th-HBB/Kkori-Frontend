@@ -20,6 +20,8 @@ env:
   # 도메인 확보(enable_dns=true) 시 VITE_API_BASE_URL 변수만 설정에서 교체하면 된다.
   VITE_API_BASE_URL: ${{ vars.VITE_API_BASE_URL }}
   VITE_KAKAO_CLIENT_ID: ${{ vars.VITE_KAKAO_CLIENT_ID }}
+  # GA4 측정 ID — 변수가 없으면 빈 값이 들어가 분석이 꺼진 빌드가 나온다 (로컬·CI 와 동일)
+  VITE_GA_MEASUREMENT_ID: ${{ vars.VITE_GA_MEASUREMENT_ID }}
   FRONTEND_BUCKET: ${{ vars.FRONTEND_BUCKET }}
   CLOUDFRONT_DISTRIBUTION_ID: ${{ vars.CLOUDFRONT_DISTRIBUTION_ID }}
 
