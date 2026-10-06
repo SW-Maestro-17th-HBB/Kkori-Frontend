@@ -1,7 +1,6 @@
 /* ============================================================
    API 도메인 타입 — 현재는 목 데이터, 백엔드 연동 시 이 계약 유지
    ============================================================ */
-import type { NavKey } from "../routes";
 
 export type ResumeStatus = "done" | "ing" | "fail";
 
@@ -135,15 +134,4 @@ export interface Subscription {
 export interface LiveKitSession {
   url: string;
   token: string;
-}
-
-export interface NotificationItem {
-  id: number;
-  icon: string;
-  tone: "done" | "ing" | "info";
-  title: string;
-  desc: string;
-  time: string;
-  unread: boolean;
-  to: NavKey;
 }

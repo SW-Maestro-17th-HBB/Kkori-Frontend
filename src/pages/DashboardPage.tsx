@@ -2,7 +2,6 @@
 import { useState } from "react";
 import { useNavigate } from "react-router";
 import { useProfile, useReports, useResumes } from "../api/hooks";
-import { useReportStatusStream } from "../api/reportStatusStream";
 import { Button, Card, Modal } from "../components/ds";
 import { Icon } from "../components/Icon";
 import {
@@ -26,7 +25,6 @@ export function DashboardPage() {
   const { data: resumes = [] } = useResumes();
   const { data: reportsPage } = useReports();
   const reports = reportsPage?.items ?? [];
-  useReportStatusStream();
 
   const analyzed = resumes.filter((r) => r.status === "done");
   const [pickOpen, setPickOpen] = useState(false);
