@@ -10,4 +10,8 @@ import { afterEach, vi } from "vitest";
 // request.ts가 모듈 상수로 읽으므로 테스트 모듈 import 전인 셋업에서 고정해야 한다.
 vi.stubEnv("VITE_API_BASE_URL", "");
 
+// GA4 측정 ID 를 비워 분석 코드를 비활성화 — 개발자 로컬 .env.local 의 ID 가 테스트에서
+// gtag 로더 삽입·dataLayer 큐를 만들지 않게 한다. analytics.test 는 ID 를 인자로 직접 넘긴다.
+vi.stubEnv("VITE_GA_MEASUREMENT_ID", "");
+
 afterEach(cleanup);

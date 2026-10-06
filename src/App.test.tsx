@@ -8,6 +8,7 @@ import * as apiClient from "./api/client";
 import { discardConnectedRoom, stashConnectedRoom } from "./hooks/useLiveKitRoom";
 import { consumePostLoginRedirect } from "./api/tokenStore";
 import { kakaoAuthorizeRedirect } from "./utils/kakaoLogin";
+import * as analytics from "./utils/analytics";
 import { ROUTE_ACCESS, ROUTES, type NavKey } from "./routes";
 import App from "./App";
 
@@ -263,5 +264,21 @@ describe("checking 차단 (비동기 판정 대비)", () => {
     expect(screen.queryByText(LOGIN_HEADING)).not.toBeInTheDocument(); // OAuth 시작 차단
     expect(screen.queryByText(DASH_TEXT)).not.toBeInTheDocument();
     expect(screen.queryByText(/약관/)).not.toBeInTheDocument(); // 가입 화면 차단
+  });
+});
+
+describe("GA4 page_view 추적", () => {
+  it("경로가 바뀔 때마다 pathname 만 1회씩 넘긴다 (쿼리스트링 제외, StrictMode 이중 effect 에도 1회)", async () => {
+    const spy = vi.spyOn(analytics, "trackPageView").mockImplementation(() => {});
+    const user = userEvent.setup();
+    renderWithProviders(<App />, { route: { pathname: ROUTES.landing, search: "?utm_source=x" } });
+    await screen.findByRole("heading", { name: /이력서로 시작하는/ });
+    expect(spy).toHaveBeenCalledTimes(1);
+    expect(spy).toHaveBeenCalledWith(ROUTES.landing);
+
+    await user.click(screen.getAllByRole("button", { name: "무료로 시작하기" })[0]);
+    await screen.findByText(LOGIN_HEADING);
+    expect(spy).toHaveBeenCalledTimes(2);
+    expect(spy).toHaveBeenLastCalledWith(ROUTES.auth);
   });
 });
