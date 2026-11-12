@@ -312,7 +312,7 @@ describe("GA4 page_view 추적", () => {
     expect(spy).toHaveBeenCalledTimes(1);
     expect(spy).toHaveBeenCalledWith(ROUTES.landing);
 
-    await user.click(screen.getAllByRole("button", { name: "무료로 시작하기" })[0]);
+    await user.click(screen.getAllByRole("link", { name: "무료로 시작하기" })[0]);
     await screen.findByText(LOGIN_HEADING);
     expect(spy).toHaveBeenCalledTimes(2);
     expect(spy).toHaveBeenLastCalledWith(ROUTES.auth);

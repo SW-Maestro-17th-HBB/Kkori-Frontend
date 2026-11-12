@@ -9,7 +9,7 @@ import { HbbFooter } from "../components/HbbFooter";
 import { Icon } from "../components/Icon";
 import { AxisBar, Display, ScoreNum, SectionLabel, WeakTag } from "../components/primitives";
 import { PublicHeader } from "../components/PublicHeader";
-import { useNav } from "../hooks/useNav";
+import { ROUTES } from "../routes";
 
 /* ---------- 카피 — 근거: Kkori-Backend README, 세션·꼬리질문·평가 기준 PRD ---------- */
 const HERO_FACTS = [
@@ -176,7 +176,7 @@ function FollowUpTree() {
 }
 
 /* ---------- 예시 리포트 카드 (리포트 상세의 축소판, 값은 /sample 픽스처) ---------- */
-function ReportPreview({ onOpen }: { onOpen: () => void }) {
+function ReportPreview() {
   const r = sampleReportDetail;
   const [taskTitle, taskDesc] = r.tasks[0];
   return (
@@ -223,7 +223,7 @@ function ReportPreview({ onOpen }: { onOpen: () => void }) {
       </div>
 
       <div style={{ marginTop: 22 }}>
-        <Button variant="assistive" fullWidth onClick={onOpen}>
+        <Button variant="assistive" fullWidth href={ROUTES.sample}>
           예시 리포트 전체 보기
         </Button>
       </div>
@@ -232,165 +232,167 @@ function ReportPreview({ onOpen }: { onOpen: () => void }) {
 }
 
 export function LandingPage() {
-  const nav = useNav();
   return (
     <div className="landing">
       <PublicHeader />
 
-      {/* 히어로 — 그래디언트 배너, 좌 카피 / 우 면접 대화 미리보기 */}
-      <section className="landing-wrap landing-hero-wrap">
-        <div className="landing-hero">
-          <div className="landing-hero__grid">
-            <div>
-              <div className="landing-pill">
-                <span className="landing-pill__dot" aria-hidden="true" /> AI 음성 모의면접
-              </div>
-              <h1 className="landing-hero__title">
-                이력서로 시작하는
-                <br />
-                진짜 같은 모의 면접
-              </h1>
-              <p className="landing-hero__lead">
-                이력서 PDF를 분석해 질문을 만들고, AI 면접관과 실시간 음성으로 면접을 진행해요.
-                답변을 듣고 꼬리질문으로 파고들고, 끝나면 답변별 피드백이 담긴 리포트를 드려요.
-              </p>
-              <div className="landing-hero__actions">
-                <Button
-                  variant="solid"
-                  size="lg"
-                  style={{ background: "#fff", color: "var(--blue-800)" }}
-                  onClick={() => nav("auth")}
-                >
-                  무료로 시작하기
-                </Button>
-                <span className="landing-ghost">
-                  <Button variant="outlined" size="lg" onClick={() => nav("sample")}>
-                    예시 리포트 보기
+      {/* 본문 랜드마크 — 헤더·푸터 사이 섹션 전체 */}
+      <main>
+        {/* 히어로 — 그래디언트 배너, 좌 카피 / 우 면접 대화 미리보기 */}
+        <section className="landing-wrap landing-hero-wrap">
+          <div className="landing-hero">
+            <div className="landing-hero__grid">
+              <div>
+                <div className="landing-pill">
+                  <span className="landing-pill__dot" aria-hidden="true" /> AI 음성 모의면접
+                </div>
+                <h1 className="landing-hero__title">
+                  이력서로 시작하는
+                  <br />
+                  진짜 같은 모의 면접
+                </h1>
+                <p className="landing-hero__lead">
+                  이력서 PDF를 분석해 질문을 만들고, AI 면접관과 실시간 음성으로 면접을 진행해요.
+                  답변을 듣고 꼬리질문으로 파고들고, 끝나면 답변별 피드백이 담긴 리포트를 드려요.
+                </p>
+                <div className="landing-hero__actions">
+                  <Button
+                    variant="solid"
+                    size="lg"
+                    style={{ background: "var(--bg-surface)", color: "var(--blue-800)" }}
+                    href={ROUTES.auth}
+                  >
+                    무료로 시작하기
                   </Button>
-                </span>
+                  <span className="landing-ghost">
+                    <Button variant="outlined" size="lg" href={ROUTES.sample}>
+                      예시 리포트 보기
+                    </Button>
+                  </span>
+                </div>
+                <ul className="landing-hero__facts" aria-label="서비스 구성">
+                  {HERO_FACTS.map((f) => (
+                    <li key={f} className="landing-fact">
+                      {f}
+                    </li>
+                  ))}
+                </ul>
               </div>
-              <ul className="landing-hero__facts" aria-label="서비스 구성">
-                {HERO_FACTS.map((f) => (
-                  <li key={f} className="landing-fact">
-                    {f}
+              <InterviewPreview />
+            </div>
+          </div>
+        </section>
+
+        {/* 진행 4단계 */}
+        <section className="landing-section">
+          <div className="landing-wrap">
+            <SectionHead
+              eyebrow="진행 순서"
+              title="이력서 업로드부터 리포트까지, 네 단계로 진행돼요"
+            />
+            <ol className="landing-steps">
+              {STEPS.map((s, i) => (
+                <li key={s.title} className="landing-step">
+                  <div className="landing-step__top">
+                    <span className="landing-step__icon">
+                      <Icon name={s.icon} size={20} />
+                    </span>
+                    <span className="landing-step__num">{String(i + 1).padStart(2, "0")}</span>
+                  </div>
+                  <h3 className="landing-step__title">{s.title}</h3>
+                  <p className="landing-step__desc">{s.desc}</p>
+                </li>
+              ))}
+            </ol>
+          </div>
+        </section>
+
+        {/* 꼬리질문 — subtle 띠 */}
+        <section className="landing-section landing-band">
+          <div className="landing-wrap landing-split">
+            <div>
+              <SectionHead
+                eyebrow="꼬리질문"
+                title={
+                  <>
+                    답변을 듣고, 그 자리에서
+                    <br />
+                    다음 질문을 만들어요
+                  </>
+                }
+                lead="첫 질문은 검수된 질문 목록에서 이력서 요약을 참고해 골라요. 그 뒤로는 답변마다 구체성·깊이·완결성을 가볍게 평가해, 더 파고들 가치가 있으면 꼬리질문을, 충분하면 다음 주제로 넘어가요."
+              />
+              <ul className="landing-list">
+                {FOLLOW_UP_TYPES.map(([name, desc]) => (
+                  <li key={name} className="landing-list__item">
+                    <span className="landing-type">{name}</span>
+                    <span className="landing-list__desc">{desc}</span>
+                  </li>
+                ))}
+              </ul>
+              <p className="landing-note">
+                <Icon name="info" size={15} style={{ marginTop: 1, color: "var(--fg-tertiary)" }} />
+                한 주제에 매몰되지 않도록 줄기당 꼬리질문 수에 상한을 두고, 상한에 닿으면 주제를
+                전환해요.
+              </p>
+            </div>
+            <div className="landing-split__visual">
+              <FollowUpTree />
+            </div>
+          </div>
+        </section>
+
+        {/* 리포트 — 좌 예시 카드 / 우 구성 항목 */}
+        <section className="landing-section">
+          <div className="landing-wrap landing-split landing-split--reverse">
+            <div>
+              <SectionHead
+                eyebrow="리포트"
+                title="면접이 끝나면, 이런 리포트를 받아요"
+                lead="답변별 판정은 AI가 맡고, 영역 점수와 총점 집계는 정해진 규칙으로 계산해요."
+              />
+              <ul className="landing-list">
+                {REPORT_ITEMS.map(([name, desc]) => (
+                  <li key={name} className="landing-list__item">
+                    <span className="landing-check">
+                      <Icon name="check-circle-2" size={14} />
+                    </span>
+                    <span>
+                      <span className="landing-list__title">{name}</span>
+                      <span className="landing-list__desc landing-list__desc--block">{desc}</span>
+                    </span>
                   </li>
                 ))}
               </ul>
             </div>
-            <InterviewPreview />
-          </div>
-        </div>
-      </section>
-
-      {/* 진행 4단계 */}
-      <section className="landing-section">
-        <div className="landing-wrap">
-          <SectionHead
-            eyebrow="진행 순서"
-            title="이력서 업로드부터 리포트까지, 네 단계로 진행돼요"
-          />
-          <ol className="landing-steps">
-            {STEPS.map((s, i) => (
-              <li key={s.title} className="landing-step">
-                <div className="landing-step__top">
-                  <span className="landing-step__icon">
-                    <Icon name={s.icon} size={20} />
-                  </span>
-                  <span className="landing-step__num">{String(i + 1).padStart(2, "0")}</span>
-                </div>
-                <h3 className="landing-step__title">{s.title}</h3>
-                <p className="landing-step__desc">{s.desc}</p>
-              </li>
-            ))}
-          </ol>
-        </div>
-      </section>
-
-      {/* 꼬리질문 — subtle 띠 */}
-      <section className="landing-section landing-band">
-        <div className="landing-wrap landing-split">
-          <div>
-            <SectionHead
-              eyebrow="꼬리질문"
-              title={
-                <>
-                  답변을 듣고, 그 자리에서
-                  <br />
-                  다음 질문을 만들어요
-                </>
-              }
-              lead="첫 질문은 검수된 질문 목록에서 이력서 요약을 참고해 골라요. 그 뒤로는 답변마다 구체성·깊이·완결성을 가볍게 평가해, 더 파고들 가치가 있으면 꼬리질문을, 충분하면 다음 주제로 넘어가요."
-            />
-            <ul className="landing-list">
-              {FOLLOW_UP_TYPES.map(([name, desc]) => (
-                <li key={name} className="landing-list__item">
-                  <span className="landing-type">{name}</span>
-                  <span className="landing-list__desc">{desc}</span>
-                </li>
-              ))}
-            </ul>
-            <p className="landing-note">
-              <Icon name="info" size={15} style={{ marginTop: 1, color: "var(--fg-tertiary)" }} />한
-              주제에 매몰되지 않도록 줄기당 꼬리질문 수에 상한을 두고, 상한에 닿으면 주제를
-              전환해요.
-            </p>
-          </div>
-          <div className="landing-split__visual">
-            <FollowUpTree />
-          </div>
-        </div>
-      </section>
-
-      {/* 리포트 — 좌 예시 카드 / 우 구성 항목 */}
-      <section className="landing-section">
-        <div className="landing-wrap landing-split landing-split--reverse">
-          <div>
-            <SectionHead
-              eyebrow="리포트"
-              title="면접이 끝나면, 이런 리포트를 받아요"
-              lead="답변별 판정은 AI가 맡고, 영역 점수와 총점 집계는 정해진 규칙으로 계산해요."
-            />
-            <ul className="landing-list">
-              {REPORT_ITEMS.map(([name, desc]) => (
-                <li key={name} className="landing-list__item">
-                  <span className="landing-check">
-                    <Icon name="check-circle-2" size={14} />
-                  </span>
-                  <span>
-                    <span className="landing-list__title">{name}</span>
-                    <span className="landing-list__desc landing-list__desc--block">{desc}</span>
-                  </span>
-                </li>
-              ))}
-            </ul>
-          </div>
-          <div className="landing-split__visual">
-            <ReportPreview onOpen={() => nav("sample")} />
-          </div>
-        </div>
-      </section>
-
-      {/* CTA — 밝은 브랜드 서브틀 (어두운 블록은 푸터 한 번만) */}
-      <section className="landing-section landing-section--cta">
-        <div className="landing-wrap">
-          <div className="landing-cta">
-            <h2 className="landing-cta__title">지금 이력서를 올리고 면접을 시작하세요</h2>
-            <p className="landing-cta__lead">
-              카카오 계정으로 로그인하고 이력서 PDF를 올리면 바로 시작할 수 있어요.
-            </p>
-            <div style={{ marginTop: 28, display: "flex", justifyContent: "center" }}>
-              <Button variant="solid" size="lg" onClick={() => nav("auth")}>
-                무료로 시작하기
-              </Button>
+            <div className="landing-split__visual">
+              <ReportPreview />
             </div>
           </div>
-          <p className="landing-footnote">
-            <Icon name="info" size={14} style={{ marginTop: 2 }} />
-            리포트는 AI가 자동 생성한 분석 결과로, 실제 면접 평가와 다를 수 있어요. 참고용으로
-            활용해 주세요.
-          </p>
-        </div>
-      </section>
+        </section>
+
+        {/* CTA — 밝은 브랜드 서브틀 (어두운 블록은 푸터 한 번만) */}
+        <section className="landing-section landing-section--cta">
+          <div className="landing-wrap">
+            <div className="landing-cta">
+              <h2 className="landing-cta__title">지금 이력서를 올리고 면접을 시작하세요</h2>
+              <p className="landing-cta__lead">
+                카카오 계정으로 로그인하고 이력서 PDF를 올리면 바로 시작할 수 있어요.
+              </p>
+              <div style={{ marginTop: 28, display: "flex", justifyContent: "center" }}>
+                <Button variant="solid" size="lg" href={ROUTES.auth}>
+                  무료로 시작하기
+                </Button>
+              </div>
+            </div>
+            <p className="landing-footnote">
+              <Icon name="info" size={14} style={{ marginTop: 2 }} />
+              리포트는 AI가 자동 생성한 분석 결과로, 실제 면접 평가와 다를 수 있어요. 참고용으로
+              활용해 주세요.
+            </p>
+          </div>
+        </section>
+      </main>
 
       <HbbFooter />
     </div>
