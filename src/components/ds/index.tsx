@@ -11,15 +11,20 @@ import {
   type ChangeEventHandler,
   forwardRef,
 } from "react";
+import { Link } from "react-router";
 import "./ds.css";
 
-/* ---------- Button ---------- */
+/* ---------- Button ----------
+   href 를 주면 같은 모양의 링크(react-router Link)로 렌더한다 — 화면 이동용 버튼은 새 탭 열기·주소 복사 같은
+   링크 기본 동작(수정 키 클릭 포함)을 보존해야 한다. 액션(제출·토글 등)은 href 없이 <button>. disabled 는
+   링크에 없으므로 href 가 있어도 disabled 면 <button> 으로 렌더한다. */
 export function Button({
   variant = "solid",
   size = "md",
   fullWidth,
   leadingIcon,
   disabled,
+  href,
   onClick,
   style,
   children,
@@ -30,7 +35,8 @@ export function Button({
   "fullWidth"?: boolean;
   "leadingIcon"?: ReactNode;
   "disabled"?: boolean;
-  "onClick"?: MouseEventHandler<HTMLButtonElement>;
+  "href"?: string;
+  "onClick"?: MouseEventHandler<HTMLElement>;
   "style"?: CSSProperties;
   "children": ReactNode;
   "aria-label"?: string;
@@ -43,6 +49,14 @@ export function Button({
   ]
     .filter(Boolean)
     .join(" ");
+  if (href !== undefined && !disabled) {
+    return (
+      <Link to={href} className={cls} style={style} aria-label={ariaLabel} onClick={onClick}>
+        {leadingIcon}
+        {children}
+      </Link>
+    );
+  }
   return (
     <button
       type="button"
