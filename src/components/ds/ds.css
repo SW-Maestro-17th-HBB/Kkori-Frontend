@@ -73,6 +73,21 @@
 .wds-btn--text:hover:not(:disabled) {
   color: var(--fg-strong);
 }
+/* href 로 렌더된 <a> 버튼 — 전역 a:hover 색 규칙(0,1,1)이 변형별 글자색을 덮지 않게 명시 */
+a.wds-btn,
+a.wds-btn:hover {
+  text-decoration: none;
+}
+a.wds-btn--solid:hover {
+  color: #fff;
+}
+a.wds-btn--assistive:hover,
+a.wds-btn--outlined:hover {
+  color: var(--fg-default);
+}
+a.wds-btn--text:hover {
+  color: var(--fg-strong);
+}
 .wds-btn:disabled {
   cursor: not-allowed;
   background: var(--neutral-100);

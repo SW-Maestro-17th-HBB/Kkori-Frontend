@@ -42,6 +42,7 @@
   --bg-muted: var(--neutral-100);
   --bg-inverse: var(--neutral-900);
   --bg-inverse-subtle: rgba(255, 255, 255, 0.08); /* 다크 서피스 위 살짝 뜬 오버레이(칩 등) */
+  --bg-inverse-muted: rgba(255, 255, 255, 0.16); /* 다크 서피스 위 필·호버 오버레이 */
   --bg-brand-subtle: var(--blue-50);
   --bg-success-subtle: #e8f7ee;
   --bg-danger-subtle: #fdeeee;
@@ -53,6 +54,9 @@
   --fg-tertiary: var(--neutral-500);
   --fg-link: var(--blue-800);
   --fg-inverse: #e6e8ea; /* 다크 서피스 위 기본 텍스트 */
+  --fg-on-inverse: #ffffff; /* 다크·그래디언트 면 위 강조 텍스트(헤딩·버튼) */
+  --fg-inverse-secondary: rgba(255, 255, 255, 0.72); /* 다크 서피스 위 보조 텍스트 */
+  --fg-inverse-tertiary: rgba(255, 255, 255, 0.6); /* 다크 서피스 위 캡션·메타 */
 
   /* ---------- 보더 ---------- */
   --border-subtle: #eceef1;
