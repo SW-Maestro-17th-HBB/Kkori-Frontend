@@ -1,86 +1,37 @@
-/* ---------- 랜딩 푸터 — 다크(--neutral-970) ---------- */
+/* ---------- 랜딩 푸터 — 다크(--neutral-970) ----------
+   링크는 실제로 존재하는 화면(예시 리포트 · 로그인)만 둔다. 준비되지 않은 페이지(요금·블로그·채용 등)는 적지 않는다.
+   스타일은 global.css 의 .landing-footer* 클래스. */
 import { Wordmark } from "./primitives";
+import { useNav } from "../hooks/useNav";
+import type { NavKey } from "../routes";
+
+const LINKS: [string, NavKey][] = [
+  ["예시 리포트", "sample"],
+  ["로그인", "auth"],
+];
 
 export function HbbFooter() {
-  const cols: [string, string[]][] = [
-    ["제품", ["기능 소개", "예시 리포트", "요금"]],
-    ["회사", ["소개", "블로그", "채용"]],
-    ["지원", ["도움말", "문의하기", "상태"]],
-  ];
+  const nav = useNav();
   return (
-    <footer style={{ background: "var(--neutral-970)", color: "#fff", padding: "56px 28px" }}>
-      <div
-        style={{
-          maxWidth: 1120,
-          margin: "0 auto",
-          display: "flex",
-          justifyContent: "space-between",
-          gap: 40,
-          flexWrap: "wrap",
-        }}
-      >
-        <div style={{ maxWidth: 300 }}>
+    <footer className="landing-footer">
+      <div className="landing-wrap landing-footer__grid">
+        <div className="landing-footer__brand">
           <Wordmark color="#fff" size={19} />
-          <p
-            style={{
-              fontFamily: "var(--font-sans)",
-              fontSize: 14,
-              fontWeight: 500,
-              lineHeight: 1.6,
-              color: "rgba(255,255,255,.6)",
-              marginTop: 14,
-            }}
-          >
-            이력서로 시작하는 AI 음성 모의면접. 개발자를 위한 면접 연습 인프라.
+          <p className="landing-footer__desc">
+            SW마에스트로 17기 팀 HBB가 만드는 개발자용 AI 음성 모의면접 서비스예요. 이력서를 분석해
+            질문을 만들고, 음성 면접이 끝나면 답변별 피드백 리포트를 드려요.
           </p>
         </div>
-        <div style={{ display: "flex", gap: 56 }}>
-          {cols.map(([h, items]) => (
-            <div key={h}>
-              <div
-                style={{
-                  fontFamily: "var(--font-sans)",
-                  fontSize: 13,
-                  fontWeight: 600,
-                  color: "rgba(255,255,255,.5)",
-                  marginBottom: 14,
-                }}
-              >
-                {h}
-              </div>
-              <div style={{ display: "flex", flexDirection: "column", gap: 11 }}>
-                {items.map((it) => (
-                  <span
-                    key={it}
-                    style={{
-                      fontFamily: "var(--font-sans)",
-                      fontSize: 14,
-                      fontWeight: 500,
-                      color: "rgba(255,255,255,.82)",
-                    }}
-                  >
-                    {it}
-                  </span>
-                ))}
-              </div>
-            </div>
+        <nav aria-label="바로가기" className="landing-footer__links">
+          <div className="landing-footer__h">둘러보기</div>
+          {LINKS.map(([label, key]) => (
+            <button key={key} className="linkbtn landing-footer__link" onClick={() => nav(key)}>
+              {label}
+            </button>
           ))}
-        </div>
+        </nav>
       </div>
-      <div
-        style={{
-          maxWidth: 1120,
-          margin: "44px auto 0",
-          paddingTop: 22,
-          borderTop: "1px solid rgba(255,255,255,.12)",
-          fontFamily: "var(--font-sans)",
-          fontSize: 13,
-          fontWeight: 500,
-          color: "rgba(255,255,255,.45)",
-        }}
-      >
-        © 2026 꼬리 잡힌 개발자
-      </div>
+      <div className="landing-wrap landing-footer__copy">© 2026 꼬리 잡힌 개발자 · 팀 HBB</div>
     </footer>
   );
 }
